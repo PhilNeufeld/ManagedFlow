@@ -1,0 +1,17 @@
+# Python environment and caches
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Timestamped backups written by storage.py
+data/*.backup_*.json
+
+# Your real household data and reports (keep off GitHub)
+data/PDNeufeld.json
+outputs/
+
+# Editor / OS clutter
+.vscode/
+Thumbs.db

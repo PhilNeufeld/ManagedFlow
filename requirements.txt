@@ -1,0 +1,9 @@
+# Core dependencies for the household asset / cashflow / retirement-transition planner.
+#
+# Kept intentionally minimal per the project's design philosophy: Python is
+# the calculation engine, JSON is storage, Excel is the reporting layer, and
+# Streamlit is the local UI. No database, no web framework, no cloud SDKs.
+
+openpyxl>=3.1        # Excel (.xlsx) reading/writing for exports.py
+pandas>=2.0           # Dataframes for the Streamlit UI's tables/editors
+streamlit>=1.35        # Local desktop UI (run with: streamlit run app.py) -- 1.35+ needed for selectable dataframe rows
