@@ -1,8 +1,8 @@
 {
   "metadata": {
-    "file_version": "0.2",
-    "created_at": "2026-11-03T22:44:59+00:00",
-    "updated_at": "2026-11-03T22:44:59+00:00",
+    "file_version": "0.3",
+    "created_at": "2026-11-03T22:57:26+00:00",
+    "updated_at": "2026-11-03T22:57:26+00:00",
     "notes": "Sample/demo data. Contains no real personal or financial information."
   },
   "household": {
@@ -646,6 +646,7 @@
       "notes": ""
     }
   ],
+  "liabilities": [],
   "bundles": [
     {
       "bundle_id": "bundle_rental_1",
@@ -655,6 +656,7 @@
         "real_estate_rental_1"
       ],
       "cashflow_ids": [],
+      "liability_ids": [],
       "notes": "The rental property together with its loan, appreciation, depreciation, rent income, and operating expenses (all already attached as cashflows on the asset itself)."
     },
     {
@@ -666,6 +668,7 @@
         "cash_1"
       ],
       "cashflow_ids": [],
+      "liability_ids": [],
       "notes": ""
     },
     {
@@ -677,6 +680,7 @@
         "pension_1"
       ],
       "cashflow_ids": [],
+      "liability_ids": [],
       "notes": ""
     },
     {
@@ -689,6 +693,7 @@
         "hh_pars_a",
         "hh_social_security_a"
       ],
+      "liability_ids": [],
       "notes": ""
     },
     {
@@ -700,6 +705,7 @@
         "hh_living_expenses",
         "hh_estimated_tax_payment"
       ],
+      "liability_ids": [],
       "notes": ""
     },
     {
@@ -710,6 +716,7 @@
         "business_1"
       ],
       "cashflow_ids": [],
+      "liability_ids": [],
       "notes": ""
     },
     {
@@ -720,6 +727,7 @@
         "trust_1"
       ],
       "cashflow_ids": [],
+      "liability_ids": [],
       "notes": ""
     }
   ],

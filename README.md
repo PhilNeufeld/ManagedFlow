@@ -329,8 +329,22 @@ the **Bundles** and **Scenario Settings** tabs respectively.
 Every saved portfolio records a `file_version` in its metadata. When the
 data model changes, `migrations.py` upgrades older files automatically on
 load; your original is kept as a timestamped backup the first time you
-save. Current version: **0.2** (all cashflows in one top-level list, each
-linked to its asset by `asset_id`).
+save. Current version: **0.3**.
+
+| Version | Change |
+|---|---|
+| 0.2 | All cashflows in one top-level list, each linked to its asset by `asset_id` |
+| 0.3 | Liabilities: `Loan` (amortizing) and `CreditLine` (interest-only); bundles can hold `liability_ids` |
+
+## Liabilities
+
+Loans and credit lines live on the **Liabilities** tab. Enter the balance
+owed, the rate, and either the months left or the payment from your
+statement; ManagedFlow splits each year's payments into interest and
+principal. Debt service counts as an expense, and net worth is assets
+minus liabilities. A loan secured by an asset is paid off in full the
+year that asset is sold. Don't also enter loan payments as cashflows, or
+they'll be counted twice.
 
 ## Running the tests
 

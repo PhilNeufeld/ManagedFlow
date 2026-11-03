@@ -34,6 +34,7 @@ REQUIRED_TOP_LEVEL_KEYS = (
     "assumptions",
     "assets",
     "cashflows",
+    "liabilities",
     "scenarios",
 )
 
@@ -82,6 +83,9 @@ def validate_portfolio_json(data: Dict[str, Any]) -> List[str]:
 
     if "cashflows" in data and not isinstance(data["cashflows"], list):
         problems.append("'cashflows' must be a list")
+
+    if "liabilities" in data and not isinstance(data["liabilities"], list):
+        problems.append("'liabilities' must be a list")
 
     if "scenarios" in data and not isinstance(data["scenarios"], list):
         problems.append("'scenarios' must be a list")

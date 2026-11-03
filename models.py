@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict
 from enum import Enum
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, ClassVar, Tuple
 
 from migrations import CURRENT_SCHEMA_VERSION, migrate
 
@@ -119,6 +119,19 @@ class EntityType(str, Enum):
     C_CORP = "c_corp"
     PARTNERSHIP = "partnership"
     TRUST = "trust"
+    OTHER = "other"
+
+
+class LiabilityType(str, Enum):
+    """What kind of debt a Liability is (a label; the math lives in the
+    Loan / CreditLine classes)."""
+    MORTGAGE = "mortgage"
+    HELOC = "heloc"
+    FARM = "farm"
+    BUSINESS = "business"
+    CAR = "car"
+    STUDENT = "student"
+    LINE_OF_CREDIT = "line_of_credit"
     OTHER = "other"
 
 
@@ -392,6 +405,193 @@ class Asset:
 
 
 # ---------------------------------------------------------------------------
+# Liabilities: Liability (base) -> Loan, CreditLine
+# ---------------------------------------------------------------------------
+
+def amortized_monthly_payment(principal: float, annual_rate: float, months: int) -> float:
+    """The fixed monthly payment that pays off `principal` in `months`
+    months at `annual_rate` (0.06 = 6%), interest compounded monthly.
+
+    Standard formula:  P = B * r / (1 - (1 + r) ** -n),  with r = annual_rate / 12.
+    Example: $100,000 at 6% for 360 months -> $599.55.
+    """
+    _require(months > 0, "Loan term must be at least 1 month")
+    r = annual_rate / 12.0
+    if r == 0:
+        return principal / months
+    return principal * r / (1 - (1 + r) ** -months)
+
+
+@dataclass
+class Liability:
+    """Money owed. This is the BASE class: it holds what every debt has in
+    common. Subclasses add the rules for how a specific kind of debt is paid
+    down each year by overriding year_activity():
+
+    - Loan:       fixed monthly payment that amortizes the balance to zero.
+    - CreditLine: interest-only (HELOC, line of credit); balance stays put.
+
+    balance is the amount owed at the START of start_year. A liability that
+    starts in a future year (e.g. a mortgage on a property bought in 2028)
+    owes nothing before then.
+
+    secured_by_asset_id links a debt to its collateral (a mortgage to its
+    house). Secured debts travel with their asset into scoped simulations,
+    and are paid off in full the year that asset is sold.
+    """
+
+    liability_id: str
+    name: str
+    balance: float
+    annual_interest_rate: float
+    start_year: int
+    liability_type: LiabilityType = LiabilityType.OTHER
+    entity_id: Optional[str] = None
+    secured_by_asset_id: Optional[str] = None
+    lender: str = ""
+    notes: str = ""
+    active: bool = True
+
+    # ClassVar = belongs to the class, not stored per-object or in __init__.
+    # Saved in JSON as "kind" so from_dict knows which subclass to rebuild.
+    kind: ClassVar[str] = "liability"
+
+    def __post_init__(self) -> None:
+        self.liability_type = _enum_value(self.liability_type, LiabilityType)
+        _require(bool(self.liability_id), "Liability.liability_id is required")
+        _require(bool(self.name), "Liability.name is required")
+        _require(self.balance >= 0, f"Liability '{self.liability_id}': balance must be >= 0")
+        _require(
+            0 <= self.annual_interest_rate < 1,
+            f"Liability '{self.liability_id}': annual_interest_rate is a fraction "
+            f"(0.06 for 6%), got {self.annual_interest_rate}",
+        )
+
+    def year_activity(self, beginning_balance: float) -> Tuple[float, float, float]:
+        """Return (interest_paid, principal_paid, ending_balance) for one
+        year that starts at beginning_balance. Each subclass defines this."""
+        raise NotImplementedError
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "kind": self.kind,
+            "liability_id": self.liability_id,
+            "name": self.name,
+            "liability_type": self.liability_type.value,
+            "balance": self.balance,
+            "annual_interest_rate": self.annual_interest_rate,
+            "start_year": self.start_year,
+            "entity_id": self.entity_id,
+            "secured_by_asset_id": self.secured_by_asset_id,
+            "lender": self.lender,
+            "notes": self.notes,
+            "active": self.active,
+        }
+
+    @staticmethod
+    def from_dict(data: Dict[str, Any]) -> "Liability":
+        return liability_from_dict(data)
+
+
+@dataclass
+class Loan(Liability):
+    """An amortizing loan: mortgage, farm loan, car loan, student loan.
+
+    Give either term_months (months left to pay as of start_year) and let the
+    app compute the payment, or monthly_payment (what the lender bills, e.g.
+    from a statement). If both are given, monthly_payment wins.
+    """
+
+    term_months: Optional[int] = None
+    monthly_payment: Optional[float] = None
+
+    kind: ClassVar[str] = "loan"
+
+    def __post_init__(self) -> None:
+        super().__post_init__()  # run the base-class checks first
+        _require(
+            self.term_months is not None or self.monthly_payment is not None,
+            f"Loan '{self.liability_id}': give term_months or monthly_payment",
+        )
+        if self.term_months is not None:
+            _require(self.term_months > 0, f"Loan '{self.liability_id}': term_months must be > 0")
+        first_month_interest = self.balance * self.annual_interest_rate / 12
+        _require(
+            self.balance == 0 or self.scheduled_monthly_payment() > first_month_interest,
+            f"Loan '{self.liability_id}': a ${self.scheduled_monthly_payment():,.2f} payment doesn't "
+            f"cover the ${first_month_interest:,.2f} monthly interest, so the balance would grow. "
+            "Use a CreditLine for interest-only debt.",
+        )
+
+    def scheduled_monthly_payment(self) -> float:
+        if self.monthly_payment is not None:
+            return self.monthly_payment
+        return amortized_monthly_payment(self.balance, self.annual_interest_rate, self.term_months)
+
+    def year_activity(self, beginning_balance: float) -> Tuple[float, float, float]:
+        """Walk 12 monthly payments. Each month: interest = balance x rate/12;
+        the rest of the payment reduces the balance. Stops at payoff."""
+        monthly_rate = self.annual_interest_rate / 12
+        payment = self.scheduled_monthly_payment()
+        balance = beginning_balance
+        interest_paid = 0.0
+        principal_paid = 0.0
+        for _month in range(12):
+            if balance <= 0.005:  # paid off (allow for rounding pennies)
+                balance = 0.0
+                break
+            interest = balance * monthly_rate
+            principal = min(payment - interest, balance)
+            interest_paid += interest
+            principal_paid += principal
+            balance -= principal
+        return interest_paid, principal_paid, max(balance, 0.0)
+
+    def to_dict(self) -> Dict[str, Any]:
+        data = super().to_dict()
+        data.update({"term_months": self.term_months, "monthly_payment": self.monthly_payment})
+        return data
+
+
+@dataclass
+class CreditLine(Liability):
+    """Interest-only revolving debt: HELOC, personal line of credit.
+    Each year you pay the interest; the balance stays the same."""
+
+    credit_limit: Optional[float] = None
+
+    kind: ClassVar[str] = "credit_line"
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.credit_limit is not None:
+            _require(
+                self.balance <= self.credit_limit,
+                f"Credit line '{self.liability_id}': balance ${self.balance:,.0f} is over "
+                f"the ${self.credit_limit:,.0f} limit",
+            )
+
+    def year_activity(self, beginning_balance: float) -> Tuple[float, float, float]:
+        return beginning_balance * self.annual_interest_rate, 0.0, beginning_balance
+
+    def to_dict(self) -> Dict[str, Any]:
+        data = super().to_dict()
+        data["credit_limit"] = self.credit_limit
+        return data
+
+
+# "kind" stored in JSON -> class to rebuild. Add new subclasses here.
+LIABILITY_KINDS: Dict[str, type] = {"loan": Loan, "credit_line": CreditLine}
+
+
+def liability_from_dict(data: Dict[str, Any]) -> Liability:
+    data = dict(data)
+    kind = data.pop("kind", "loan")
+    _require(kind in LIABILITY_KINDS, f"Unknown liability kind '{kind}'")
+    return LIABILITY_KINDS[kind](**data)
+
+
+# ---------------------------------------------------------------------------
 # Bundle
 # ---------------------------------------------------------------------------
 
@@ -405,6 +605,8 @@ class Bundle:
       assets (Cashflow.asset_id) comes along automatically.
     - cashflow_ids: household-level cashflows (asset_id None) that belong to
       the bundle, e.g. the salary in "Phil earnings".
+    - liability_ids: debts in the bundle. A debt secured by one of the
+      bundle's assets comes along automatically, like its cashflows.
 
     Schema v0.1 called cashflow_ids "standalone_cashflow_ids";
     migrations.py renames it when an old file is loaded.
@@ -419,6 +621,7 @@ class Bundle:
     entity_id: str
     asset_ids: List[str] = field(default_factory=list)
     cashflow_ids: List[str] = field(default_factory=list)
+    liability_ids: List[str] = field(default_factory=list)
     notes: str = ""
 
     def __post_init__(self) -> None:
@@ -426,8 +629,8 @@ class Bundle:
         _require(bool(self.name), "Bundle.name is required")
         _require(bool(self.entity_id), f"Bundle '{self.bundle_id}': entity_id is required")
         _require(
-            bool(self.asset_ids) or bool(self.cashflow_ids),
-            f"Bundle '{self.bundle_id}': must contain at least one asset_id or cashflow_id",
+            bool(self.asset_ids) or bool(self.cashflow_ids) or bool(self.liability_ids),
+            f"Bundle '{self.bundle_id}': must contain at least one asset, cashflow, or liability",
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -437,6 +640,7 @@ class Bundle:
             "entity_id": self.entity_id,
             "asset_ids": list(self.asset_ids),
             "cashflow_ids": list(self.cashflow_ids),
+            "liability_ids": list(self.liability_ids),
             "notes": self.notes,
         }
 
@@ -589,6 +793,28 @@ class AnnualAssetResult:
 
 
 @dataclass
+class AnnualLiabilityResult:
+    liability_id: str
+    year: int
+    beginning_balance: float = 0.0
+    interest_paid: float = 0.0
+    principal_paid: float = 0.0
+    ending_balance: float = 0.0
+    paid_off_this_year: bool = False
+
+    @property
+    def debt_service(self) -> float:
+        return self.interest_paid + self.principal_paid
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "AnnualLiabilityResult":
+        return cls(**data)
+
+
+@dataclass
 class TaxEstimate:
     year: int
     taxable_income_by_category: Dict[str, float] = field(default_factory=dict)
@@ -617,7 +843,12 @@ class AnnualHouseholdResult:
     total_net_worth: float = 0.0
     liquid_net_worth: float = 0.0
     illiquid_net_worth: float = 0.0
+    total_assets: float = 0.0
+    total_liabilities: float = 0.0
+    total_debt_service: float = 0.0
+    total_interest_paid: float = 0.0
     asset_results: List[AnnualAssetResult] = field(default_factory=list)
+    liability_results: List[AnnualLiabilityResult] = field(default_factory=list)
     tax_estimate: Optional[TaxEstimate] = None
     warnings: List[str] = field(default_factory=list)
 
@@ -635,7 +866,12 @@ class AnnualHouseholdResult:
             "total_net_worth": self.total_net_worth,
             "liquid_net_worth": self.liquid_net_worth,
             "illiquid_net_worth": self.illiquid_net_worth,
+            "total_assets": self.total_assets,
+            "total_liabilities": self.total_liabilities,
+            "total_debt_service": self.total_debt_service,
+            "total_interest_paid": self.total_interest_paid,
             "asset_results": [a.to_dict() for a in self.asset_results],
+            "liability_results": [r.to_dict() for r in self.liability_results],
             "tax_estimate": self.tax_estimate.to_dict() if self.tax_estimate else None,
             "warnings": self.warnings,
         }
@@ -644,6 +880,9 @@ class AnnualHouseholdResult:
     def from_dict(cls, data: Dict[str, Any]) -> "AnnualHouseholdResult":
         data = dict(data)
         data["asset_results"] = [AnnualAssetResult.from_dict(a) for a in data.get("asset_results", [])]
+        data["liability_results"] = [
+            AnnualLiabilityResult.from_dict(r) for r in data.get("liability_results", [])
+        ]
         if data.get("tax_estimate"):
             data["tax_estimate"] = TaxEstimate.from_dict(data["tax_estimate"])
         return cls(**data)
@@ -691,6 +930,7 @@ class Portfolio:
     entities: List[Entity] = field(default_factory=list)
     assets: List[Asset] = field(default_factory=list)
     cashflows: List[Cashflow] = field(default_factory=list)
+    liabilities: List[Liability] = field(default_factory=list)
     bundles: List[Bundle] = field(default_factory=list)
     scenarios: List[Scenario] = field(default_factory=list)
     file_version: str = CURRENT_SCHEMA_VERSION
@@ -711,6 +951,10 @@ class Portfolio:
         dup_entities = {e for e in entity_ids if entity_ids.count(e) > 1}
         _require(not dup_entities, f"Duplicate entity_id(s) found: {dup_entities}")
 
+        liability_ids = [li.liability_id for li in self.liabilities]
+        dup_liabilities = {x for x in liability_ids if liability_ids.count(x) > 1}
+        _require(not dup_liabilities, f"Duplicate liability_id(s) found: {dup_liabilities}")
+
         bundle_ids = [b.bundle_id for b in self.bundles]
         dup_bundles = {b for b in bundle_ids if bundle_ids.count(b) > 1}
         _require(not dup_bundles, f"Duplicate bundle_id(s) found: {dup_bundles}")
@@ -725,6 +969,18 @@ class Portfolio:
             _require(
                 cf.asset_id is None or cf.asset_id in asset_id_set,
                 f"Cashflow '{cf.flow_id}' references asset_id '{cf.asset_id}' "
+                "which is not defined in portfolio.assets",
+            )
+
+        for li in self.liabilities:
+            _require(
+                li.entity_id is None or li.entity_id in entity_id_set,
+                f"Liability '{li.liability_id}' references entity_id '{li.entity_id}' "
+                "which is not defined in portfolio.entities",
+            )
+            _require(
+                li.secured_by_asset_id is None or li.secured_by_asset_id in asset_id_set,
+                f"Liability '{li.liability_id}' is secured by asset_id '{li.secured_by_asset_id}' "
                 "which is not defined in portfolio.assets",
             )
 
@@ -752,6 +1008,12 @@ class Portfolio:
                     fid in flow_id_set,
                     f"Bundle '{b.bundle_id}' references cashflow_id '{fid}' "
                     "which is not defined in portfolio.cashflows",
+                )
+            for lid in b.liability_ids:
+                _require(
+                    lid in set(liability_ids),
+                    f"Bundle '{b.bundle_id}' references liability_id '{lid}' "
+                    "which is not defined in portfolio.liabilities",
                 )
 
     # -- lookups -------------------------------------------------------------
@@ -785,21 +1047,21 @@ class Portfolio:
 
     def resolve_scope(
         self, entity_ids: Optional[List[str]] = None, bundle_ids: Optional[List[str]] = None
-    ) -> "tuple[set, set]":
+    ) -> "tuple[set, set, set]":
         """Resolve a (entity_ids, bundle_ids) targeting spec -- as found on
-        Scenario.entity_ids / Scenario.bundle_ids -- into the concrete set
-        of asset_ids and household-level cashflow_ids it covers.
+        Scenario.entity_ids / Scenario.bundle_ids -- into the concrete sets
+        of (asset_ids, household-level cashflow_ids, liability_ids) it covers.
 
         The effective scope is the union of: every Bundle under any of the
         named Entities, plus every Bundle named directly in bundle_ids. If
-        both are empty, returns (None, None) to signal "no scoping, use the
+        both are empty, returns (None, None, None) to signal "no scoping, use the
         whole portfolio" -- callers should check for this rather than
         treating it as an empty scope.
         """
         entity_ids = entity_ids or []
         bundle_ids = bundle_ids or []
         if not entity_ids and not bundle_ids:
-            return None, None
+            return None, None, None
 
         target_bundles: List[Bundle] = []
         for eid in entity_ids:
@@ -811,10 +1073,12 @@ class Portfolio:
 
         asset_id_scope = set()
         flow_id_scope = set()
+        liability_id_scope = set()
         for b in target_bundles:
             asset_id_scope.update(b.asset_ids)
             flow_id_scope.update(b.cashflow_ids)
-        return asset_id_scope, flow_id_scope
+            liability_id_scope.update(b.liability_ids)
+        return asset_id_scope, flow_id_scope, liability_id_scope
 
     # -- cashflows -------------------------------------------------------------
 
@@ -884,12 +1148,58 @@ class Portfolio:
 
     def remove_asset(self, asset_id: str) -> List[Cashflow]:
         """Remove an asset AND the cashflows linked to it (a rent flow means
-        nothing without its property). Returns the removed cashflows."""
+        nothing without its property). Returns the removed cashflows.
+
+        Debts secured by the asset are NOT deleted -- removing a record
+        doesn't make a loan go away -- they're just un-linked."""
         _require(self.get_asset(asset_id) is not None, f"No asset with id '{asset_id}' found to remove")
+        for li in self.liabilities_secured_by(asset_id):
+            li.secured_by_asset_id = None
         removed = self.cashflows_for_asset(asset_id)
         self.assets = [a for a in self.assets if a.asset_id != asset_id]
         self.cashflows = [cf for cf in self.cashflows if cf.asset_id != asset_id]
         return removed
+
+    # -- liabilities -----------------------------------------------------------
+
+    def get_liability(self, liability_id: str) -> Optional[Liability]:
+        for li in self.liabilities:
+            if li.liability_id == liability_id:
+                return li
+        return None
+
+    def liabilities_secured_by(self, asset_id: str) -> List[Liability]:
+        return [li for li in self.liabilities if li.secured_by_asset_id == asset_id]
+
+    def _require_valid_liability_links(self, liability: Liability) -> None:
+        _require(
+            liability.secured_by_asset_id is None or self.get_asset(liability.secured_by_asset_id) is not None,
+            f"Liability '{liability.liability_id}' is secured by unknown asset '{liability.secured_by_asset_id}'",
+        )
+        _require(
+            liability.entity_id is None or self.get_entity(liability.entity_id) is not None,
+            f"Liability '{liability.liability_id}' references unknown entity '{liability.entity_id}'",
+        )
+
+    def add_liability(self, liability: Liability) -> None:
+        _require(
+            self.get_liability(liability.liability_id) is None,
+            f"Liability with id '{liability.liability_id}' already exists",
+        )
+        self._require_valid_liability_links(liability)
+        self.liabilities.append(liability)
+
+    def replace_liability(self, liability_id: str, new_liability: Liability) -> None:
+        self._require_valid_liability_links(new_liability)
+        for i, li in enumerate(self.liabilities):
+            if li.liability_id == liability_id:
+                self.liabilities[i] = new_liability
+                return
+        _require(False, f"No liability with id '{liability_id}' found to replace")
+
+    def remove_liability(self, liability_id: str) -> None:
+        _require(self.get_liability(liability_id) is not None, f"No liability with id '{liability_id}' found to remove")
+        self.liabilities = [li for li in self.liabilities if li.liability_id != liability_id]
 
     # -- scenarios, entities, bundles -----------------------------------------
 
@@ -954,6 +1264,7 @@ class Portfolio:
             "entities": [e.to_dict() for e in self.entities],
             "assets": [a.to_dict() for a in self.assets],
             "cashflows": [cf.to_dict() for cf in self.cashflows],
+            "liabilities": [li.to_dict() for li in self.liabilities],
             "bundles": [b.to_dict() for b in self.bundles],
             "scenarios": [s.to_dict() for s in self.scenarios],
         }
@@ -968,6 +1279,7 @@ class Portfolio:
             entities=[Entity.from_dict(e) for e in data.get("entities", [])],
             assets=[Asset.from_dict(a) for a in data.get("assets", [])],
             cashflows=[Cashflow.from_dict(cf) for cf in data.get("cashflows", [])],
+            liabilities=[liability_from_dict(li) for li in data.get("liabilities", [])],
             bundles=[Bundle.from_dict(b) for b in data.get("bundles", [])],
             scenarios=[Scenario.from_dict(s) for s in data.get("scenarios", [])],
             file_version=metadata.get("file_version", CURRENT_SCHEMA_VERSION),

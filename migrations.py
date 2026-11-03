@@ -10,7 +10,7 @@ Every saved file records its schema in metadata.file_version. migrate()
 looks at that version and applies each upgrade step in order until the
 data is current -- like climbing a ladder one rung at a time:
 
-    "0.1" --(_v0_1_to_v0_2)--> "0.2"
+    "0.1" --(_v0_1_to_v0_2)--> "0.2" --(_v0_2_to_v0_3)--> "0.3"
 
 To change the model in the future:
   1. Bump CURRENT_SCHEMA_VERSION.
@@ -27,7 +27,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Callable, Dict
 
-CURRENT_SCHEMA_VERSION = "0.2"
+CURRENT_SCHEMA_VERSION = "0.3"
 
 
 class MigrationError(ValueError):
@@ -60,9 +60,21 @@ def _v0_1_to_v0_2(data: Dict[str, Any]) -> Dict[str, Any]:
     return data
 
 
+def _v0_2_to_v0_3(data: Dict[str, Any]) -> Dict[str, Any]:
+    """v0.3 adds liabilities (loans, credit lines) as a top-level list,
+    and bundles can now hold liability_ids. Older files had no liabilities,
+    so both start empty."""
+    data.setdefault("liabilities", [])
+    for bundle in data.get("bundles", []) or []:
+        bundle.setdefault("liability_ids", [])
+    data.setdefault("metadata", {})["file_version"] = "0.3"
+    return data
+
+
 # version found in the file -> function that upgrades it one step
 _STEPS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "0.1": _v0_1_to_v0_2,
+    "0.2": _v0_2_to_v0_3,
 }
 
 

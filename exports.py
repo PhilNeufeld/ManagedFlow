@@ -130,10 +130,12 @@ def export_to_excel(
     _write_entities_sheet(wb, portfolio)
     _write_assets_sheet(wb, portfolio)
     _write_cashflows_sheet(wb, portfolio)
+    _write_liabilities_sheet(wb, portfolio)
     _write_bundles_sheet(wb, portfolio)
     _write_scenario_settings_sheet(wb, portfolio)
     _write_annual_results_sheet(wb, simulation_results)
     _write_asset_detail_sheet(wb, simulation_results)
+    _write_liability_detail_sheet(wb, simulation_results)
     _write_cashflow_detail_sheet(wb, portfolio, simulation_results)
     _write_tax_estimate_sheet(wb, simulation_results)
     _write_drawdowns_sheet(wb, simulation_results)
@@ -379,6 +381,7 @@ ANNUAL_RESULTS_HEADERS = [
     "Scenario", "Year", "Total Gross Income", "Total Expenses", "Estimated Tax",
     "Net Cashflow", "Surplus / (Deficit)", "Withdrawal Amount", "Reinvestment Amount",
     "Total Net Worth", "Liquid Net Worth", "Illiquid Net Worth",
+    "Total Assets", "Total Liabilities", "Debt Service", "Interest Paid",
 ]
 
 
@@ -395,8 +398,9 @@ def _write_annual_results_sheet(wb: Workbook, simulation_results: List[Simulatio
                 r.total_estimated_tax, r.net_cashflow, r.surplus_or_deficit,
                 r.withdrawal_amount, r.reinvestment_amount, r.total_net_worth,
                 r.liquid_net_worth, r.illiquid_net_worth,
+                r.total_assets, r.total_liabilities, r.total_debt_service, r.total_interest_paid,
             ])
-    _write_table(ws, 3, ANNUAL_RESULTS_HEADERS, rows, currency_cols=list(range(2, 12)))
+    _write_table(ws, 3, ANNUAL_RESULTS_HEADERS, rows, currency_cols=list(range(2, 16)))
 
     # Highlight deficit years for quick visual scanning.
     deficit_col = ANNUAL_RESULTS_HEADERS.index("Surplus / (Deficit)") + 1
@@ -431,6 +435,59 @@ def _write_asset_detail_sheet(wb: Workbook, simulation_results: List[SimulationR
                     ar.gross_expense, ar.sold_this_year, ar.sale_proceeds,
                 ])
     _write_table(ws, 3, ASSET_DETAIL_HEADERS, rows, currency_cols=list(range(3, 9)) + [10])
+
+
+# ---------------------------------------------------------------------------
+# Liabilities (inputs) and Liability Detail (per-year results)
+# ---------------------------------------------------------------------------
+
+LIABILITY_HEADERS = [
+    "Liability ID", "Name", "Kind", "Type", "Lender", "Entity", "Secured By",
+    "Balance", "Interest Rate", "Start Year", "Term (months)", "Monthly Payment",
+    "Credit Limit", "Active", "Notes",
+]
+
+
+def _write_liabilities_sheet(wb: Workbook, portfolio: Portfolio) -> None:
+    ws = wb.create_sheet("Liabilities")
+    ws["A1"] = "Liabilities"
+    ws["A1"].font = TITLE_FONT
+    entity_name_by_id = {e.entity_id: e.name for e in portfolio.entities}
+    asset_name_by_id = {a.asset_id: a.name for a in portfolio.assets}
+    rows = []
+    for li in portfolio.liabilities:
+        payment = li.scheduled_monthly_payment() if hasattr(li, "scheduled_monthly_payment") else None
+        rows.append([
+            li.liability_id, li.name, li.kind, li.liability_type.value, li.lender,
+            entity_name_by_id.get(li.entity_id, li.entity_id or ""),
+            asset_name_by_id.get(li.secured_by_asset_id, li.secured_by_asset_id or ""),
+            li.balance, li.annual_interest_rate, li.start_year,
+            getattr(li, "term_months", None), payment, getattr(li, "credit_limit", None),
+            li.active, li.notes,
+        ])
+    _write_table(ws, 3, LIABILITY_HEADERS, rows, currency_cols=[7, 11, 12], percent_cols=[8])
+
+
+LIABILITY_DETAIL_HEADERS = [
+    "Scenario", "Year", "Liability ID", "Beginning Balance", "Interest Paid",
+    "Principal Paid", "Debt Service", "Ending Balance", "Paid Off This Year",
+]
+
+
+def _write_liability_detail_sheet(wb: Workbook, simulation_results: List[SimulationResult]) -> None:
+    ws = wb.create_sheet("Liability Detail")
+    ws["A1"] = "Per-Liability Annual Detail by Scenario"
+    ws["A1"].font = TITLE_FONT
+    rows = []
+    for sim in simulation_results:
+        for r in sim.annual_results:
+            for lr in r.liability_results:
+                rows.append([
+                    sim.scenario_id, lr.year, lr.liability_id, lr.beginning_balance,
+                    lr.interest_paid, lr.principal_paid, lr.debt_service, lr.ending_balance,
+                    lr.paid_off_this_year,
+                ])
+    _write_table(ws, 3, LIABILITY_DETAIL_HEADERS, rows, currency_cols=[3, 4, 5, 6, 7])
 
 
 # ---------------------------------------------------------------------------

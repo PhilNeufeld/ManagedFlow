@@ -29,12 +29,15 @@ from models import (
     Bundle,
     Cashflow,
     CashflowDirection,
+    CreditLine,
     Entity,
     EntityType,
     FlowType,
     Frequency,
     Household,
+    LiabilityType,
     LiquidityCategory,
+    Loan,
     Portfolio,
     Scenario,
     TaxCategory,
@@ -771,6 +774,216 @@ def _render_cashflow_editor(portfolio: Portfolio, editor: dict) -> None:
 # Entities & Bundles tab
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Liabilities tab
+# ---------------------------------------------------------------------------
+
+_KIND_LABELS = {"loan": "Loan (amortizing)", "credit_line": "Credit line (interest-only)"}
+
+
+def _monthly_payment_label(li) -> str:
+    if isinstance(li, Loan):
+        return format_currency(li.scheduled_monthly_payment())
+    return format_currency(li.balance * li.annual_interest_rate / 12) + " (interest)"
+
+
+def render_liabilities_tab(portfolio: Portfolio) -> None:
+    st.header("Liabilities")
+    st.caption(
+        "Loans and credit lines. Payments are calculated for you each year: "
+        "don't also enter them as cashflows, or they'll be counted twice."
+    )
+
+    kind = "liability"
+    asset_name_by_id = {a.asset_id: a.name for a in portfolio.assets}
+    entity_name_by_id = {e.entity_id: e.name for e in portfolio.entities}
+
+    if portfolio.liabilities:
+        df = pd.DataFrame(
+            [
+                {
+                    "Name": li.name,
+                    "Kind": _KIND_LABELS.get(li.kind, li.kind),
+                    "Type": li.liability_type.value,
+                    "Lender": li.lender,
+                    "Balance": format_currency(li.balance),
+                    "Rate": f"{li.annual_interest_rate:.3%}",
+                    "As of": li.start_year,
+                    "Monthly Payment": _monthly_payment_label(li),
+                    "Secured By": asset_name_by_id.get(li.secured_by_asset_id, ""),
+                    "Entity": entity_name_by_id.get(li.entity_id, ""),
+                    "Active": li.active,
+                }
+                for li in portfolio.liabilities
+            ]
+        )
+        total = sum(li.balance for li in portfolio.liabilities if li.active)
+        st.caption(f"Total owed (active): {format_currency(total)}. Click a row to select it, then Edit or Delete.")
+
+        def _delete_liability(liability_id: str) -> bool:
+            li = portfolio.get_liability(liability_id)
+            referencing = [b.name for b in portfolio.bundles if liability_id in b.liability_ids]
+            if referencing:
+                st.error(
+                    f"Can't delete '{li.name}': it's referenced by Bundle(s) "
+                    f"{', '.join(referencing)}. Remove it from those Bundles first."
+                )
+                return False
+            portfolio.remove_liability(liability_id)
+            _clear_simulation_cache()
+            st.success(f"Deleted '{li.name}'.")
+            return True
+
+        _render_selectable_table(
+            kind, df, [li.liability_id for li in portfolio.liabilities], _delete_liability,
+            delete_label="this liability",
+        )
+    else:
+        st.info("No liabilities yet. Click 'Add new liability' below to add a loan or credit line.")
+
+    if st.button("➕ Add new liability", key="liability_add_new_btn"):
+        _editor_open_new(kind)
+        st.rerun()
+
+    editor = _editor_get(kind)
+    if editor is not None:
+        _render_liability_editor(portfolio, editor)
+
+
+def _render_liability_editor(portfolio: Portfolio, editor: dict) -> None:
+    kind = "liability"
+    mode = editor["mode"]
+    record_id = editor["record_id"]
+    existing = portfolio.get_liability(record_id) if mode == "edit" else None
+
+    if mode == "edit" and existing is None:
+        st.warning("That liability no longer exists.")
+        _editor_close(kind)
+        return
+
+    st.markdown(f"**Editing '{existing.name}'**" if mode == "edit" else "**New liability**")
+
+    def field(name: str):
+        return _editor_widget_key(kind, name)
+
+    # Kind sits OUTSIDE the form so the form can show the right fields for it
+    # (widgets inside an st.form don't rerun the page until Save).
+    kind_values = list(_KIND_LABELS)
+    liability_kind = st.radio(
+        "Kind", kind_values, format_func=_KIND_LABELS.get, horizontal=True,
+        index=kind_values.index(existing.kind) if existing else 0, key=field("kind"),
+    )
+
+    asset_options = [None] + [a.asset_id for a in portfolio.assets]
+    entity_options = [None] + [e.entity_id for e in portfolio.entities]
+    asset_names = {a.asset_id: a.name for a in portfolio.assets}
+    entity_names = {e.entity_id: e.name for e in portfolio.entities}
+    type_values = [t.value for t in LiabilityType]
+
+    with st.form(f"liability_editor_form_{mode}_{record_id}"):
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            name = st.text_input("Name", value=existing.name if existing else "", key=field("name"))
+            liability_type = st.selectbox(
+                "Type", type_values,
+                index=type_values.index(existing.liability_type.value) if existing else 0,
+                key=field("liability_type"),
+            )
+            lender = st.text_input("Lender", value=existing.lender if existing else "", key=field("lender"))
+        with col2:
+            balance = st.number_input(
+                "Balance owed", min_value=0.0, step=1000.0,
+                value=float(existing.balance) if existing else 0.0, key=field("balance"),
+            )
+            rate_pct = st.number_input(
+                "Interest rate (%)", min_value=0.0, max_value=99.0, step=0.125, format="%.3f",
+                value=float(existing.annual_interest_rate * 100) if existing else 6.0, key=field("rate"),
+            )
+            start_year = st.number_input(
+                "Balance as of (year)", step=1,
+                value=int(existing.start_year) if existing else int(portfolio.assumptions.start_year),
+                key=field("start_year"),
+            )
+        with col3:
+            if liability_kind == "loan":
+                term_months = st.number_input(
+                    "Months left to pay (0 = use payment)", min_value=0, step=12,
+                    value=int(getattr(existing, "term_months", None) or 0) if existing else 360,
+                    key=field("term_months"),
+                )
+                monthly_payment = st.number_input(
+                    "Monthly payment from statement (0 = calculate)", min_value=0.0, step=10.0,
+                    value=float(getattr(existing, "monthly_payment", None) or 0.0) if existing else 0.0,
+                    key=field("monthly_payment"),
+                )
+            else:
+                credit_limit = st.number_input(
+                    "Credit limit (0 = none)", min_value=0.0, step=1000.0,
+                    value=float(getattr(existing, "credit_limit", None) or 0.0) if existing else 0.0,
+                    key=field("credit_limit"),
+                )
+            secured_by = st.selectbox(
+                "Secured by asset", asset_options,
+                index=asset_options.index(existing.secured_by_asset_id)
+                if existing and existing.secured_by_asset_id in asset_options else 0,
+                format_func=lambda aid: "(none)" if aid is None else asset_names.get(aid, aid),
+                key=field("secured_by"),
+            )
+            entity_id = st.selectbox(
+                "Owed by entity", entity_options,
+                index=entity_options.index(existing.entity_id)
+                if existing and existing.entity_id in entity_options else 0,
+                format_func=lambda eid: "(none)" if eid is None else entity_names.get(eid, eid),
+                key=field("entity_id"),
+            )
+        active = st.checkbox("Active", value=existing.active if existing else True, key=field("active"))
+        notes = st.text_area("Notes", value=existing.notes if existing else "", key=field("notes"))
+
+        col_save, col_cancel = st.columns([1, 1])
+        with col_save:
+            save_clicked = st.form_submit_button("💾 Save", type="primary")
+        with col_cancel:
+            cancel_clicked = st.form_submit_button("Cancel")
+
+    if cancel_clicked:
+        _editor_close(kind)
+        st.rerun()
+
+    if save_clicked:
+        if not name.strip():
+            st.error("Name is required.")
+            return
+        try:
+            liability_id = record_id if mode == "edit" else _generate_id(
+                "liability", name, [li.liability_id for li in portfolio.liabilities]
+            )
+            common = dict(
+                liability_id=liability_id, name=name, liability_type=liability_type, lender=lender,
+                balance=balance, annual_interest_rate=rate_pct / 100, start_year=int(start_year),
+                secured_by_asset_id=secured_by, entity_id=entity_id, active=active, notes=notes,
+            )
+            if liability_kind == "loan":
+                liability = Loan(
+                    **common,
+                    term_months=int(term_months) or None,
+                    monthly_payment=monthly_payment or None,
+                )
+            else:
+                liability = CreditLine(**common, credit_limit=credit_limit or None)
+
+            if mode == "new":
+                portfolio.add_liability(liability)
+                st.success(f"Added '{name}'.")
+            else:
+                portfolio.replace_liability(record_id, liability)
+                st.success(f"Saved changes to '{name}'.")
+            _clear_simulation_cache()
+            _editor_close(kind)
+            st.rerun()
+        except ValidationError as exc:
+            st.error(str(exc))
+
+
 def render_entities_bundles_tab(portfolio: Portfolio) -> None:
     st.header("Entities & Bundles")
     st.caption(
@@ -947,7 +1160,8 @@ def _render_entity_editor(portfolio: Portfolio, editor: dict) -> None:
         st.divider()
         referencing_bundles = [b.name for b in portfolio.bundles if b.entity_id == record_id]
         referencing_assets = [a.name for a in portfolio.assets if a.entity_id == record_id]
-        blockers = referencing_bundles + referencing_assets
+        referencing_liabilities = [li.name for li in portfolio.liabilities if li.entity_id == record_id]
+        blockers = referencing_bundles + referencing_assets + referencing_liabilities
         if blockers:
             st.caption(f"⚠️ Still referenced by: {', '.join(blockers)}. These must be reassigned or removed first.")
         confirm_key = f"_confirm_delete_entity_inline_{record_id}"
@@ -1001,6 +1215,7 @@ def _render_bundle_editor(portfolio: Portfolio, editor: dict) -> None:
         "entity_choice": existing.entity_id if existing else (entity_ids[0] if entity_ids else None),
         "asset_ids": list(existing.asset_ids) if existing else [],
         "flow_ids": list(existing.cashflow_ids) if existing else [],
+        "liability_ids": list(existing.liability_ids) if existing else [],
         "notes": existing.notes if existing else "",
     }
 
@@ -1026,6 +1241,14 @@ def _render_bundle_editor(portfolio: Portfolio, editor: dict) -> None:
                 options=[cf.flow_id for cf in portfolio.household_level_cashflows()],
                 default=[fid for fid in defaults["flow_ids"] if fid in flow_name_by_id],
                 format_func=lambda fid: flow_name_by_id.get(fid, fid), key=field("flow_ids"),
+            )
+            liability_name_by_id = {li.liability_id: li.name for li in portfolio.liabilities}
+            selected_liabilities = st.multiselect(
+                "Liabilities in this bundle (loans secured by a bundled asset "
+                "travel automatically with it)",
+                options=list(liability_name_by_id),
+                default=[lid for lid in defaults["liability_ids"] if lid in liability_name_by_id],
+                format_func=lambda lid: liability_name_by_id.get(lid, lid), key=field("liability_ids"),
             )
         notes = st.text_area("Notes", value=defaults["notes"], key=field("notes"))
 
@@ -1055,6 +1278,7 @@ def _render_bundle_editor(portfolio: Portfolio, editor: dict) -> None:
                     entity_id=entity_choice,
                     asset_ids=list(selected_assets),
                     cashflow_ids=list(selected_flows),
+                    liability_ids=list(selected_liabilities),
                     notes=notes,
                 )
 
@@ -1439,6 +1663,9 @@ def render_simulation_tab(portfolio: Portfolio) -> None:
                 "Surplus/(Deficit)": r.surplus_or_deficit,
                 "Withdrawal": r.withdrawal_amount,
                 "Reinvestment": r.reinvestment_amount,
+                "Debt Service": r.total_debt_service,
+                "Total Assets": r.total_assets,
+                "Total Liabilities": r.total_liabilities,
                 "Total Net Worth": r.total_net_worth,
                 "Liquid Net Worth": r.liquid_net_worth,
                 "Illiquid Net Worth": r.illiquid_net_worth,
@@ -1451,7 +1678,7 @@ def render_simulation_tab(portfolio: Portfolio) -> None:
     for col in currency_cols:
         display_df[col] = display_df[col].apply(format_currency)
     st.dataframe(display_df, use_container_width=True)
-    st.line_chart(numeric_df.set_index("Year")[["Total Net Worth", "Liquid Net Worth", "Illiquid Net Worth"]])
+    st.line_chart(numeric_df.set_index("Year")[["Total Assets", "Total Liabilities", "Total Net Worth"]])
 
     all_warnings = [(r.year, w) for r in chosen.annual_results for w in r.warnings]
     if all_warnings:
@@ -1511,21 +1738,24 @@ def main() -> None:
         return
 
     tabs = st.tabs(
-        ["Assets", "Cashflows", "Entities & Bundles", "Assumptions", "Scenarios", "Simulation", "Export"]
+        ["Assets", "Liabilities", "Cashflows", "Entities & Bundles", "Assumptions",
+         "Scenarios", "Simulation", "Export"]
     )
     with tabs[0]:
         render_assets_tab(portfolio)
     with tabs[1]:
-        render_cashflows_tab(portfolio)
+        render_liabilities_tab(portfolio)
     with tabs[2]:
-        render_entities_bundles_tab(portfolio)
+        render_cashflows_tab(portfolio)
     with tabs[3]:
-        render_assumptions_tab(portfolio)
+        render_entities_bundles_tab(portfolio)
     with tabs[4]:
-        render_scenarios_tab(portfolio)
+        render_assumptions_tab(portfolio)
     with tabs[5]:
-        render_simulation_tab(portfolio)
+        render_scenarios_tab(portfolio)
     with tabs[6]:
+        render_simulation_tab(portfolio)
+    with tabs[7]:
         render_export_tab(portfolio)
 
 

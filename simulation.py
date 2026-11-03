@@ -9,13 +9,16 @@ Per-year sequence (matches the project spec's "Simulation Logic" section):
     1. For each asset: beginning value -> growth -> apply cashflows that
        affect value -> ending value. Track gross income/expense for
        reporting.
-    2. Aggregate household-level cashflows (not tied to an asset).
-    3. Estimate taxes for the year.
-    4. Compute total cash available vs. total household expenses.
-    5. Determine surplus/deficit.
-    6. If deficit: run the withdrawal rules engine.
-    7. If surplus: reinvest (if the scenario says to).
-    8. Record an AnnualHouseholdResult.
+    2. For each liability: pay the year's interest and principal, reduce
+       the balance (paid off in full if its collateral was sold this year).
+       Debt service counts as an expense.
+    3. Aggregate household-level cashflows (not tied to an asset).
+    4. Estimate taxes for the year.
+    5. Compute total cash available vs. total household expenses.
+    6. Determine surplus/deficit.
+    7. If deficit: run the withdrawal rules engine.
+    8. If surplus: reinvest (if the scenario says to).
+    9. Net worth = assets - liabilities. Record an AnnualHouseholdResult.
 
 A "year" in this MVP is always a full calendar year. Monthly/quarterly
 frequency cashflows are normalized to an annual figure inside
@@ -31,7 +34,9 @@ from models import (
     Asset,
     AnnualAssetResult,
     AnnualHouseholdResult,
+    AnnualLiabilityResult,
     Assumptions,
+    Liability,
     CashflowDirection,
     Portfolio,
     Scenario,
@@ -62,7 +67,7 @@ def run_simulation(portfolio: Portfolio, scenario: Scenario) -> SimulationResult
     working_portfolio, scenario_warnings = scenario_engine.apply_scenario(portfolio, scenario)
     assumptions = working_portfolio.assumptions
 
-    asset_id_scope, flow_id_scope = working_portfolio.resolve_scope(
+    asset_id_scope, flow_id_scope, liability_id_scope = working_portfolio.resolve_scope(
         scenario.entity_ids, scenario.bundle_ids
     )
     # Split the portfolio's single cashflow list into the two groups the
@@ -79,9 +84,21 @@ def run_simulation(portfolio: Portfolio, scenario: Scenario) -> SimulationResult
     if asset_id_scope is not None:
         scope_assets = [a for a in working_portfolio.assets if a.asset_id in asset_id_scope]
         scope_household_cashflows = [cf for cf in household_flows if cf.flow_id in flow_id_scope]
+        # A debt is in scope if its bundle names it, or if it's secured by
+        # an asset that's in scope (the mortgage travels with the house).
+        scope_liabilities = [
+            li for li in working_portfolio.liabilities
+            if li.liability_id in liability_id_scope or li.secured_by_asset_id in asset_id_scope
+        ]
     else:
         scope_assets = working_portfolio.assets
         scope_household_cashflows = household_flows
+        scope_liabilities = working_portfolio.liabilities
+
+    # Running balance of each debt, carried from one year to the next.
+    # (The Liability objects themselves keep their starting balance, which
+    # Loan needs to compute its fixed payment.)
+    balances = {li.liability_id: li.balance for li in scope_liabilities}
 
     annual_results: List[AnnualHouseholdResult] = []
 
@@ -89,7 +106,7 @@ def run_simulation(portfolio: Portfolio, scenario: Scenario) -> SimulationResult
         year_warnings = list(scenario_warnings) if year == assumptions.start_year else []
         result = _simulate_year(
             year, scope_assets, scope_household_cashflows, flows_by_asset,
-            scenario, assumptions, year_warnings,
+            scope_liabilities, balances, scenario, assumptions, year_warnings,
         )
         annual_results.append(result)
 
@@ -101,6 +118,8 @@ def _simulate_year(
     assets: List[Asset],
     household_cashflows: list,
     flows_by_asset: dict,
+    liabilities: List[Liability],
+    balances: dict,
     scenario: Scenario,
     assumptions: Assumptions,
     warnings: List[str],
@@ -119,6 +138,14 @@ def _simulate_year(
         total_asset_income += asset_result.gross_income
         total_asset_expense += asset_result.gross_expense
 
+    sold_asset_ids = {r.asset_id for r in asset_results if r.sold_this_year}
+    liability_results: List[AnnualLiabilityResult] = [
+        _simulate_liability_year(li, year, balances, sold_asset_ids) for li in liabilities
+    ]
+    total_debt_service = sum(r.debt_service for r in liability_results)
+    total_interest_paid = sum(r.interest_paid for r in liability_results)
+    total_liabilities = sum(r.ending_balance for r in liability_results)
+
     household_income = 0.0
     household_expense = 0.0
     for cf in household_cashflows:
@@ -129,7 +156,7 @@ def _simulate_year(
             household_expense += -signed  # store as positive expense magnitude
 
     total_gross_income = total_asset_income + household_income
-    total_expenses = total_asset_expense + household_expense
+    total_expenses = total_asset_expense + household_expense + total_debt_service
 
     this_year_cashflows = [
         cf for cf in (
@@ -168,7 +195,8 @@ def _simulate_year(
     liquid_categories = {"liquid", "semi_liquid"}
     liquid_net_worth = sum(a.current_value for a in assets if a.active and a.liquidity_category.value in liquid_categories)
     illiquid_net_worth = sum(a.current_value for a in assets if a.active and a.liquidity_category.value not in liquid_categories)
-    total_net_worth = liquid_net_worth + illiquid_net_worth
+    total_assets = liquid_net_worth + illiquid_net_worth
+    total_net_worth = total_assets - total_liabilities
 
     return AnnualHouseholdResult(
         year=year,
@@ -183,7 +211,12 @@ def _simulate_year(
         total_net_worth=total_net_worth,
         liquid_net_worth=liquid_net_worth,
         illiquid_net_worth=illiquid_net_worth,
+        total_assets=total_assets,
+        total_liabilities=total_liabilities,
+        total_debt_service=total_debt_service,
+        total_interest_paid=total_interest_paid,
         asset_results=asset_results,
+        liability_results=liability_results,
         tax_estimate=tax_estimate,
         warnings=warnings,
     )
@@ -282,6 +315,43 @@ def _simulate_asset_year(
         gross_expense=gross_expense,
         sold_this_year=sold_this_year,
         sale_proceeds=sale_proceeds,
+    )
+
+
+def _simulate_liability_year(
+    liability: Liability, year: int, balances: dict, sold_asset_ids: set
+) -> AnnualLiabilityResult:
+    """Advance one debt by one year and update balances[liability_id].
+
+    - Before its start_year (or if inactive) the debt doesn't exist yet: $0.
+    - Otherwise the subclass's year_activity() decides interest and
+      principal (Loan amortizes; CreditLine pays interest only).
+    - If the asset securing it was sold this year, the remaining balance is
+      paid off from the sale.
+    """
+    lid = liability.liability_id
+    if not liability.active or year < liability.start_year:
+        return AnnualLiabilityResult(liability_id=lid, year=year)
+
+    beginning = balances.get(lid, 0.0)
+    if beginning <= 0:
+        return AnnualLiabilityResult(liability_id=lid, year=year)
+
+    interest, principal, ending = liability.year_activity(beginning)
+
+    if liability.secured_by_asset_id in sold_asset_ids and ending > 0:
+        principal += ending  # pay off the rest of the loan at sale
+        ending = 0.0
+
+    balances[lid] = ending
+    return AnnualLiabilityResult(
+        liability_id=lid,
+        year=year,
+        beginning_balance=beginning,
+        interest_paid=interest,
+        principal_paid=principal,
+        ending_balance=ending,
+        paid_off_this_year=ending <= 0.005,
     )
 
 
