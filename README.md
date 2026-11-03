@@ -323,3 +323,5 @@ the **Bundles** and **Scenario Settings** tabs respectively.
   Run `streamlit run app.py` on your own machine and click through
   each tab once, especially the add/remove forms and the new
   Entity/Bundle creation flow, before relying on it day to day.
+#   M a n a g e d F l o w  
+ 
