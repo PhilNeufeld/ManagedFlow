@@ -64,7 +64,10 @@ def build_sample_portfolio() -> Portfolio:
         ),
     ]
 
-    assets = [
+    # Each _build_* helper returns (asset, its cashflows). Assets go in
+    # portfolio.assets; their cashflows go in the one top-level
+    # portfolio.cashflows list, linked back by asset_id.
+    built = [
         _build_rental_property(),
         _build_equity_fund(),
         _build_cash_account(),
@@ -73,6 +76,12 @@ def build_sample_portfolio() -> Portfolio:
         _build_business_interest(),
         _build_trust(),
     ]
+    assets = [asset for asset, _ in built]
+    asset_cashflows = []
+    for asset, flows in built:
+        for cf in flows:
+            cf.asset_id = asset.asset_id
+            asset_cashflows.append(cf)
     # Attribute each asset to its holding entity. Done here (rather than
     # inside each _build_* function) so the entity assignment is visible
     # in one place alongside the Bundle layout below.
@@ -173,13 +182,13 @@ def build_sample_portfolio() -> Portfolio:
             bundle_id="bundle_spouse_a_earnings",
             name="Spouse A Earnings",
             entity_id="entity_personal",
-            standalone_cashflow_ids=["hh_salary_a", "hh_pars_a", "hh_social_security_a"],
+            cashflow_ids=["hh_salary_a", "hh_pars_a", "hh_social_security_a"],
         ),
         Bundle(
             bundle_id="bundle_household_expenses",
             name="Household Living Expenses",
             entity_id="entity_personal",
-            standalone_cashflow_ids=["hh_living_expenses", "hh_estimated_tax_payment"],
+            cashflow_ids=["hh_living_expenses", "hh_estimated_tax_payment"],
         ),
         Bundle(
             bundle_id="bundle_business_interest",
@@ -247,7 +256,7 @@ def build_sample_portfolio() -> Portfolio:
         assumptions=assumptions,
         entities=entities,
         assets=assets,
-        household_cashflows=household_cashflows,
+        cashflows=household_cashflows + asset_cashflows,
         bundles=bundles,
         scenarios=scenarios,
         metadata_notes="Sample/demo data. Contains no real personal or financial information.",
@@ -255,7 +264,7 @@ def build_sample_portfolio() -> Portfolio:
     return portfolio
 
 
-def _build_rental_property() -> Asset:
+def _build_rental_property() -> tuple:
     asset = Asset(
         asset_id="real_estate_rental_1",
         name="Sample Rental Property",
@@ -268,7 +277,7 @@ def _build_rental_property() -> Asset:
         tax_category=TaxCategory.RENTAL_INCOME,
         notes="Single-family rental; sample numbers only.",
     )
-    asset.cashflows = [
+    flows = [
         Cashflow(
             flow_id="rental1_rent_income",
             asset_id=asset.asset_id,
@@ -377,10 +386,10 @@ def _build_rental_property() -> Asset:
             notes="Amount is 0 unless a scenario overrides it alongside sale_year.",
         ),
     ]
-    return asset
+    return asset, flows
 
 
-def _build_equity_fund() -> Asset:
+def _build_equity_fund() -> tuple:
     asset = Asset(
         asset_id="equity_fund_1",
         name="Sample Taxable Brokerage Account",
@@ -393,7 +402,7 @@ def _build_equity_fund() -> Asset:
         tax_category=TaxCategory.CAPITAL_GAINS,
         notes="Diversified index fund portfolio; sample numbers only.",
     )
-    asset.cashflows = [
+    flows = [
         Cashflow(
             flow_id="equity1_dividends",
             asset_id=asset.asset_id,
@@ -444,10 +453,10 @@ def _build_equity_fund() -> Asset:
             annual_growth_rate=0.03,
         ),
     ]
-    return asset
+    return asset, flows
 
 
-def _build_cash_account() -> Asset:
+def _build_cash_account() -> tuple:
     asset = Asset(
         asset_id="cash_1",
         name="Sample Cash / Money Market Reserve",
@@ -460,7 +469,7 @@ def _build_cash_account() -> Asset:
         tax_category=TaxCategory.ORDINARY_INCOME,
         notes="Emergency reserve / first-line liquidity buffer.",
     )
-    asset.cashflows = [
+    flows = [
         Cashflow(
             flow_id="cash1_interest",
             asset_id=asset.asset_id,
@@ -474,10 +483,10 @@ def _build_cash_account() -> Asset:
             tax_category=TaxCategory.ORDINARY_INCOME,
         ),
     ]
-    return asset
+    return asset, flows
 
 
-def _build_annuity() -> Asset:
+def _build_annuity() -> tuple:
     asset = Asset(
         asset_id="annuity_1",
         name="Sample Fixed Annuity",
@@ -491,7 +500,7 @@ def _build_annuity() -> Asset:
         do_not_sell=False,
         notes="Guaranteed income rider begins 2030 in this sample.",
     )
-    asset.cashflows = [
+    flows = [
         Cashflow(
             flow_id="annuity1_guaranteed_income",
             asset_id=asset.asset_id,
@@ -505,10 +514,10 @@ def _build_annuity() -> Asset:
             tax_category=TaxCategory.ANNUITY_INCOME,
         ),
     ]
-    return asset
+    return asset, flows
 
 
-def _build_pension() -> Asset:
+def _build_pension() -> tuple:
     asset = Asset(
         asset_id="pension_1",
         name="Sample CalPERS-style Pension",
@@ -521,7 +530,7 @@ def _build_pension() -> Asset:
         tax_category=TaxCategory.PENSION_INCOME,
         notes="Pension has no market value to track; modeled purely as an income stream.",
     )
-    asset.cashflows = [
+    flows = [
         Cashflow(
             flow_id="pension1_income",
             asset_id=asset.asset_id,
@@ -537,10 +546,10 @@ def _build_pension() -> Asset:
             notes="Scenario 'delay_calpers' / 'start_calpers_immediately' would override start_year.",
         ),
     ]
-    return asset
+    return asset, flows
 
 
-def _build_business_interest() -> Asset:
+def _build_business_interest() -> tuple:
     asset = Asset(
         asset_id="business_1",
         name="Sample Minority Business Interest",
@@ -554,7 +563,7 @@ def _build_business_interest() -> Asset:
         do_not_sell=True,
         notes="Illustrates an illiquid, do-not-sell holding with periodic distributions.",
     )
-    asset.cashflows = [
+    flows = [
         Cashflow(
             flow_id="business1_distribution",
             asset_id=asset.asset_id,
@@ -568,10 +577,10 @@ def _build_business_interest() -> Asset:
             tax_category=TaxCategory.BUSINESS_INCOME,
         ),
     ]
-    return asset
+    return asset, flows
 
 
-def _build_trust() -> Asset:
+def _build_trust() -> tuple:
     asset = Asset(
         asset_id="trust_1",
         name="Sample Family Trust",
@@ -584,7 +593,7 @@ def _build_trust() -> Asset:
         tax_category=TaxCategory.TRUST_INCOME,
         notes="Placeholder structure for a charitable remainder trust or similar vehicle.",
     )
-    asset.cashflows = [
+    flows = [
         Cashflow(
             flow_id="trust1_distribution",
             asset_id=asset.asset_id,
@@ -608,7 +617,7 @@ def _build_trust() -> Asset:
             frequency=Frequency.ANNUAL,
         ),
     ]
-    return asset
+    return asset, flows
 
 
 if __name__ == "__main__":

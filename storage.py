@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
+from migrations import MigrationError, migrate
 from models import Portfolio, SimulationResult, ValidationError
 
 
@@ -32,7 +33,7 @@ REQUIRED_TOP_LEVEL_KEYS = (
     "household",
     "assumptions",
     "assets",
-    "household_cashflows",
+    "cashflows",
     "scenarios",
 )
 
@@ -79,8 +80,8 @@ def validate_portfolio_json(data: Dict[str, Any]) -> List[str]:
     if "assets" in data and not isinstance(data["assets"], list):
         problems.append("'assets' must be a list")
 
-    if "household_cashflows" in data and not isinstance(data["household_cashflows"], list):
-        problems.append("'household_cashflows' must be a list")
+    if "cashflows" in data and not isinstance(data["cashflows"], list):
+        problems.append("'cashflows' must be a list")
 
     if "scenarios" in data and not isinstance(data["scenarios"], list):
         problems.append("'scenarios' must be a list")
@@ -125,7 +126,7 @@ def create_new_portfolio_file(
         household=Household(name=household_name, members=[]),
         assumptions=Assumptions(start_year=start_year, end_year=end_year),
         assets=[],
-        household_cashflows=[],
+        cashflows=[],
         scenarios=[],
         created_at=_now_iso(),
         updated_at=_now_iso(),
@@ -185,6 +186,14 @@ def load_portfolio(path: str | Path) -> Portfolio:
             data = json.load(f)
     except json.JSONDecodeError as exc:
         raise StorageError(f"Portfolio file is not valid JSON: {path} ({exc})") from exc
+
+    # Older files are upgraded in memory to the current schema. The file on
+    # disk is untouched until you save, and save_portfolio() backs up the
+    # old version first.
+    try:
+        data = migrate(data)
+    except MigrationError as exc:
+        raise StorageError(f"Portfolio file can't be upgraded: {path} ({exc})") from exc
 
     problems = validate_portfolio_json(data)
     if problems:

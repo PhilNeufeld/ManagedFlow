@@ -65,21 +65,31 @@ def run_simulation(portfolio: Portfolio, scenario: Scenario) -> SimulationResult
     asset_id_scope, flow_id_scope = working_portfolio.resolve_scope(
         scenario.entity_ids, scenario.bundle_ids
     )
+    # Split the portfolio's single cashflow list into the two groups the
+    # yearly engine needs: flows linked to an asset (grouped by asset_id)
+    # and household-level flows (asset_id is None).
+    flows_by_asset: dict[str, list] = {}
+    household_flows = []
+    for cf in working_portfolio.cashflows:
+        if cf.asset_id is None:
+            household_flows.append(cf)
+        else:
+            flows_by_asset.setdefault(cf.asset_id, []).append(cf)
+
     if asset_id_scope is not None:
         scope_assets = [a for a in working_portfolio.assets if a.asset_id in asset_id_scope]
-        scope_household_cashflows = [
-            cf for cf in working_portfolio.household_cashflows if cf.flow_id in flow_id_scope
-        ]
+        scope_household_cashflows = [cf for cf in household_flows if cf.flow_id in flow_id_scope]
     else:
         scope_assets = working_portfolio.assets
-        scope_household_cashflows = working_portfolio.household_cashflows
+        scope_household_cashflows = household_flows
 
     annual_results: List[AnnualHouseholdResult] = []
 
     for year in range(assumptions.start_year, assumptions.end_year + 1):
         year_warnings = list(scenario_warnings) if year == assumptions.start_year else []
         result = _simulate_year(
-            year, scope_assets, scope_household_cashflows, scenario, assumptions, year_warnings
+            year, scope_assets, scope_household_cashflows, flows_by_asset,
+            scenario, assumptions, year_warnings,
         )
         annual_results.append(result)
 
@@ -90,6 +100,7 @@ def _simulate_year(
     year: int,
     assets: List[Asset],
     household_cashflows: list,
+    flows_by_asset: dict,
     scenario: Scenario,
     assumptions: Assumptions,
     warnings: List[str],
@@ -101,7 +112,9 @@ def _simulate_year(
     inflation_rate = assumptions.inflation_rate
 
     for asset in assets:
-        asset_result = _simulate_asset_year(asset, year, inflation_rate)
+        asset_result = _simulate_asset_year(
+            asset, flows_by_asset.get(asset.asset_id, []), year, inflation_rate
+        )
         asset_results.append(asset_result)
         total_asset_income += asset_result.gross_income
         total_asset_expense += asset_result.gross_expense
@@ -119,7 +132,10 @@ def _simulate_year(
     total_expenses = total_asset_expense + household_expense
 
     this_year_cashflows = [
-        cf for cf in (household_cashflows + [cf for a in assets for cf in a.cashflows])
+        cf for cf in (
+            household_cashflows
+            + [cf for a in assets for cf in flows_by_asset.get(a.asset_id, [])]
+        )
         if _flow_active_in_year(cf, year)
     ]
     tax_estimate = tax_engine.estimate_taxes_for_year(year, this_year_cashflows, assumptions)
@@ -173,7 +189,9 @@ def _simulate_year(
     )
 
 
-def _simulate_asset_year(asset: Asset, year: int, inflation_rate: float = 0.0) -> AnnualAssetResult:
+def _simulate_asset_year(
+    asset: Asset, asset_flows: list, year: int, inflation_rate: float = 0.0
+) -> AnnualAssetResult:
     """Advance a single asset by one year: apply growth, then apply any
     cashflows flagged affects_asset_value, and report gross income/expense
     for that asset in the year (regardless of whether they affect value --
@@ -215,7 +233,7 @@ def _simulate_asset_year(asset: Asset, year: int, inflation_rate: float = 0.0) -
     gross_expense = 0.0
     net_cashflow_affecting_value = 0.0
 
-    for cf in asset.cashflows:
+    for cf in asset_flows:
         if not _flow_active_in_year(cf, year):
             continue
         signed = cf.signed_amount_in_year(year, inflation_rate=inflation_rate)
@@ -241,7 +259,7 @@ def _simulate_asset_year(asset: Asset, year: int, inflation_rate: float = 0.0) -
         # above, since the underlying asset no longer exists.
         sale_proceeds = sum(
             cf.signed_amount_in_year(year, inflation_rate=inflation_rate)
-            for cf in asset.cashflows
+            for cf in asset_flows
             if cf.flow_type.value == "sale_proceeds"
         )
         ending_value = 0.0

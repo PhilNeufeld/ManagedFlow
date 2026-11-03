@@ -26,6 +26,8 @@ from dataclasses import dataclass, field, asdict
 from enum import Enum
 from typing import Optional, List, Dict, Any
 
+from migrations import CURRENT_SCHEMA_VERSION, migrate
+
 
 # ---------------------------------------------------------------------------
 # Enumerations
@@ -339,7 +341,9 @@ class Asset:
     do_not_sell: bool = False
     sale_year: Optional[int] = None
     sale_assumptions: Dict[str, Any] = field(default_factory=dict)
-    cashflows: List[Cashflow] = field(default_factory=list)
+    # Cashflows are NOT stored on the asset (schema v0.2). They live in
+    # Portfolio.cashflows and point here via Cashflow.asset_id. Use
+    # Portfolio.cashflows_for_asset(asset_id) to get them.
 
     def __post_init__(self) -> None:
         self.asset_type = _enum_value(self.asset_type, AssetType)
@@ -348,13 +352,6 @@ class Asset:
 
         if self.current_value is None:
             self.current_value = self.initial_value
-
-        # Normalize embedded cashflows: allow dicts (e.g. fresh from JSON) or
-        # Cashflow instances (e.g. constructed in Python/sample_data.py).
-        normalized: List[Cashflow] = []
-        for cf in self.cashflows:
-            normalized.append(cf if isinstance(cf, Cashflow) else Cashflow.from_dict(cf))
-        self.cashflows = normalized
 
         _require(bool(self.asset_id), "Asset.asset_id is required")
         _require(bool(self.name), "Asset.name is required")
@@ -366,18 +363,6 @@ class Asset:
         )
         if self.liquidity_category == LiquidityCategory.DO_NOT_SELL:
             self.do_not_sell = True
-
-        for cf in self.cashflows:
-            _require(
-                cf.asset_id in (None, self.asset_id),
-                f"Cashflow '{cf.flow_id}' has asset_id '{cf.asset_id}' "
-                f"but is attached to asset '{self.asset_id}'",
-            )
-            cf.asset_id = self.asset_id
-
-    def add_cashflow(self, cashflow: Cashflow) -> None:
-        cashflow.asset_id = self.asset_id
-        self.cashflows.append(cashflow)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -398,7 +383,6 @@ class Asset:
             "do_not_sell": self.do_not_sell,
             "sale_year": self.sale_year,
             "sale_assumptions": self.sale_assumptions,
-            "cashflows": [cf.to_dict() for cf in self.cashflows],
         }
 
     @classmethod
@@ -413,36 +397,28 @@ class Asset:
 
 @dataclass
 class Bundle:
-    """A named, trackable grouping of related Assets and/or standalone
-    (household-level) Cashflows, attributed to an Entity.
+    """A named grouping of related Assets and Cashflows, attributed to an
+    Entity -- e.g. "4392 Brix": the house plus its rent and expenses, or
+    "Phil earnings": just a salary cashflow.
 
-    Examples:
-    - "Rental Address 1": the rental property Asset (which already carries
-      its own loan-payment, appreciation, depreciation, rent-income, and
-      expense Cashflows) -- a Bundle with one asset_id and no
-      standalone_cashflow_ids.
-    - "Person A Earnings": no Asset at all, just a household-level salary
-      Cashflow -- a Bundle with no asset_ids and one standalone_cashflow_id.
-    - "Household Living Expenses": a household-level expense Cashflow
-      shared across people, also asset-free.
+    - asset_ids: assets in the bundle. Every cashflow linked to one of these
+      assets (Cashflow.asset_id) comes along automatically.
+    - cashflow_ids: household-level cashflows (asset_id None) that belong to
+      the bundle, e.g. the salary in "Phil earnings".
 
-    standalone_cashflow_ids holds ids of cashflows in
-    Portfolio.household_cashflows -- i.e. cashflows with no asset_id of
-    their own. Asset-attached cashflows never need to be listed here:
-    they travel automatically with their Asset once that Asset's id is in
-    asset_ids.
+    Schema v0.1 called cashflow_ids "standalone_cashflow_ids";
+    migrations.py renames it when an old file is loaded.
 
-    A Bundle must reference at least one Asset or one standalone Cashflow
-    (an empty Bundle isn't useful). Scenarios can target a specific set of
-    Bundles (or all Bundles under an Entity) so a simulation can be scoped
-    to e.g. "just this LLC" or "just this rental property."
+    A Bundle must reference at least one asset or cashflow. Scenarios can
+    target Bundles (or every Bundle under an Entity) to scope a simulation
+    to e.g. "just the rental LLC" or "just this property."
     """
 
     bundle_id: str
     name: str
     entity_id: str
     asset_ids: List[str] = field(default_factory=list)
-    standalone_cashflow_ids: List[str] = field(default_factory=list)
+    cashflow_ids: List[str] = field(default_factory=list)
     notes: str = ""
 
     def __post_init__(self) -> None:
@@ -450,9 +426,8 @@ class Bundle:
         _require(bool(self.name), "Bundle.name is required")
         _require(bool(self.entity_id), f"Bundle '{self.bundle_id}': entity_id is required")
         _require(
-            bool(self.asset_ids) or bool(self.standalone_cashflow_ids),
-            f"Bundle '{self.bundle_id}': must contain at least one asset_id "
-            "or standalone_cashflow_id",
+            bool(self.asset_ids) or bool(self.cashflow_ids),
+            f"Bundle '{self.bundle_id}': must contain at least one asset_id or cashflow_id",
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -461,7 +436,7 @@ class Bundle:
             "name": self.name,
             "entity_id": self.entity_id,
             "asset_ids": list(self.asset_ids),
-            "standalone_cashflow_ids": list(self.standalone_cashflow_ids),
+            "cashflow_ids": list(self.cashflow_ids),
             "notes": self.notes,
         }
 
@@ -699,10 +674,14 @@ class SimulationResult:
 
 @dataclass
 class Portfolio:
-    """The full household portfolio: household info, assumptions, assets,
-    household-level cashflows, and scenarios. This is what gets persisted
-    as portfolio.json (simulation_results are typically persisted separately
-    under outputs/, see storage.py).
+    """The full household portfolio: household info, assumptions, entities,
+    assets, cashflows, bundles, and scenarios. This is what gets persisted
+    as portfolio.json.
+
+    Schema v0.2: every cashflow lives in ONE list, `cashflows`. A cashflow
+    belongs to an asset when its asset_id is set (rent on a rental), or is
+    household-level when asset_id is None (salary, Social Security, living
+    expenses). Older files are upgraded automatically by migrations.py.
     """
 
     household: Household = field(default_factory=Household)
@@ -711,10 +690,10 @@ class Portfolio:
     )
     entities: List[Entity] = field(default_factory=list)
     assets: List[Asset] = field(default_factory=list)
-    household_cashflows: List[Cashflow] = field(default_factory=list)
+    cashflows: List[Cashflow] = field(default_factory=list)
     bundles: List[Bundle] = field(default_factory=list)
     scenarios: List[Scenario] = field(default_factory=list)
-    file_version: str = "0.1"
+    file_version: str = CURRENT_SCHEMA_VERSION
     created_at: str = ""
     updated_at: str = ""
     metadata_notes: str = ""
@@ -724,17 +703,9 @@ class Portfolio:
         duplicates = {a for a in asset_ids if asset_ids.count(a) > 1}
         _require(not duplicates, f"Duplicate asset_id(s) found: {duplicates}")
 
-        flow_ids = [cf.flow_id for cf in self.household_cashflows]
-        flow_ids += [cf.flow_id for a in self.assets for cf in a.cashflows]
+        flow_ids = [cf.flow_id for cf in self.cashflows]
         dup_flows = {f for f in flow_ids if flow_ids.count(f) > 1}
         _require(not dup_flows, f"Duplicate cashflow flow_id(s) found: {dup_flows}")
-
-        for cf in self.household_cashflows:
-            _require(
-                cf.asset_id is None,
-                f"Household cashflow '{cf.flow_id}' must not have an asset_id "
-                f"(found '{cf.asset_id}'); attach it to the asset instead.",
-            )
 
         entity_ids = [e.entity_id for e in self.entities]
         dup_entities = {e for e in entity_ids if entity_ids.count(e) > 1}
@@ -746,7 +717,16 @@ class Portfolio:
 
         entity_id_set = set(entity_ids)
         asset_id_set = set(asset_ids)
-        household_flow_id_set = {cf.flow_id for cf in self.household_cashflows}
+        flow_id_set = set(flow_ids)
+
+        # Referential integrity: every id that points somewhere must point
+        # at something that exists.
+        for cf in self.cashflows:
+            _require(
+                cf.asset_id is None or cf.asset_id in asset_id_set,
+                f"Cashflow '{cf.flow_id}' references asset_id '{cf.asset_id}' "
+                "which is not defined in portfolio.assets",
+            )
 
         for a in self.assets:
             _require(
@@ -767,12 +747,14 @@ class Portfolio:
                     f"Bundle '{b.bundle_id}' references asset_id '{aid}' "
                     "which is not defined in portfolio.assets",
                 )
-            for fid in b.standalone_cashflow_ids:
+            for fid in b.cashflow_ids:
                 _require(
-                    fid in household_flow_id_set,
-                    f"Bundle '{b.bundle_id}' references standalone_cashflow_id "
-                    f"'{fid}' which is not defined in portfolio.household_cashflows",
+                    fid in flow_id_set,
+                    f"Bundle '{b.bundle_id}' references cashflow_id '{fid}' "
+                    "which is not defined in portfolio.cashflows",
                 )
+
+    # -- lookups -------------------------------------------------------------
 
     def get_asset(self, asset_id: str) -> Optional[Asset]:
         for a in self.assets:
@@ -806,13 +788,13 @@ class Portfolio:
     ) -> "tuple[set, set]":
         """Resolve a (entity_ids, bundle_ids) targeting spec -- as found on
         Scenario.entity_ids / Scenario.bundle_ids -- into the concrete set
-        of asset_ids and standalone_cashflow_ids it covers.
+        of asset_ids and household-level cashflow_ids it covers.
 
         The effective scope is the union of: every Bundle under any of the
         named Entities, plus every Bundle named directly in bundle_ids. If
-        both entity_ids and bundle_ids are empty, returns (None, None) to
-        signal "no scoping, use the whole portfolio" -- callers should
-        check for this rather than treating it as an empty scope.
+        both are empty, returns (None, None) to signal "no scoping, use the
+        whole portfolio" -- callers should check for this rather than
+        treating it as an empty scope.
         """
         entity_ids = entity_ids or []
         bundle_ids = bundle_ids or []
@@ -831,39 +813,60 @@ class Portfolio:
         flow_id_scope = set()
         for b in target_bundles:
             asset_id_scope.update(b.asset_ids)
-            flow_id_scope.update(b.standalone_cashflow_ids)
+            flow_id_scope.update(b.cashflow_ids)
         return asset_id_scope, flow_id_scope
 
+    # -- cashflows -------------------------------------------------------------
+
     def all_cashflows(self) -> List[Cashflow]:
-        """All cashflows in the portfolio: household-level plus every
-        asset's attached cashflows."""
-        flows = list(self.household_cashflows)
-        for asset in self.assets:
-            flows.extend(asset.cashflows)
-        return flows
+        """Every cashflow in the portfolio (a new list, safe to modify)."""
+        return list(self.cashflows)
+
+    def cashflows_for_asset(self, asset_id: str) -> List[Cashflow]:
+        """Cashflows linked to one asset, in the order they were entered."""
+        return [cf for cf in self.cashflows if cf.asset_id == asset_id]
+
+    def household_level_cashflows(self) -> List[Cashflow]:
+        """Cashflows not linked to any asset: salary, Social Security,
+        living expenses, and so on."""
+        return [cf for cf in self.cashflows if cf.asset_id is None]
 
     def get_cashflow(self, flow_id: str) -> Optional[Cashflow]:
-        for cf in self.all_cashflows():
+        for cf in self.cashflows:
             if cf.flow_id == flow_id:
                 return cf
         return None
 
+    def _require_known_asset(self, cashflow: Cashflow) -> None:
+        _require(
+            cashflow.asset_id is None or self.get_asset(cashflow.asset_id) is not None,
+            f"Cashflow '{cashflow.flow_id}' references unknown asset_id '{cashflow.asset_id}'",
+        )
+
+    def add_cashflow(self, cashflow: Cashflow) -> None:
+        _require(
+            self.get_cashflow(cashflow.flow_id) is None,
+            f"Cashflow with id '{cashflow.flow_id}' already exists",
+        )
+        self._require_known_asset(cashflow)
+        self.cashflows.append(cashflow)
+
     def replace_cashflow(self, flow_id: str, new_cashflow: Cashflow) -> None:
-        """Replace the cashflow with id `flow_id` (wherever it lives --
-        household-level or attached to an Asset) with `new_cashflow`,
-        in place. Used by the UI's "save edits to an existing cashflow"
-        flow. Raises ValidationError if no cashflow with that id exists.
-        """
-        for i, cf in enumerate(self.household_cashflows):
+        """Replace the cashflow with id `flow_id` in place. Moving a flow to
+        a different asset (or to household-level) is just a change to its
+        asset_id -- there is no separate container to move it between."""
+        self._require_known_asset(new_cashflow)
+        for i, cf in enumerate(self.cashflows):
             if cf.flow_id == flow_id:
-                self.household_cashflows[i] = new_cashflow
+                self.cashflows[i] = new_cashflow
                 return
-        for asset in self.assets:
-            for i, cf in enumerate(asset.cashflows):
-                if cf.flow_id == flow_id:
-                    asset.cashflows[i] = new_cashflow
-                    return
         _require(False, f"No cashflow with id '{flow_id}' found to replace")
+
+    def remove_cashflow(self, flow_id: str) -> None:
+        _require(self.get_cashflow(flow_id) is not None, f"No cashflow with id '{flow_id}' found to remove")
+        self.cashflows = [cf for cf in self.cashflows if cf.flow_id != flow_id]
+
+    # -- assets ----------------------------------------------------------------
 
     def add_asset(self, asset: Asset) -> None:
         _require(
@@ -879,12 +882,16 @@ class Portfolio:
                 return
         _require(False, f"No asset with id '{asset_id}' found to replace")
 
-    def add_household_cashflow(self, cashflow: Cashflow) -> None:
-        _require(
-            cashflow.asset_id is None,
-            f"Household cashflow '{cashflow.flow_id}' must not reference an asset_id",
-        )
-        self.household_cashflows.append(cashflow)
+    def remove_asset(self, asset_id: str) -> List[Cashflow]:
+        """Remove an asset AND the cashflows linked to it (a rent flow means
+        nothing without its property). Returns the removed cashflows."""
+        _require(self.get_asset(asset_id) is not None, f"No asset with id '{asset_id}' found to remove")
+        removed = self.cashflows_for_asset(asset_id)
+        self.assets = [a for a in self.assets if a.asset_id != asset_id]
+        self.cashflows = [cf for cf in self.cashflows if cf.asset_id != asset_id]
+        return removed
+
+    # -- scenarios, entities, bundles -----------------------------------------
 
     def add_scenario(self, scenario: Scenario) -> None:
         _require(
@@ -932,10 +939,12 @@ class Portfolio:
                 return
         _require(False, f"No bundle with id '{bundle_id}' found to replace")
 
+    # -- JSON round trip -------------------------------------------------------
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "metadata": {
-                "file_version": self.file_version,
+                "file_version": CURRENT_SCHEMA_VERSION,
                 "created_at": self.created_at,
                 "updated_at": self.updated_at,
                 "notes": self.metadata_notes,
@@ -944,23 +953,24 @@ class Portfolio:
             "assumptions": self.assumptions.to_dict(),
             "entities": [e.to_dict() for e in self.entities],
             "assets": [a.to_dict() for a in self.assets],
-            "household_cashflows": [cf.to_dict() for cf in self.household_cashflows],
+            "cashflows": [cf.to_dict() for cf in self.cashflows],
             "bundles": [b.to_dict() for b in self.bundles],
             "scenarios": [s.to_dict() for s in self.scenarios],
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Portfolio":
+        data = migrate(data)  # upgrade older files to the current schema first
         metadata = data.get("metadata", {})
         return cls(
             household=Household.from_dict(data.get("household", {})),
             assumptions=Assumptions.from_dict(data["assumptions"]),
             entities=[Entity.from_dict(e) for e in data.get("entities", [])],
             assets=[Asset.from_dict(a) for a in data.get("assets", [])],
-            household_cashflows=[Cashflow.from_dict(cf) for cf in data.get("household_cashflows", [])],
+            cashflows=[Cashflow.from_dict(cf) for cf in data.get("cashflows", [])],
             bundles=[Bundle.from_dict(b) for b in data.get("bundles", [])],
             scenarios=[Scenario.from_dict(s) for s in data.get("scenarios", [])],
-            file_version=metadata.get("file_version", "0.1"),
+            file_version=metadata.get("file_version", CURRENT_SCHEMA_VERSION),
             created_at=metadata.get("created_at", ""),
             updated_at=metadata.get("updated_at", ""),
             metadata_notes=metadata.get("notes", ""),

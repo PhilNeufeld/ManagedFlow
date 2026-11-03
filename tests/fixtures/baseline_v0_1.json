@@ -1,0 +1,3194 @@
+{
+ "base_case": [
+  {
+   "year": 2026,
+   "total_gross_income": 154800.0,
+   "total_expenses": 107900.0,
+   "total_estimated_tax": 35937.0,
+   "net_cashflow": 10963.0,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 10963.0,
+   "total_net_worth": 1664338.0,
+   "liquid_net_worth": 764363.0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 463500.0,
+    "equity_fund_1": 666700.0,
+    "cash_1": 86700.0,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 187200.0,
+    "trust_1": 99275.0
+   }
+  },
+  {
+   "year": 2027,
+   "total_gross_income": 157825.0,
+   "total_expenses": 112686.8,
+   "total_estimated_tax": 36637.35,
+   "net_cashflow": 8500.849999999999,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 8500.849999999999,
+   "total_net_worth": 1750878.005,
+   "liquid_net_worth": 825042.63,
+   "asset_ending_values": {
+    "real_estate_rental_1": 477405.0,
+    "equity_fund_1": 728107.78,
+    "cash_1": 88434.0,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 194688.0,
+    "trust_1": 103742.375
+   }
+  },
+  {
+   "year": 2028,
+   "total_gross_income": 160917.55,
+   "total_expenses": 117761.72432000001,
+   "total_estimated_tax": 37353.1425,
+   "net_cashflow": 5802.683179999978,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 5802.683179999978,
+   "total_net_worth": 1839502.512855,
+   "liquid_net_worth": 886889.0609800001,
+   "asset_ending_values": {
+    "real_estate_rental_1": 491727.15,
+    "equity_fund_1": 790883.6978000001,
+    "cash_1": 90202.68,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 202475.52,
+    "trust_1": 108410.781875
+   }
+  },
+  {
+   "year": 2029,
+   "total_gross_income": 117264.43149999998,
+   "total_expenses": 123141.433000088,
+   "total_estimated_tax": 26009.181974999996,
+   "net_cashflow": -31886.18347508802,
+   "withdrawal_amount": 31886.18347508802,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1895331.792823087,
+   "liquid_net_worth": 914989.0204637122,
+   "asset_ending_values": {
+    "real_estate_rental_1": 506478.9645,
+    "equity_fund_1": 854868.4703388001,
+    "cash_1": 92006.73359999999,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 210574.5408,
+    "trust_1": 113289.26705937501
+   }
+  },
+  {
+   "year": 2030,
+   "total_gross_income": 128320.44681999998,
+   "total_expenses": 128843.59300115838,
+   "total_estimated_tax": 28437.797204249997,
+   "net_cashflow": -28960.943385408398,
+   "withdrawal_amount": 28960.943385408398,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1956997.6226011734,
+   "liquid_net_worth": 947939.4826571265,
+   "asset_ending_values": {
+    "real_estate_rental_1": 521673.333435,
+    "equity_fund_1": 883053.5577705349,
+    "cash_1": 93846.86827199999,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 218997.522432,
+    "trust_1": 118387.28407704688
+   }
+  },
+  {
+   "year": 2031,
+   "total_gross_income": 130425.219658975,
+   "total_expenses": 134886.93896207804,
+   "total_estimated_tax": 28896.937384627498,
+   "net_cashflow": -33358.656687730545,
+   "withdrawal_amount": 33358.656687730545,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2017512.0925316373,
+   "liquid_net_worth": 978716.4239037934,
+   "asset_ending_values": {
+    "real_estate_rental_1": 537323.53343805,
+    "equity_fund_1": 916351.2749540841,
+    "cash_1": 95723.80563743999,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 227757.42332928,
+    "trust_1": 123714.71186051398
+   }
+  },
+  {
+   "year": 2032,
+   "total_gross_income": 132579.9316689786,
+   "total_expenses": 141291.33764677308,
+   "total_estimated_tax": 29366.854167022568,
+   "net_cashflow": -38078.26014481706,
+   "withdrawal_amount": 38078.26014481706,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2076468.5273826118,
+   "liquid_net_worth": 1006875.6937847319,
+   "asset_ending_values": {
+    "real_estate_rental_1": 553443.2394411914,
+    "equity_fund_1": 947315.6721793602,
+    "cash_1": 97638.28175018879,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 236867.72026245118,
+    "trust_1": 129281.87389423711
+   }
+  },
+  {
+   "year": 2033,
+   "total_gross_income": 162785.7937647882,
+   "total_expenses": 148077.85630547823,
+   "total_estimated_tax": 36567.8053342109,
+   "net_cashflow": -21859.867874900934,
+   "withdrawal_amount": 21859.867874900934,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2154695.161905298,
+   "liquid_net_worth": 1053206.6379884437,
+   "asset_ending_values": {
+    "real_estate_rental_1": 570046.5366244272,
+    "equity_fund_1": 975475.458478152,
+    "cash_1": 99591.04738519256,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 246342.42907294922,
+    "trust_1": 135099.5582194778
+   }
+  },
+  {
+   "year": 2034,
+   "total_gross_income": 165884.04686391557,
+   "total_expenses": 155268.8351880356,
+   "total_estimated_tax": 37060.05495306533,
+   "net_cashflow": -26444.843277185348,
+   "withdrawal_amount": 26444.843277185348,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2232527.9641667213,
+   "liquid_net_worth": 1098004.8668683397,
+   "asset_ending_values": {
+    "real_estate_rental_1": 587147.93272316,
+    "equity_fund_1": 1022866.8418126286,
+    "cash_1": 101582.86833289641,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 256196.12623586718,
+    "trust_1": 141179.0383393543
+   }
+  },
+  {
+   "year": 2035,
+   "total_gross_income": 169061.16264570737,
+   "total_expenses": 162887.96446160303,
+   "total_estimated_tax": 37563.87353061401,
+   "net_cashflow": -31390.675346509663,
+   "withdrawal_amount": 31390.675346509663,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2309564.9511017743,
+   "liquid_net_worth": 1140826.5140469924,
+   "asset_ending_values": {
+    "real_estate_rental_1": 604762.3707048548,
+    "equity_fund_1": 1068602.6636939477,
+    "cash_1": 103614.52569955435,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 266443.97128530184,
+    "trust_1": 147532.09506462523
+   }
+  },
+  {
+   "year": 2036,
+   "total_gross_income": 172319.20033003652,
+   "total_expenses": 170960.3658004865,
+   "total_estimated_tax": 38079.538174044144,
+   "net_cashflow": -36720.703644494126,
+   "withdrawal_amount": 36720.703644494126,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2385356.0371263525,
+   "liquid_net_worth": 1181178.0258211046,
+   "asset_ending_values": {
+    "real_estate_rental_1": 622905.2418260005,
+    "equity_fund_1": 1112211.9132520533,
+    "cash_1": 105686.81621354543,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 277101.73013671394,
+    "trust_1": 154171.03934253336
+   }
+  },
+  {
+   "year": 2037,
+   "total_gross_income": 175660.2741560999,
+   "total_expenses": 179512.6789321012,
+   "total_estimated_tax": 38607.33275475267,
+   "net_cashflow": -42459.73753075396,
+   "withdrawal_amount": 42459.73753075396,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2459398.6534988675,
+   "liquid_net_worth": 1218511.7189629574,
+   "asset_ending_values": {
+    "real_estate_rental_1": 641592.3990807806,
+    "equity_fund_1": 1153170.903955895,
+    "cash_1": 107800.55253781634,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 288185.7993421825,
+    "trust_1": 161108.73611294737
+   }
+  },
+  {
+   "year": 2038,
+   "total_gross_income": 179086.55488225134,
+   "total_expenses": 188573.15344034636,
+   "total_estimated_tax": 39147.5480765481,
+   "net_cashflow": -48634.14663464312,
+   "withdrawal_amount": 48634.14663464312,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2531133.0133967213,
+   "liquid_net_worth": 1252220.9817896178,
+   "asset_ending_values": {
+    "real_estate_rental_1": 660840.171053204,
+    "equity_fund_1": 1190898.5648356883,
+    "cash_1": 109956.56358857267,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 299713.23131586984,
+    "trust_1": 168358.62923803
+   }
+  },
+  {
+   "year": 2039,
+   "total_gross_income": 182600.27132742413,
+   "total_expenses": 198171.74614601163,
+   "total_estimated_tax": 39700.48204811023,
+   "net_cashflow": -55271.956866697736,
+   "withdrawal_amount": 55271.956866697736,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2599936.99587159,
+   "liquid_net_worth": 1281635.091564544,
+   "asset_ending_values": {
+    "real_estate_rental_1": 680665.3761848,
+    "equity_fund_1": 1224751.3535708976,
+    "cash_1": 112155.69486034411,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 311701.76056850463,
+    "trust_1": 175934.76755374135
+   }
+  },
+  {
+   "year": 2040,
+   "total_gross_income": 186203.71195531386,
+   "total_expenses": 208340.22440328094,
+   "total_estimated_tax": 40266.43985981757,
+   "net_cashflow": -62402.952307784646,
+   "withdrawal_amount": 62402.952307784646,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2665120.6198975905,
+   "liquid_net_worth": 1306013.6193423418,
+   "asset_ending_values": {
+    "real_estate_rental_1": 701085.337470344,
+    "equity_fund_1": 1254017.7628925755,
+    "cash_1": 114398.808757551,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 324169.8309912448,
+    "trust_1": 183851.8320936597
+   }
+  },
+  {
+   "year": 2041,
+   "total_gross_income": 189899.22650252393,
+   "total_expenses": 219112.27567203314,
+   "total_estimated_tax": 40845.73416505477,
+   "net_cashflow": -70058.78333456398,
+   "withdrawal_amount": 70058.78333456398,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2725920.0776389474,
+   "liquid_net_worth": 1324540.3912757237,
+   "asset_ending_values": {
+    "real_estate_rental_1": 722117.8975944543,
+    "equity_fund_1": 1277912.3896775856,
+    "cash_1": 116686.78493270202,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 337136.6242308946,
+    "trust_1": 192125.1645378744
+   }
+  },
+  {
+   "year": 2042,
+   "total_gross_income": 193689.22765191167,
+   "total_expenses": 213646.22271152865,
+   "total_estimated_tax": 41438.68526611563,
+   "net_cashflow": -61395.68032573261,
+   "withdrawal_amount": 61395.68032573261,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2798368.694865162,
+   "liquid_net_worth": 1353194.374200665,
+   "asset_ending_values": {
+    "real_estate_rental_1": 743781.4345222879,
+    "equity_fund_1": 1295569.5338950413,
+    "cash_1": 119020.52063135606,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 350622.0892001304,
+    "trust_1": 200770.79694207874
+   }
+  },
+  {
+   "year": 2043,
+   "total_gross_income": 197576.19275240746,
+   "total_expenses": 225709.88361084726,
+   "total_estimated_tax": 42045.62130482013,
+   "net_cashflow": -70179.31216325994,
+   "withdrawal_amount": 70179.31216325994,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2865695.2893013367,
+   "liquid_net_worth": 1375147.9561707722,
+   "asset_ending_values": {
+    "real_estate_rental_1": 766094.8775579566,
+    "equity_fund_1": 1323926.3372900488,
+    "cash_1": 121400.93104398319,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 364646.9727681356,
+    "trust_1": 209805.4828044723
+   }
+  },
+  {
+   "year": 2044,
+   "total_gross_income": 201562.66558661553,
+   "total_expenses": 238484.14761226933,
+   "total_estimated_tax": 42666.87845796706,
+   "net_cashflow": -79588.36048362085,
+   "withdrawal_amount": 79588.36048362085,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2926942.8549916474,
+   "liquid_net_worth": 1389385.5498974174,
+   "asset_ending_values": {
+    "real_estate_rental_1": 789077.7238846953,
+    "equity_fund_1": 1345144.9607161754,
+    "cash_1": 123828.94966486286,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 379232.851678861,
+    "trust_1": 219246.72953067356
+   }
+  },
+  {
+   "year": 2045,
+   "total_gross_income": 205651.2581875432,
+   "total_expenses": 252011.60774356988,
+   "total_estimated_tax": 43302.801137746996,
+   "net_cashflow": -89663.15069377368,
+   "withdrawal_amount": 89663.15069377368,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2981055.7354219323,
+   "liquid_net_worth": 1394790.6817151266,
+   "asset_ending_values": {
+    "real_estate_rental_1": 812750.0556012362,
+    "equity_fund_1": 1358148.3037507404,
+    "cash_1": 126305.52865816011,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 394402.16574601544,
+    "trust_1": 229112.83235955387
+   }
+  },
+  {
+   "year": 2046,
+   "total_gross_income": 209844.65270584234,
+   "total_expenses": 266337.43063482636,
+   "total_estimated_tax": 43953.74219724366,
+   "net_cashflow": -100446.52012622768,
+   "withdrawal_amount": 100446.52012622768,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 3026871.157535703,
+   "liquid_net_worth": 1390137.4380748398,
+   "asset_ending_values": {
+    "real_estate_rental_1": 837132.5572692732,
+    "equity_fund_1": 1361752.3189697443,
+    "cash_1": 128831.63923132331,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 410178.25237585604,
+    "trust_1": 239422.9098157338
+   }
+  },
+  {
+   "year": 2047,
+   "total_gross_income": 214145.603328988,
+   "total_expenses": 281509.5126188717,
+   "total_estimated_tax": 44620.06314115508,
+   "net_cashflow": -111983.97243103877,
+   "withdrawal_amount": 111983.97243103877,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 3063110.1020059623,
+   "liquid_net_worth": 1374081.2447902786,
+   "asset_ending_values": {
+    "real_estate_rental_1": 862246.5339873515,
+    "equity_fund_1": 1354656.9452053676,
+    "cash_1": 131408.27201594977,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 426585.3824708903,
+    "trust_1": 250196.9407574418
+   }
+  },
+  {
+   "year": 2048,
+   "total_gross_income": 218556.9382538576,
+   "total_expenses": 297578.6453177966,
+   "total_estimated_tax": 45302.134341869365,
+   "net_cashflow": -124323.84140580837,
+   "withdrawal_amount": 124323.84140580837,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 3088367.460443651,
+   "liquid_net_worth": 1345148.9295754263,
+   "asset_ending_values": {
+    "real_estate_rental_1": 888113.930006972,
+    "equity_fund_1": 1335436.333524966,
+    "cash_1": 134036.43745626876,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 443648.7977697259,
+    "trust_1": 261455.80309152667
+   }
+  },
+  {
+   "year": 2049,
+   "total_gross_income": 223081.5617142182,
+   "total_expenses": 314598.69129251287,
+   "total_estimated_tax": 46000.33526103345,
+   "net_cashflow": -137517.4648393281,
+   "withdrawal_amount": 137517.4648393281,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 3101101.4266864173,
+   "liquid_net_worth": 1301728.0148680755,
+   "asset_ending_values": {
+    "real_estate_rental_1": 914757.3479071812,
+    "equity_fund_1": 1302528.3135020095,
+    "cash_1": 136717.16620539414,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 461394.7496805149,
+    "trust_1": 273221.31423064537
+   }
+  },
+  {
+   "year": 2050,
+   "total_gross_income": 227722.45606467055,
+   "total_expenses": 332626.7703675075,
+   "total_estimated_tax": 46715.05467675686,
+   "net_cashflow": -151619.3689795938,
+   "withdrawal_amount": 151619.3689795938,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 3099622.065526881,
+   "liquid_net_worth": 1242055.1841437244,
+   "asset_ending_values": {
+    "real_estate_rental_1": 942200.0683443967,
+    "equity_fund_1": 1254223.043593816,
+    "cash_1": 139451.50952950201,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 479850.5396677355,
+    "trust_1": 285516.2733710244
+   }
+  },
+  {
+   "year": 2051,
+   "total_gross_income": 232482.68392264366,
+   "total_expenses": 351723.45728017075,
+   "total_estimated_tax": 47446.69091659623,
+   "net_cashflow": -166687.4642741233,
+   "withdrawal_amount": 166687.4642741233,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 3082078.9981906535,
+   "liquid_net_worth": 1164203.8608687595,
+   "asset_ending_values": {
+    "real_estate_rental_1": 970466.0703947286,
+    "equity_fund_1": 1188650.7854227908,
+    "cash_1": 142240.53972009206,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 499044.56125444494,
+    "trust_1": 298364.5056727205
+   }
+  },
+  {
+   "year": 2052,
+   "total_gross_income": 237365.390370079,
+   "total_expenses": 371952.99134360394,
+   "total_estimated_tax": 48195.65209647007,
+   "net_cashflow": -182783.253069995,
+   "withdrawal_amount": 182783.253069995,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 3046448.139542939,
+   "liquid_net_worth": 1066070.834903753,
+   "asset_ending_values": {
+    "real_estate_rental_1": 999580.0525065705,
+    "equity_fund_1": 1103768.737459254,
+    "cash_1": 145085.35051449388,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 519006.34370462276,
+    "trust_1": 311790.9084279929
+   }
+  },
+  {
+   "year": 2053,
+   "total_gross_income": 242373.80521648988,
+   "total_expenses": 393383.4988537377,
+   "total_estimated_tax": 48962.35636565743,
+   "net_cashflow": -199972.05000290528,
+   "withdrawal_amount": 199972.05000290528,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2990517.417369237,
+   "liquid_net_worth": 945361.8665274095,
+   "asset_ending_values": {
+    "real_estate_rental_1": 1029567.4540817676,
+    "equity_fund_1": 997346.8590055311,
+    "cash_1": 147987.05752478377,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 539766.5974528077,
+    "trust_1": 325821.4993072526
+   }
+  },
+  {
+   "year": 2054,
+   "total_gross_income": 247511.24532513064,
+   "total_expenses": 416087.2290160777,
+   "total_estimated_tax": 49747.2321580378,
+   "net_cashflow": -218323.21584898487,
+   "withdrawal_amount": 218323.21584898487,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2911871.3991198014,
+   "liquid_net_worth": 799576.1932885819,
+   "asset_ending_values": {
+    "real_estate_rental_1": 1060454.4777042207,
+    "equity_fund_1": 866952.6104622873,
+    "cash_1": 150946.79867527945,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 561357.26135092,
+    "trust_1": 340483.466776079
+   }
+  },
+  {
+   "year": 2055,
+   "total_gross_income": 252781.11700405815,
+   "total_expenses": 440140.80421457626,
+   "total_estimated_tax": 50550.7184497341,
+   "net_cashflow": -237910.4056602522,
+   "withdrawal_amount": 237910.4056602522,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2807874.746207029,
+   "liquid_net_worth": 625989.8595857224,
+   "asset_ending_values": {
+    "real_estate_rental_1": 1092268.1120353474,
+    "equity_fund_1": 709934.5305971897,
+    "cash_1": 153965.73464878503,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 583811.5518049567,
+    "trust_1": 355805.2227810025
+   }
+  }
+ ],
+ "higher_inflation": [
+  {
+   "year": 2026,
+   "total_gross_income": 154800.0,
+   "total_expenses": 107900.0,
+   "total_estimated_tax": 35937.0,
+   "net_cashflow": 10963.0,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 10963.0,
+   "total_net_worth": 1664338.0,
+   "liquid_net_worth": 764363.0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 463500.0,
+    "equity_fund_1": 666700.0,
+    "cash_1": 86700.0,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 187200.0,
+    "trust_1": 99275.0
+   }
+  },
+  {
+   "year": 2027,
+   "total_gross_income": 157825.0,
+   "total_expenses": 114170.0,
+   "total_estimated_tax": 36637.35,
+   "net_cashflow": 7017.6500000000015,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 7017.6500000000015,
+   "total_net_worth": 1749394.8050000002,
+   "liquid_net_worth": 823559.43,
+   "asset_ending_values": {
+    "real_estate_rental_1": 477405.0,
+    "equity_fund_1": 728107.78,
+    "cash_1": 88434.0,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 194688.0,
+    "trust_1": 103742.375
+   }
+  },
+  {
+   "year": 2028,
+   "total_gross_income": 160917.55,
+   "total_expenses": 120939.33200000002,
+   "total_estimated_tax": 37353.1425,
+   "net_cashflow": 2625.0754999999626,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 2625.0754999999626,
+   "total_net_worth": 1834752.7131750002,
+   "liquid_net_worth": 882139.2613000001,
+   "asset_ending_values": {
+    "real_estate_rental_1": 491727.15,
+    "equity_fund_1": 789311.5058000002,
+    "cash_1": 90202.68,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 202475.52,
+    "trust_1": 108410.781875
+   }
+  },
+  {
+   "year": 2029,
+   "total_gross_income": 117264.43149999998,
+   "total_expenses": 128247.37037300001,
+   "total_estimated_tax": 26009.181974999996,
+   "net_cashflow": -36992.120848000035,
+   "withdrawal_amount": 36992.120848000035,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1885191.0677893749,
+   "liquid_net_worth": 904848.29543,
+   "asset_ending_values": {
+    "real_estate_rental_1": 506478.9645,
+    "equity_fund_1": 849833.6826780001,
+    "cash_1": 92006.73359999999,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 210574.5408,
+    "trust_1": 113289.26705937501
+   }
+  },
+  {
+   "year": 2030,
+   "total_gross_income": 128320.44681999998,
+   "total_expenses": 136136.68263617455,
+   "total_estimated_tax": 28437.797204249997,
+   "net_cashflow": -36254.03302042456,
+   "withdrawal_amount": 36254.03302042456,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1938955.3644304224,
+   "liquid_net_worth": 929897.2244863755,
+   "asset_ending_values": {
+    "real_estate_rental_1": 521673.333435,
+    "equity_fund_1": 872304.3892348,
+    "cash_1": 93846.86827199999,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 218997.522432,
+    "trust_1": 118387.28407704688
+   }
+  },
+  {
+   "year": 2031,
+   "total_gross_income": 130425.219658975,
+   "total_expenses": 144653.28878706213,
+   "total_estimated_tax": 28896.937384627498,
+   "net_cashflow": -43125.00651271464,
+   "withdrawal_amount": 43125.00651271464,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1988620.9490456572,
+   "liquid_net_worth": 949825.2804178132,
+   "asset_ending_values": {
+    "real_estate_rental_1": 537323.53343805,
+    "equity_fund_1": 897226.4812930879,
+    "cash_1": 95723.80563743999,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 227757.42332928,
+    "trust_1": 123714.71186051398
+   }
+  },
+  {
+   "year": 2032,
+   "total_gross_income": 132579.9316689786,
+   "total_expenses": 153846.9417563366,
+   "total_estimated_tax": 29366.854167022568,
+   "net_cashflow": -50633.864254380576,
+   "withdrawal_amount": 50633.864254380576,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2033288.3111779094,
+   "liquid_net_worth": 963695.4775800294,
+   "asset_ending_values": {
+    "real_estate_rental_1": 553443.2394411914,
+    "equity_fund_1": 916691.0600842212,
+    "cash_1": 97638.28175018879,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 236867.72026245118,
+    "trust_1": 129281.87389423711
+   }
+  },
+  {
+   "year": 2033,
+   "total_gross_income": 162785.7937647882,
+   "total_expenses": 163771.4306973414,
+   "total_estimated_tax": 36567.8053342109,
+   "net_cashflow": -37553.4422667641,
+   "withdrawal_amount": 37553.4422667641,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2093230.5583364503,
+   "liquid_net_worth": 991742.0344195958,
+   "asset_ending_values": {
+    "real_estate_rental_1": 570046.5366244272,
+    "equity_fund_1": 929704.4293011674,
+    "cash_1": 99591.04738519256,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 246342.42907294922,
+    "trust_1": 135099.5582194778
+   }
+  },
+  {
+   "year": 2034,
+   "total_gross_income": 166444.04686391557,
+   "total_expenses": 174484.9089727407,
+   "total_estimated_tax": 37060.05495306533,
+   "net_cashflow": -45100.91706189045,
+   "withdrawal_amount": 45100.91706189045,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2148719.410599037,
+   "liquid_net_worth": 1014196.3133006557,
+   "asset_ending_values": {
+    "real_estate_rental_1": 587147.93272316,
+    "equity_fund_1": 957714.3620296498,
+    "cash_1": 101582.86833289641,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 256196.12623586718,
+    "trust_1": 141179.0383393543
+   }
+  },
+  {
+   "year": 2035,
+   "total_gross_income": 170225.96264570736,
+   "total_expenses": 186050.24885023292,
+   "total_estimated_tax": 37563.87353061401,
+   "net_cashflow": -53388.15973513957,
+   "withdrawal_amount": 53388.15973513957,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2198730.3999313996,
+   "liquid_net_worth": 1029991.9628766176,
+   "asset_ending_values": {
+    "real_estate_rental_1": 604762.3707048548,
+    "equity_fund_1": 979765.5969122028,
+    "cash_1": 103614.52569955435,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 266443.97128530184,
+    "trust_1": 147532.09506462523
+   }
+  },
+  {
+   "year": 2036,
+   "total_gross_income": 174136.3443300365,
+   "total_expenses": 198535.4250832208,
+   "total_estimated_tax": 38079.538174044144,
+   "net_cashflow": -62478.61892722845,
+   "withdrawal_amount": 62478.61892722845,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2242113.497603021,
+   "liquid_net_worth": 1037935.4862977731,
+   "asset_ending_values": {
+    "real_estate_rental_1": 622905.2418260005,
+    "equity_fund_1": 994727.2890114562,
+    "cash_1": 105686.81621354543,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 277101.73013671394,
+    "trust_1": 154171.03934253336
+   }
+  },
+  {
+   "year": 2037,
+   "total_gross_income": 178180.2024760999,
+   "total_expenses": 212013.92972964002,
+   "total_estimated_tax": 38607.33275475267,
+   "net_cashflow": -72441.0600082928,
+   "withdrawal_amount": 72441.0600082928,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2277580.2391265975,
+   "liquid_net_worth": 1036693.3045906872,
+   "asset_ending_values": {
+    "real_estate_rental_1": 641592.3990807806,
+    "equity_fund_1": 1001333.8120611636,
+    "cash_1": 107800.55253781634,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 288185.7993421825,
+    "trust_1": 161108.73611294737
+   }
+  },
+  {
+   "year": 2038,
+   "total_gross_income": 182362.76455185135,
+   "total_expenses": 226565.22075390693,
+   "total_estimated_tax": 39147.5480765481,
+   "net_cashflow": -83350.00427860368,
+   "withdrawal_amount": 83350.00427860368,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2303689.6365181543,
+   "liquid_net_worth": 1024777.6049110508,
+   "asset_ending_values": {
+    "real_estate_rental_1": 660840.171053204,
+    "equity_fund_1": 998171.0456010818,
+    "cash_1": 109956.56358857267,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 299713.23131586984,
+    "trust_1": 168358.62923803
+   }
+  },
+  {
+   "year": 2039,
+   "total_gross_income": 186689.48496211212,
+   "total_expenses": 242275.20716432942,
+   "total_estimated_tax": 39700.48204811023,
+   "net_cashflow": -95286.20425032752,
+   "withdrawal_amount": 95286.20425032752,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2318832.768996679,
+   "liquid_net_worth": 1000530.8646896333,
+   "asset_ending_values": {
+    "real_estate_rental_1": 680665.3761848,
+    "equity_fund_1": 983661.3740796166,
+    "cash_1": 112155.69486034411,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 311701.76056850463,
+    "trust_1": 175934.76755374135
+   }
+  },
+  {
+   "year": 2040,
+   "total_gross_income": 191166.05555779248,
+   "total_expenses": 259236.77366261266,
+   "total_estimated_tax": 40266.43985981757,
+   "net_cashflow": -108337.15796463774,
+   "withdrawal_amount": 108337.15796463774,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2321215.933753332,
+   "liquid_net_worth": 962108.9331980833,
+   "asset_ending_values": {
+    "real_estate_rental_1": 701085.337470344,
+    "equity_fund_1": 956047.28240517,
+    "cash_1": 114398.808757551,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 324169.8309912448,
+    "trust_1": 183851.8320936597
+   }
+  },
+  {
+   "year": 2041,
+   "total_gross_income": 195798.41664976443,
+   "total_expenses": 277550.3480246539,
+   "total_estimated_tax": 40845.73416505477,
+   "net_cashflow": -122597.66553994425,
+   "withdrawal_amount": 122597.66553994425,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2308842.228120653,
+   "liquid_net_worth": 907462.5417574293,
+   "asset_ending_values": {
+    "real_estate_rental_1": 722117.8975944543,
+    "equity_fund_1": 913373.4223646715,
+    "cash_1": 116686.78493270202,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 337136.6242308946,
+    "trust_1": 192125.1645378744
+   }
+  },
+  {
+   "year": 2042,
+   "total_gross_income": 200592.76855209126,
+   "total_expenses": 280447.11365815654,
+   "total_estimated_tax": 41438.68526611563,
+   "net_cashflow": -121293.0303721809,
+   "withdrawal_amount": 121293.0303721809,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2296368.8243293213,
+   "liquid_net_worth": 851194.5036648244,
+   "asset_ending_values": {
+    "real_estate_rental_1": 743781.4345222879,
+    "equity_fund_1": 853467.0134056492,
+    "cash_1": 119020.52063135606,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 350622.0892001304,
+    "trust_1": 200770.79694207874
+   }
+  },
+  {
+   "year": 2043,
+   "total_gross_income": 205555.58368054044,
+   "total_expenses": 301774.4099128575,
+   "total_estimated_tax": 42045.62130482013,
+   "net_cashflow": -138264.4475371372,
+   "withdrawal_amount": 138264.4475371372,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2265490.2911594687,
+   "liquid_net_worth": 774942.9580289042,
+   "asset_ending_values": {
+    "real_estate_rental_1": 766094.8775579566,
+    "equity_fund_1": 791806.4745220582,
+    "cash_1": 121400.93104398319,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 364646.9727681356,
+    "trust_1": 209805.4828044723
+   }
+  },
+  {
+   "year": 2044,
+   "total_gross_income": 210693.61923358784,
+   "total_expenses": 324799.89474218833,
+   "total_estimated_tax": 42666.87845796706,
+   "net_cashflow": -156773.15396656754,
+   "withdrawal_amount": 156773.15396656754,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2213540.76347832,
+   "liquid_net_worth": 675983.4583840906,
+   "asset_ending_values": {
+    "real_estate_rental_1": 789077.7238846953,
+    "equity_fund_1": 708927.6626857953,
+    "cash_1": 123828.94966486286,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 379232.851678861,
+    "trust_1": 219246.72953067356
+   }
+  },
+  {
+   "year": 2045,
+   "total_gross_income": 216013.9304844698,
+   "total_expenses": 349660.8146806709,
+   "total_estimated_tax": 43302.801137746996,
+   "net_cashflow": -176949.68533394812,
+   "withdrawal_amount": 176949.68533394812,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2137562.9837776315,
+   "liquid_net_worth": 551297.930070826,
+   "asset_ending_values": {
+    "real_estate_rental_1": 812750.0556012362,
+    "equity_fund_1": 601942.086746614,
+    "cash_1": 126305.52865816011,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 394402.16574601544,
+    "trust_1": 229112.83235955387
+   }
+  },
+  {
+   "year": 2046,
+   "total_gross_income": 221523.88471424914,
+   "total_expenses": 376505.5667921348,
+   "total_estimated_tax": 43953.74219724366,
+   "net_cashflow": -198935.42427512928,
+   "withdrawal_amount": 198935.42427512928,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2034279.9366438424,
+   "liquid_net_worth": 397546.2171829793,
+   "asset_ending_values": {
+    "real_estate_rental_1": 837132.5572692732,
+    "equity_fund_1": 467650.00222678523,
+    "cash_1": 128831.63923132331,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 410178.25237585604,
+    "trust_1": 239422.9098157338
+   }
+  },
+  {
+   "year": 2047,
+   "total_gross_income": 227231.17581734806,
+   "total_expenses": 405494.60632609384,
+   "total_estimated_tax": 44620.06314115508,
+   "net_cashflow": -222883.49364990086,
+   "withdrawal_amount": 222883.49364990086,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1900063.8866417278,
+   "liquid_net_worth": 211035.0294260444,
+   "asset_ending_values": {
+    "real_estate_rental_1": 862246.5339873515,
+    "equity_fund_1": 302510.2510599955,
+    "cash_1": 131408.27201594977,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 426585.3824708903,
+    "trust_1": 250196.9407574418
+   }
+  },
+  {
+   "year": 2048,
+   "total_gross_income": 233143.83961255453,
+   "total_expenses": 436801.4283114438,
+   "total_estimated_tax": 45302.134341869365,
+   "net_cashflow": -248959.7230407586,
+   "withdrawal_amount": 248959.7230407586,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1730902.5905226127,
+   "liquid_net_worth": 0.0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 888113.930006972,
+    "equity_fund_1": 102607.34523887775,
+    "cash_1": 134036.43745626876,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 443648.7977697259,
+    "trust_1": 261455.80309152667
+   }
+  },
+  {
+   "year": 2049,
+   "total_gross_income": 239270.26989414636,
+   "total_expenses": 470613.62911212025,
+   "total_estimated_tax": 46000.33526103345,
+   "net_cashflow": -277343.69447900733,
+   "withdrawal_amount": 277343.69447900733,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1528462.848849425,
+   "liquid_net_worth": 0.0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 914757.3479071812,
+    "equity_fund_1": 18749.071855702754,
+    "cash_1": 0.0,
+    "annuity_1": 137684.0596543879,
+    "pension_1": 0.0,
+    "business_1": 461394.7496805149,
+    "trust_1": 273221.31423064537
+   }
+  },
+  {
+   "year": 2050,
+   "total_gross_income": 245619.23525949044,
+   "total_expenses": 507134.0544603202,
+   "total_estimated_tax": 46715.05467675686,
+   "net_cashflow": -308229.8738775866,
+   "withdrawal_amount": 308229.8738775866,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1292297.0132144259,
+   "liquid_net_worth": 0.0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 942200.0683443967,
+    "equity_fund_1": 19311.544011373837,
+    "cash_1": 0.0,
+    "annuity_1": 0.0,
+    "pension_1": 0.0,
+    "business_1": 479850.5396677355,
+    "trust_1": 159164.7350685065
+   }
+  },
+  {
+   "year": 2051,
+   "total_gross_income": 252199.89675127674,
+   "total_expenses": 546582.0410138664,
+   "total_estimated_tax": 47446.69091659623,
+   "net_cashflow": -341828.8351791859,
+   "withdrawal_amount": 341828.8351791859,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1013926.4841600652,
+   "liquid_net_worth": 0.0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 836819.867753091,
+    "equity_fund_1": 19890.89033171505,
+    "cash_1": 0.0,
+    "annuity_1": 0.0,
+    "pension_1": 0.0,
+    "business_1": 499044.56125444494,
+    "trust_1": 0.0
+   }
+  },
+  {
+   "year": 2052,
+   "total_gross_income": 259021.8263544381,
+   "total_expenses": 589194.7590585422,
+   "total_estimated_tax": 48195.65209647007,
+   "net_cashflow": -378368.5848005742,
+   "withdrawal_amount": 378368.5848005742,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 691453.7565385039,
+   "liquid_net_worth": 0.0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 530328.3805927888,
+    "equity_fund_1": 20487.617041666508,
+    "cash_1": 0.0,
+    "annuity_1": 0.0,
+    "pension_1": 0.0,
+    "business_1": 519006.34370462276,
+    "trust_1": 0.0
+   }
+  },
+  {
+   "year": 2053,
+   "total_gross_income": 266095.0263897901,
+   "total_expenses": 635228.6645972729,
+   "total_estimated_tax": 48962.35636565743,
+   "net_cashflow": -418095.99457314017,
+   "withdrawal_amount": 198723.0807718141,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 539766.5974528077,
+   "liquid_net_worth": 0.0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 177620.83521889758,
+    "equity_fund_1": 21102.2455529165,
+    "cash_1": 0.0,
+    "annuity_1": 0.0,
+    "pension_1": 0.0,
+    "business_1": 539766.5974528077,
+    "trust_1": 0.0
+   }
+  },
+  {
+   "year": 2054,
+   "total_gross_income": 273429.94984851073,
+   "total_expenses": 684961.069739694,
+   "total_estimated_tax": 49747.2321580378,
+   "net_cashflow": -461278.35204922105,
+   "withdrawal_amount": 21735.312919504,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 561357.26135092,
+   "liquid_net_worth": 0.0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 21735.312919504,
+    "cash_1": 0.0,
+    "annuity_1": 0.0,
+    "pension_1": 0.0,
+    "business_1": 561357.26135092,
+    "trust_1": 0.0
+   }
+  },
+  {
+   "year": 2055,
+   "total_gross_income": 281037.5217137645,
+   "total_expenses": 738691.8410320443,
+   "total_estimated_tax": 50550.7184497341,
+   "net_cashflow": -508205.03776801383,
+   "withdrawal_amount": 22387.372307089117,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 583811.5518049567,
+   "liquid_net_worth": 0.0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 22387.372307089117,
+    "cash_1": 0.0,
+    "annuity_1": 0.0,
+    "pension_1": 0.0,
+    "business_1": 583811.5518049567,
+    "trust_1": 0.0
+   }
+  }
+ ],
+ "sell_rental_2032": [
+  {
+   "year": 2026,
+   "total_gross_income": 154800.0,
+   "total_expenses": 107900.0,
+   "total_estimated_tax": 35937.0,
+   "net_cashflow": 10963.0,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 10963.0,
+   "total_net_worth": 1664338.0,
+   "liquid_net_worth": 764363.0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 463500.0,
+    "equity_fund_1": 666700.0,
+    "cash_1": 86700.0,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 187200.0,
+    "trust_1": 99275.0
+   }
+  },
+  {
+   "year": 2027,
+   "total_gross_income": 157825.0,
+   "total_expenses": 112686.8,
+   "total_estimated_tax": 36637.35,
+   "net_cashflow": 8500.849999999999,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 8500.849999999999,
+   "total_net_worth": 1750878.005,
+   "liquid_net_worth": 825042.63,
+   "asset_ending_values": {
+    "real_estate_rental_1": 477405.0,
+    "equity_fund_1": 728107.78,
+    "cash_1": 88434.0,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 194688.0,
+    "trust_1": 103742.375
+   }
+  },
+  {
+   "year": 2028,
+   "total_gross_income": 160917.55,
+   "total_expenses": 117761.72432000001,
+   "total_estimated_tax": 37353.1425,
+   "net_cashflow": 5802.683179999978,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 5802.683179999978,
+   "total_net_worth": 1839502.512855,
+   "liquid_net_worth": 886889.0609800001,
+   "asset_ending_values": {
+    "real_estate_rental_1": 491727.15,
+    "equity_fund_1": 790883.6978000001,
+    "cash_1": 90202.68,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 202475.52,
+    "trust_1": 108410.781875
+   }
+  },
+  {
+   "year": 2029,
+   "total_gross_income": 117264.43149999998,
+   "total_expenses": 123141.433000088,
+   "total_estimated_tax": 26009.181974999996,
+   "net_cashflow": -31886.18347508802,
+   "withdrawal_amount": 31886.18347508802,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1895331.792823087,
+   "liquid_net_worth": 914989.0204637122,
+   "asset_ending_values": {
+    "real_estate_rental_1": 506478.9645,
+    "equity_fund_1": 854868.4703388001,
+    "cash_1": 92006.73359999999,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 210574.5408,
+    "trust_1": 113289.26705937501
+   }
+  },
+  {
+   "year": 2030,
+   "total_gross_income": 128320.44681999998,
+   "total_expenses": 128843.59300115838,
+   "total_estimated_tax": 28437.797204249997,
+   "net_cashflow": -28960.943385408398,
+   "withdrawal_amount": 28960.943385408398,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1956997.6226011734,
+   "liquid_net_worth": 947939.4826571265,
+   "asset_ending_values": {
+    "real_estate_rental_1": 521673.333435,
+    "equity_fund_1": 883053.5577705349,
+    "cash_1": 93846.86827199999,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 218997.522432,
+    "trust_1": 118387.28407704688
+   }
+  },
+  {
+   "year": 2031,
+   "total_gross_income": 130425.219658975,
+   "total_expenses": 134886.93896207804,
+   "total_estimated_tax": 28896.937384627498,
+   "net_cashflow": -33358.656687730545,
+   "withdrawal_amount": 33358.656687730545,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2017512.0925316373,
+   "liquid_net_worth": 978716.4239037934,
+   "asset_ending_values": {
+    "real_estate_rental_1": 537323.53343805,
+    "equity_fund_1": 916351.2749540841,
+    "cash_1": 95723.80563743999,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 227757.42332928,
+    "trust_1": 123714.71186051398
+   }
+  },
+  {
+   "year": 2032,
+   "total_gross_income": 132579.9316689786,
+   "total_expenses": 141291.33764677308,
+   "total_estimated_tax": 29366.854167022568,
+   "net_cashflow": -38078.26014481706,
+   "withdrawal_amount": 38078.26014481706,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1523025.2879414202,
+   "liquid_net_worth": 1006875.6937847319,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 947315.6721793602,
+    "cash_1": 97638.28175018879,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 236867.72026245118,
+    "trust_1": 129281.87389423711
+   }
+  },
+  {
+   "year": 2033,
+   "total_gross_income": 122845.95244153627,
+   "total_expenses": 115340.89258397996,
+   "total_estimated_tax": 36567.8053342109,
+   "net_cashflow": -29062.745476654592,
+   "withdrawal_amount": 29062.745476654592,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1577445.7476791171,
+   "liquid_net_worth": 1046003.76038669,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 975475.458478152,
+    "cash_1": 99591.04738519256,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 246342.42907294922,
+    "trust_1": 135099.5582194778
+   }
+  },
+  {
+   "year": 2034,
+   "total_gross_income": 124945.70950758236,
+   "total_expenses": 122139.32898135702,
+   "total_estimated_tax": 37060.05495306533,
+   "net_cashflow": -34253.674426839985,
+   "withdrawal_amount": 34253.674426839985,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1629936.1500360474,
+   "liquid_net_worth": 1082560.985460826,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 1015231.7915547696,
+    "cash_1": 101582.86833289641,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 256196.12623586718,
+    "trust_1": 141179.0383393543
+   }
+  },
+  {
+   "year": 2035,
+   "total_gross_income": 127099.36685546582,
+   "total_expenses": 129346.65973650472,
+   "total_estimated_tax": 37563.87353061401,
+   "net_cashflow": -39811.16641165291,
+   "withdrawal_amount": 39811.16641165291,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1680011.5750398117,
+   "liquid_net_worth": 1116035.5086898846,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 1052232.1494019832,
+    "cash_1": 103614.52569955435,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 266443.97128530184,
+    "trust_1": 147532.09506462523
+   }
+  },
+  {
+   "year": 2036,
+   "total_gross_income": 129308.35964503893,
+   "total_expenses": 136987.6326032464,
+   "total_estimated_tax": 38079.538174044144,
+   "net_cashflow": -45758.81113225161,
+   "withdrawal_amount": 45758.81113225161,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1727134.2221340602,
+   "liquid_net_worth": 1145861.452654813,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 1085933.447573519,
+    "cash_1": 105686.81621354543,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 277101.73013671394,
+    "trust_1": 154171.03934253336
+   }
+  },
+  {
+   "year": 2037,
+   "total_gross_income": 131574.1624539774,
+   "total_expenses": 145088.49785623632,
+   "total_estimated_tax": 38607.33275475267,
+   "net_cashflow": -52121.668157011605,
+   "withdrawal_amount": 52121.668157011605,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1770708.7562355604,
+   "liquid_net_worth": 1171414.2207804306,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 1115735.3363996258,
+    "cash_1": 107800.55253781634,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 288185.7993421825,
+    "trust_1": 161108.73611294737
+   }
+  },
+  {
+   "year": 2038,
+   "total_gross_income": 133898.29038757578,
+   "total_expenses": 153677.09965595687,
+   "total_estimated_tax": 39147.5480765481,
+   "net_cashflow": -58926.357344929194,
+   "withdrawal_amount": 58926.357344929194,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1810077.283559753,
+   "liquid_net_worth": 1192005.4230058533,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 1140975.2167622098,
+    "cash_1": 109956.56358857267,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 299713.23131586984,
+    "trust_1": 168358.62923803
+   }
+  },
+  {
+   "year": 2039,
+   "total_gross_income": 136282.30022038167,
+   "total_expenses": 162782.97297368874,
+   "total_estimated_tax": 39700.48204811023,
+   "net_cashflow": -66201.15480141729,
+   "withdrawal_amount": 66201.15480141729,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1844513.92944128,
+   "liquid_net_worth": 1206877.401319034,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 1160922.8612601073,
+    "cash_1": 112155.69486034411,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 311701.76056850463,
+    "trust_1": 175934.76755374135
+   }
+  },
+  {
+   "year": 2040,
+   "total_gross_income": 138727.79157059532,
+   "total_expenses": 172437.44641493092,
+   "total_estimated_tax": 40266.43985981757,
+   "net_cashflow": -73976.09470415316,
+   "withdrawal_amount": 73976.09470415316,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1873218.988370637,
+   "liquid_net_worth": 1215197.3252857325,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 1174774.6112323347,
+    "cash_1": 114398.808757551,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 324169.8309912448,
+    "trust_1": 183851.8320936597
+   }
+  },
+  {
+   "year": 2041,
+   "total_gross_income": 141236.40810818743,
+   "total_expenses": 182673.7513003591,
+   "total_estimated_tax": 40845.73416505477,
+   "net_cashflow": -82283.07735722643,
+   "withdrawal_amount": 82283.07735722643,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1895312.6143218242,
+   "liquid_net_worth": 1216050.8255530552,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 1181647.1179775796,
+    "cash_1": 116686.78493270202,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 337136.6242308946,
+    "trust_1": 192125.1645378744
+   }
+  },
+  {
+   "year": 2042,
+   "total_gross_income": 143809.8387977168,
+   "total_expenses": 193527.13738527265,
+   "total_estimated_tax": 41438.68526611563,
+   "net_cashflow": -91155.98385367148,
+   "withdrawal_amount": 91155.98385367148,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1909828.0171489066,
+   "liquid_net_worth": 1208435.1310066974,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 1180570.5942290127,
+    "cash_1": 119020.52063135606,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 350622.0892001304,
+    "trust_1": 200770.79694207874
+   }
+  },
+  {
+   "year": 2043,
+   "total_gross_income": 146449.8191768577,
+   "total_expenses": 205034.99562167906,
+   "total_estimated_tax": 42045.62130482013,
+   "net_cashflow": -100630.79774964148,
+   "withdrawal_amount": 100630.79774964148,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1915704.1283713928,
+   "liquid_net_worth": 1191251.672798785,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 1170481.5395044433,
+    "cash_1": 121400.93104398319,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 364646.9727681356,
+    "trust_1": 209805.4828044723
+   }
+  },
+  {
+   "year": 2044,
+   "total_gross_income": 149158.13267167704,
+   "total_expenses": 217236.988391772,
+   "total_estimated_tax": 42666.87845796706,
+   "net_cashflow": -110745.73417806202,
+   "withdrawal_amount": 110745.73417806202,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1911777.6970382044,
+   "liquid_net_worth": 1163298.1158286696,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 1150214.9003418689,
+    "cash_1": 123828.94966486286,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 379232.851678861,
+    "trust_1": 219246.72953067356
+   }
+  },
+  {
+   "year": 2045,
+   "total_gross_income": 151936.6119497312,
+   "total_expenses": 230175.1876676655,
+   "total_estimated_tax": 43302.801137746996,
+   "net_cashflow": -121541.37685568132,
+   "withdrawal_amount": 121541.37685568132,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1896774.7735459157,
+   "liquid_net_worth": 1123259.7754403464,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 1118495.6236378676,
+    "cash_1": 126305.52865816011,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 394402.16574601544,
+    "trust_1": 229112.83235955387
+   }
+  },
+  {
+   "year": 2046,
+   "total_gross_income": 154787.1403120851,
+   "total_expenses": 243894.22157994597,
+   "total_estimated_tax": 43953.74219724366,
+   "net_cashflow": -133060.8234651045,
+   "withdrawal_amount": 133060.8234651045,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1869301.5362762858,
+   "liquid_net_worth": 1069700.374084696,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 1073929.5583184771,
+    "cash_1": 128831.63923132331,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 410178.25237585604,
+    "trust_1": 239422.9098157338
+   }
+  },
+  {
+   "year": 2047,
+   "total_gross_income": 157711.65312538683,
+   "total_expenses": 258441.42990698392,
+   "total_estimated_tax": 44620.06314115508,
+   "net_cashflow": -145349.83992275217,
+   "withdrawal_amount": 145349.83992275217,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1827834.412697345,
+   "liquid_net_worth": 1001052.0894690128,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 1014993.6573758153,
+    "cash_1": 131408.27201594977,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 426585.3824708903,
+    "trust_1": 250196.9407574418
+   }
+  },
+  {
+   "year": 2048,
+   "total_gross_income": 160712.13929516642,
+   "total_expenses": 273867.02902812307,
+   "total_estimated_tax": 45302.134341869365,
+   "net_cashflow": -158457.024074826,
+   "withdrawal_amount": 158457.024074826,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1770709.4431271194,
+   "liquid_net_worth": 915604.8422658669,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 940025.4288844243,
+    "cash_1": 134036.43745626876,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 443648.7977697259,
+    "trust_1": 261455.80309152667
+   }
+  },
+  {
+   "year": 2049,
+   "total_gross_income": 163790.64278155973,
+   "total_expenses": 290224.28691693366,
+   "total_estimated_tax": 46000.33526103345,
+   "net_cashflow": -172433.97939640738,
+   "withdrawal_amount": 172433.97939640738,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1696110.831674024,
+   "liquid_net_worth": 811494.7677628638,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 847211.580953877,
+    "cash_1": 136717.16620539414,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 461394.7496805149,
+    "trust_1": 273221.31423064537
+   }
+  },
+  {
+   "year": 2050,
+   "total_gross_income": 166949.26415869562,
+   "total_expenses": 307569.7087858028,
+   "total_estimated_tax": 46715.05467675686,
+   "net_cashflow": -187335.49930386408,
+   "withdrawal_amount": 187335.49930386408,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1602058.6249266895,
+   "liquid_net_worth": 686691.8118879296,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 734575.8016622916,
+    "cash_1": 139451.50952950201,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 479850.5396677355,
+    "trust_1": 285516.2733710244
+   }
+  },
+  {
+   "year": 2051,
+   "total_gross_income": 170190.16221901937,
+   "total_expenses": 325963.2340303548,
+   "total_estimated_tax": 47446.69091659623,
+   "net_cashflow": -203219.76272793167,
+   "withdrawal_amount": 203219.76272793167,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1486395.4547509742,
+   "liquid_net_worth": 538986.3878238086,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 599965.6108316482,
+    "cash_1": 142240.53972009206,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 499044.56125444494,
+    "trust_1": 298364.5056727205
+   }
+  },
+  {
+   "year": 2052,
+   "total_gross_income": 173515.5556238641,
+   "total_expenses": 345468.4451616851,
+   "total_estimated_tax": 48195.65209647007,
+   "net_cashflow": -220148.5416342911,
+   "withdrawal_amount": 220148.5416342911,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1346772.2770444243,
+   "liquid_net_worth": 365975.0249118089,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 441038.2160316061,
+    "cash_1": 145085.35051449388,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 519006.34370462276,
+    "trust_1": 311790.9084279929
+   }
+  },
+  {
+   "year": 2053,
+   "total_gross_income": 176927.72460161961,
+   "total_expenses": 366152.7894562798,
+   "total_estimated_tax": 48962.35636565743,
+   "net_cashflow": -238187.4212203176,
+   "withdrawal_amount": 238187.4212203176,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1180633.0334785967,
+   "liquid_net_worth": 165044.93671853654,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 255245.30041407037,
+    "cash_1": 147987.05752478377,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 539766.5974528077,
+    "trust_1": 325821.4993072526
+   }
+  },
+  {
+   "year": 2054,
+   "total_gross_income": 180429.0126948886,
+   "total_expenses": 388087.81409794267,
+   "total_estimated_tax": 49747.2321580378,
+   "net_cashflow": -257406.03356109187,
+   "withdrawal_amount": 257406.03356109184,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 985198.1581060684,
+   "liquid_net_worth": 0.0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 39816.66486488194,
+    "cash_1": 150946.79867527945,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 561357.26135092,
+    "trust_1": 340483.466776079
+   }
+  },
+  {
+   "year": 2055,
+   "total_gross_income": 184021.82855806008,
+   "total_expenses": 411349.4156331962,
+   "total_estimated_tax": 50550.7184497341,
+   "net_cashflow": -277878.30552487023,
+   "withdrawal_amount": 277878.30552487023,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 767483.2713472478,
+   "liquid_net_worth": 0.0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 0.0,
+    "equity_fund_1": 22387.372307089117,
+    "cash_1": 0.0,
+    "annuity_1": 83357.42997906954,
+    "pension_1": 0.0,
+    "business_1": 583811.5518049567,
+    "trust_1": 355805.2227810025
+   }
+  }
+ ],
+ "lower_market_returns": [
+  {
+   "year": 2026,
+   "total_gross_income": 154800.0,
+   "total_expenses": 107900.0,
+   "total_estimated_tax": 35937.0,
+   "net_cashflow": 10963.0,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 10963.0,
+   "total_net_worth": 1651938.0,
+   "liquid_net_worth": 751963.0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 463500.0,
+    "equity_fund_1": 654300.0,
+    "cash_1": 86700.0,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 187200.0,
+    "trust_1": 99275.0
+   }
+  },
+  {
+   "year": 2027,
+   "total_gross_income": 157825.0,
+   "total_expenses": 112686.8,
+   "total_estimated_tax": 36637.35,
+   "net_cashflow": 8500.849999999999,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 8500.849999999999,
+   "total_net_worth": 1724428.745,
+   "liquid_net_worth": 798593.37,
+   "asset_ending_values": {
+    "real_estate_rental_1": 477405.0,
+    "equity_fund_1": 701658.52,
+    "cash_1": 88434.0,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 194688.0,
+    "trust_1": 103742.375
+   }
+  },
+  {
+   "year": 2028,
+   "total_gross_income": 160917.55,
+   "total_expenses": 117761.72432000001,
+   "total_estimated_tax": 37353.1425,
+   "net_cashflow": 5802.683179999978,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 5802.683179999978,
+   "total_net_worth": 1797263.109855,
+   "liquid_net_worth": 844649.6579799999,
+   "asset_ending_values": {
+    "real_estate_rental_1": 491727.15,
+    "equity_fund_1": 748644.2948,
+    "cash_1": 90202.68,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 202475.52,
+    "trust_1": 108410.781875
+   }
+  },
+  {
+   "year": 2029,
+   "total_gross_income": 117264.43149999998,
+   "total_expenses": 123141.433000088,
+   "total_estimated_tax": 26009.181974999996,
+   "net_cashflow": -31886.18347508802,
+   "withdrawal_amount": 31886.18347508802,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1835469.0860834871,
+   "liquid_net_worth": 855126.3137241121,
+   "asset_ending_values": {
+    "real_estate_rental_1": 506478.9645,
+    "equity_fund_1": 795005.7635992,
+    "cash_1": 92006.73359999999,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 210574.5408,
+    "trust_1": 113289.26705937501
+   }
+  },
+  {
+   "year": 2030,
+   "total_gross_income": 128320.44681999998,
+   "total_expenses": 128843.59300115838,
+   "total_estimated_tax": 28437.797204249997,
+   "net_cashflow": -28960.943385408398,
+   "withdrawal_amount": 28960.943385408398,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1878280.7618547152,
+   "liquid_net_worth": 869222.6219106682,
+   "asset_ending_values": {
+    "real_estate_rental_1": 521673.333435,
+    "equity_fund_1": 804336.6970240766,
+    "cash_1": 93846.86827199999,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 218997.522432,
+    "trust_1": 118387.28407704688
+   }
+  },
+  {
+   "year": 2031,
+   "total_gross_income": 130425.219658975,
+   "total_expenses": 134886.93896207804,
+   "total_estimated_tax": 28896.937384627498,
+   "net_cashflow": -33358.656687730545,
+   "withdrawal_amount": 33358.656687730545,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1918564.7050676183,
+   "liquid_net_worth": 879769.0364397743,
+   "asset_ending_values": {
+    "real_estate_rental_1": 537323.53343805,
+    "equity_fund_1": 817403.887490065,
+    "cash_1": 95723.80563743999,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 227757.42332928,
+    "trust_1": 123714.71186051398
+   }
+  },
+  {
+   "year": 2032,
+   "total_gross_income": 132579.9316689786,
+   "total_expenses": 141291.33764677308,
+   "total_estimated_tax": 29366.854167022568,
+   "net_cashflow": -38078.26014481706,
+   "withdrawal_amount": 38078.26014481706,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1955903.392054705,
+   "liquid_net_worth": 886310.558456825,
+   "asset_ending_values": {
+    "real_estate_rental_1": 553443.2394411914,
+    "equity_fund_1": 826750.5368514532,
+    "cash_1": 97638.28175018879,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 236867.72026245118,
+    "trust_1": 129281.87389423711
+   }
+  },
+  {
+   "year": 2033,
+   "total_gross_income": 162785.7937647882,
+   "total_expenses": 148077.85630547823,
+   "total_estimated_tax": 36567.8053342109,
+   "net_cashflow": -21859.867874900934,
+   "withdrawal_amount": 21859.867874900934,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2011122.672923584,
+   "liquid_net_worth": 909634.1490067296,
+   "asset_ending_values": {
+    "real_estate_rental_1": 570046.5366244272,
+    "equity_fund_1": 831902.9694964379,
+    "cash_1": 99591.04738519256,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 246342.42907294922,
+    "trust_1": 135099.5582194778
+   }
+  },
+  {
+   "year": 2034,
+   "total_gross_income": 165884.04686391557,
+   "total_expenses": 155268.8351880356,
+   "total_estimated_tax": 37060.05495306533,
+   "net_cashflow": -26444.843277185348,
+   "withdrawal_amount": 26444.843277185348,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2064140.263813673,
+   "liquid_net_worth": 929617.1665152918,
+   "asset_ending_values": {
+    "real_estate_rental_1": 587147.93272316,
+    "equity_fund_1": 854479.1414595807,
+    "cash_1": 101582.86833289641,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 256196.12623586718,
+    "trust_1": 141179.0383393543
+   }
+  },
+  {
+   "year": 2035,
+   "total_gross_income": 169061.16264570737,
+   "total_expenses": 162887.96446160303,
+   "total_estimated_tax": 37563.87353061401,
+   "net_cashflow": -31390.675346509663,
+   "withdrawal_amount": 31390.675346509663,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2114513.3027638956,
+   "liquid_net_worth": 945774.8657091138,
+   "asset_ending_values": {
+    "real_estate_rental_1": 604762.3707048548,
+    "equity_fund_1": 873551.0153560691,
+    "cash_1": 103614.52569955435,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 266443.97128530184,
+    "trust_1": 147532.09506462523
+   }
+  },
+  {
+   "year": 2036,
+   "total_gross_income": 172319.20033003652,
+   "total_expenses": 170960.3658004865,
+   "total_estimated_tax": 38079.538174044144,
+   "net_cashflow": -36720.703644494126,
+   "withdrawal_amount": 36720.703644494126,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2161758.08308801,
+   "liquid_net_worth": 957580.0717827622,
+   "asset_ending_values": {
+    "real_estate_rental_1": 622905.2418260005,
+    "equity_fund_1": 888613.959213711,
+    "cash_1": 105686.81621354543,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 277101.73013671394,
+    "trust_1": 154171.03934253336
+   }
+  },
+  {
+   "year": 2037,
+   "total_gross_income": 175660.2741560999,
+   "total_expenses": 179512.6789321012,
+   "total_estimated_tax": 38607.33275475267,
+   "net_cashflow": -42459.73753075396,
+   "withdrawal_amount": 42459.73753075396,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2205346.9571068403,
+   "liquid_net_worth": 964460.0225709301,
+   "asset_ending_values": {
+    "real_estate_rental_1": 641592.3990807806,
+    "equity_fund_1": 899119.2075638677,
+    "cash_1": 107800.55253781634,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 288185.7993421825,
+    "trust_1": 161108.73611294737
+   }
+  },
+  {
+   "year": 2038,
+   "total_gross_income": 179086.55488225134,
+   "total_expenses": 188573.15344034636,
+   "total_estimated_tax": 39147.5480765481,
+   "net_cashflow": -48634.14663464312,
+   "withdrawal_amount": 48634.14663464312,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2244705.0258205105,
+   "liquid_net_worth": 965792.9942134066,
+   "asset_ending_values": {
+    "real_estate_rental_1": 660840.171053204,
+    "equity_fund_1": 904470.577259477,
+    "cash_1": 109956.56358857267,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 299713.23131586984,
+    "trust_1": 168358.62923803
+   }
+  },
+  {
+   "year": 2039,
+   "total_gross_income": 182600.27132742413,
+   "total_expenses": 198171.74614601163,
+   "total_estimated_tax": 39700.48204811023,
+   "net_cashflow": -55271.956866697736,
+   "withdrawal_amount": 55271.956866697736,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2279206.6004283093,
+   "liquid_net_worth": 960904.6961212636,
+   "asset_ending_values": {
+    "real_estate_rental_1": 680665.3761848,
+    "equity_fund_1": 904020.9581276171,
+    "cash_1": 112155.69486034411,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 311701.76056850463,
+    "trust_1": 175934.76755374135
+   }
+  },
+  {
+   "year": 2040,
+   "total_gross_income": 186203.71195531386,
+   "total_expenses": 208340.22440328094,
+   "total_estimated_tax": 40266.43985981757,
+   "net_cashflow": -62402.952307784646,
+   "withdrawal_amount": 62402.952307784646,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2308171.4207024947,
+   "liquid_net_worth": 949064.4201472461,
+   "asset_ending_values": {
+    "real_estate_rental_1": 701085.337470344,
+    "equity_fund_1": 897068.5636974798,
+    "cash_1": 114398.808757551,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 324169.8309912448,
+    "trust_1": 183851.8320936597
+   }
+  },
+  {
+   "year": 2041,
+   "total_gross_income": 189899.22650252393,
+   "total_expenses": 219112.27567203314,
+   "total_estimated_tax": 40845.73416505477,
+   "net_cashflow": -70058.78333456398,
+   "withdrawal_amount": 70058.78333456398,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2330860.614264352,
+   "liquid_net_worth": 929480.9279011283,
+   "asset_ending_values": {
+    "real_estate_rental_1": 722117.8975944543,
+    "equity_fund_1": 882852.9263029902,
+    "cash_1": 116686.78493270202,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 337136.6242308946,
+    "trust_1": 192125.1645378744
+   }
+  },
+  {
+   "year": 2042,
+   "total_gross_income": 193689.22765191167,
+   "total_expenses": 213646.22271152865,
+   "total_estimated_tax": 41438.68526611563,
+   "net_cashflow": -61395.68032573261,
+   "withdrawal_amount": 61395.68032573261,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2363349.7808287223,
+   "liquid_net_worth": 918175.4601642252,
+   "asset_ending_values": {
+    "real_estate_rental_1": 743781.4345222879,
+    "equity_fund_1": 860550.6198586017,
+    "cash_1": 119020.52063135606,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 350622.0892001304,
+    "trust_1": 200770.79694207874
+   }
+  },
+  {
+   "year": 2043,
+   "total_gross_income": 197576.19275240746,
+   "total_expenses": 225709.88361084726,
+   "total_estimated_tax": 42045.62130482013,
+   "net_cashflow": -70179.31216325994,
+   "withdrawal_amount": 70179.31216325994,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2388592.141632053,
+   "liquid_net_worth": 898044.8085014888,
+   "asset_ending_values": {
+    "real_estate_rental_1": 766094.8775579566,
+    "equity_fund_1": 846823.1896207655,
+    "cash_1": 121400.93104398319,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 364646.9727681356,
+    "trust_1": 209805.4828044723
+   }
+  },
+  {
+   "year": 2044,
+   "total_gross_income": 201562.66558661553,
+   "total_expenses": 238484.14761226933,
+   "total_estimated_tax": 42666.87845796706,
+   "net_cashflow": -79588.36048362085,
+   "withdrawal_amount": 79588.36048362085,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2405680.6409130567,
+   "liquid_net_worth": 868123.3358188268,
+   "asset_ending_values": {
+    "real_estate_rental_1": 789077.7238846953,
+    "equity_fund_1": 823882.7466375849,
+    "cash_1": 123828.94966486286,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 379232.851678861,
+    "trust_1": 219246.72953067356
+   }
+  },
+  {
+   "year": 2045,
+   "total_gross_income": 205651.2581875432,
+   "total_expenses": 252011.60774356988,
+   "total_estimated_tax": 43302.801137746996,
+   "net_cashflow": -89663.15069377368,
+   "withdrawal_amount": 89663.15069377368,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2413631.900775547,
+   "liquid_net_worth": 827366.8470687416,
+   "asset_ending_values": {
+    "real_estate_rental_1": 812750.0556012362,
+    "equity_fund_1": 790724.4691043551,
+    "cash_1": 126305.52865816011,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 394402.16574601544,
+    "trust_1": 229112.83235955387
+   }
+  },
+  {
+   "year": 2046,
+   "total_gross_income": 209844.65270584234,
+   "total_expenses": 266337.43063482636,
+   "total_estimated_tax": 43953.74219724366,
+   "net_cashflow": -100446.52012622768,
+   "withdrawal_amount": 100446.52012622768,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2411380.666442323,
+   "liquid_net_worth": 774646.9469814597,
+   "asset_ending_values": {
+    "real_estate_rental_1": 837132.5572692732,
+    "equity_fund_1": 746261.8278763641,
+    "cash_1": 128831.63923132331,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 410178.25237585604,
+    "trust_1": 239422.9098157338
+   }
+  },
+  {
+   "year": 2047,
+   "total_gross_income": 214145.603328988,
+   "total_expenses": 281509.5126188717,
+   "total_estimated_tax": 44620.06314115508,
+   "net_cashflow": -111983.97243103877,
+   "withdrawal_amount": 111983.97243103877,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2397773.8752919766,
+   "liquid_net_worth": 708745.0180762932,
+   "asset_ending_values": {
+    "real_estate_rental_1": 862246.5339873515,
+    "equity_fund_1": 689320.7184913822,
+    "cash_1": 131408.27201594977,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 426585.3824708903,
+    "trust_1": 250196.9407574418
+   }
+  },
+  {
+   "year": 2048,
+   "total_gross_income": 218556.9382538576,
+   "total_expenses": 297578.6453177966,
+   "total_estimated_tax": 45302.134341869365,
+   "net_cashflow": -124323.84140580837,
+   "withdrawal_amount": 124323.84140580837,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2371564.3252056194,
+   "liquid_net_worth": 628345.7943373951,
+   "asset_ending_values": {
+    "real_estate_rental_1": 888113.930006972,
+    "equity_fund_1": 618633.1982869346,
+    "cash_1": 134036.43745626876,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 443648.7977697259,
+    "trust_1": 261455.80309152667
+   }
+  },
+  {
+   "year": 2049,
+   "total_gross_income": 223081.5617142182,
+   "total_expenses": 314598.69129251287,
+   "total_estimated_tax": 46000.33526103345,
+   "net_cashflow": -137517.4648393281,
+   "withdrawal_amount": 137517.4648393281,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2331403.916196482,
+   "liquid_net_worth": 532030.5043781402,
+   "asset_ending_values": {
+    "real_estate_rental_1": 914757.3479071812,
+    "equity_fund_1": 532830.8030120741,
+    "cash_1": 136717.16620539414,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 461394.7496805149,
+    "trust_1": 273221.31423064537
+   }
+  },
+  {
+   "year": 2050,
+   "total_gross_income": 227722.45606467055,
+   "total_expenses": 332626.7703675075,
+   "total_estimated_tax": 46715.05467675686,
+   "net_cashflow": -151619.3689795938,
+   "withdrawal_amount": 151619.3689795938,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2275836.437644094,
+   "liquid_net_worth": 418269.5562609379,
+   "asset_ending_values": {
+    "real_estate_rental_1": 942200.0683443967,
+    "equity_fund_1": 430437.41571102967,
+    "cash_1": 139451.50952950201,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 479850.5396677355,
+    "trust_1": 285516.2733710244
+   }
+  },
+  {
+   "year": 2051,
+   "total_gross_income": 232482.68392264366,
+   "total_expenses": 351723.45728017075,
+   "total_estimated_tax": 47446.69091659623,
+   "net_cashflow": -166687.4642741233,
+   "withdrawal_amount": 166687.4642741233,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2203289.871700271,
+   "liquid_net_worth": 285414.7343783771,
+   "asset_ending_values": {
+    "real_estate_rental_1": 970466.0703947286,
+    "equity_fund_1": 309861.6589324084,
+    "cash_1": 142240.53972009206,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 499044.56125444494,
+    "trust_1": 298364.5056727205
+   }
+  },
+  {
+   "year": 2052,
+   "total_gross_income": 237365.390370079,
+   "total_expenses": 371952.99134360394,
+   "total_estimated_tax": 48195.65209647007,
+   "net_cashflow": -182783.253069995,
+   "withdrawal_amount": 182783.253069995,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2112068.181569968,
+   "liquid_net_worth": 131690.87693078184,
+   "asset_ending_values": {
+    "real_estate_rental_1": 999580.0525065705,
+    "equity_fund_1": 169388.77948628296,
+    "cash_1": 145085.35051449388,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 519006.34370462276,
+    "trust_1": 311790.9084279929
+   }
+  },
+  {
+   "year": 2053,
+   "total_gross_income": 242373.80521648988,
+   "total_expenses": 393383.4988537377,
+   "total_estimated_tax": 48962.35636565743,
+   "net_cashflow": -199972.05000290528,
+   "withdrawal_amount": 199972.05000290525,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 2000610.4408612368,
+   "liquid_net_worth": 0.0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 1029567.4540817676,
+    "equity_fund_1": 21102.2455529165,
+    "cash_1": 134324.69446939748,
+    "annuity_1": 150000.0,
+    "pension_1": 0.0,
+    "business_1": 539766.5974528077,
+    "trust_1": 325821.4993072526
+   }
+  },
+  {
+   "year": 2054,
+   "total_gross_income": 247511.24532513064,
+   "total_expenses": 416087.2290160777,
+   "total_estimated_tax": 49747.2321580378,
+   "net_cashflow": -218323.21584898487,
+   "withdrawal_amount": 218323.21584898484,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1871162.1929211474,
+   "liquid_net_worth": 0.0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 1060454.4777042207,
+    "equity_fund_1": 21735.312919504,
+    "cash_1": 0.0,
+    "annuity_1": 105454.89001940872,
+    "pension_1": 0.0,
+    "business_1": 561357.26135092,
+    "trust_1": 340483.466776079
+   }
+  },
+  {
+   "year": 2055,
+   "total_gross_income": 252781.11700405815,
+   "total_expenses": 440140.80421457626,
+   "total_estimated_tax": 50550.7184497341,
+   "net_cashflow": -237910.4056602522,
+   "withdrawal_amount": 237910.4056602522,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 1721127.8547771182,
+   "liquid_net_worth": 0.0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 1092268.1120353474,
+    "equity_fund_1": 22387.372307089117,
+    "cash_1": 0.0,
+    "annuity_1": 0.0,
+    "pension_1": 0.0,
+    "business_1": 583811.5518049567,
+    "trust_1": 260571.22428997714
+   }
+  }
+ ],
+ "rental_llc_only": [
+  {
+   "year": 2026,
+   "total_gross_income": 33600.0,
+   "total_expenses": 30500.0,
+   "total_estimated_tax": 8064.0,
+   "net_cashflow": -4964.0,
+   "withdrawal_amount": 4964.0,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 458536.0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 463500.0
+   }
+  },
+  {
+   "year": 2027,
+   "total_gross_income": 34440.0,
+   "total_expenses": 30767.0,
+   "total_estimated_tax": 8265.6,
+   "net_cashflow": -4592.6,
+   "withdrawal_amount": 4592.6,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 467699.48000000004,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 472292.08
+   }
+  },
+  {
+   "year": 2028,
+   "total_gross_income": 35301.0,
+   "total_expenses": 31051.04,
+   "total_estimated_tax": 8472.24,
+   "net_cashflow": -4222.280000000001,
+   "withdrawal_amount": 4222.280000000001,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 477508.1844,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 481730.46440000006
+   }
+  },
+  {
+   "year": 2029,
+   "total_gross_income": 36183.52499999999,
+   "total_expenses": 31352.39615,
+   "total_estimated_tax": 8684.045999999997,
+   "net_cashflow": -3852.91715000001,
+   "withdrawal_amount": 3852.91715000001,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 487980.512782,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 491833.429932
+   }
+  },
+  {
+   "year": 2030,
+   "total_gross_income": 37088.11312499998,
+   "total_expenses": 31671.35749625,
+   "total_estimated_tax": 8901.147149999995,
+   "net_cashflow": -3484.3915212500124,
+   "withdrawal_amount": 3484.3915212500124,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 499135.53664421,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 502619.92816546
+   }
+  },
+  {
+   "year": 2031,
+   "total_gross_income": 38015.315953124984,
+   "total_expenses": 32008.226314951244,
+   "total_estimated_tax": 9123.675828749996,
+   "net_cashflow": -3116.586190576256,
+   "withdrawal_amount": 3116.586190576256,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 510993.01655296003,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 514109.6027435363
+   }
+  },
+  {
+   "year": 2032,
+   "total_gross_income": 38965.6988519531,
+   "total_expenses": 32363.318459467682,
+   "total_estimated_tax": 9351.767724468744,
+   "net_cashflow": -2749.3873319833256,
+   "withdrawal_amount": 2749.3873319833256,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 523573.4197175655,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 526322.8070495488
+   }
+  },
+  {
+   "year": 2033,
+   "total_gross_income": 39939.84132325193,
+   "total_expenses": 32736.96372149826,
+   "total_estimated_tax": 9585.561917580462,
+   "net_cashflow": -2382.684315826793,
+   "withdrawal_amount": 2382.684315826793,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 536897.9379932658,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 539280.6223090925
+   }
+  },
+  {
+   "year": 2034,
+   "total_gross_income": 40938.33735633322,
+   "total_expenses": 33129.50620667857,
+   "total_estimated_tax": 9825.200965519973,
+   "net_cashflow": -2016.3698158653206,
+   "withdrawal_amount": 2016.3698158653206,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 550988.5063171985,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 553004.8761330638
+   }
+  },
+  {
+   "year": 2035,
+   "total_gross_income": 41961.79579024155,
+   "total_expenses": 33541.30472509831,
+   "total_estimated_tax": 10070.830989657972,
+   "net_cashflow": -1650.3399245147284,
+   "withdrawal_amount": 1650.3399245147284,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 565867.8215821997,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 567518.1615067144
+   }
+  },
+  {
+   "year": 2036,
+   "total_gross_income": 43010.84068499758,
+   "total_expenses": 33972.73319724009,
+   "total_estimated_tax": 10322.601764399418,
+   "net_cashflow": -1284.4942766419317,
+   "withdrawal_amount": 1284.4942766419317,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 581559.3619530237,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 582843.8562296657
+   }
+  },
+  {
+   "year": 2037,
+   "total_gross_income": 44086.11170212252,
+   "total_expenses": 34424.181075864886,
+   "total_estimated_tax": 10580.666808509404,
+   "net_cashflow": -918.7361822517687,
+   "withdrawal_amount": 918.7361822517687,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 598087.4066293627,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 599006.1428116144
+   }
+  },
+  {
+   "year": 2038,
+   "total_gross_income": 45188.26449467558,
+   "total_expenses": 34896.05378438951,
+   "total_estimated_tax": 10845.18347872214,
+   "net_cashflow": -552.9727684360641,
+   "withdrawal_amount": 552.9727684360641,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 615477.0560598075,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 616030.0288282436
+   }
+  },
+  {
+   "year": 2039,
+   "total_gross_income": 46317.97110704246,
+   "total_expenses": 35388.77317232292,
+   "total_estimated_tax": 11116.31306569019,
+   "net_cashflow": -187.1151309706529,
+   "withdrawal_amount": 187.1151309706529,
+   "reinvestment_amount": 0.0,
+   "total_net_worth": 633754.2526106312,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 633941.3677416018
+   }
+  },
+  {
+   "year": 2040,
+   "total_gross_income": 47475.92038471853,
+   "total_expenses": 35902.77798835,
+   "total_estimated_tax": 11394.220892332447,
+   "net_cashflow": 178.9215040360832,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 652766.8801889501,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 652766.8801889501
+   }
+  },
+  {
+   "year": 2041,
+   "total_gross_income": 48662.818394336486,
+   "total_expenses": 36438.52437167403,
+   "total_estimated_tax": 11679.076414640756,
+   "net_cashflow": 545.2176080216996,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 672349.8865946186,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 672349.8865946186
+   }
+  },
+  {
+   "year": 2042,
+   "total_gross_income": 49879.38885419489,
+   "total_expenses": 20119.085326256016,
+   "total_estimated_tax": 11971.053325006773,
+   "net_cashflow": 17789.250202932104,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 692520.3831924571,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 692520.3831924571
+   }
+  },
+  {
+   "year": 2043,
+   "total_gross_income": 51126.373575549755,
+   "total_expenses": 20674.887989168197,
+   "total_estimated_tax": 12270.329658131941,
+   "net_cashflow": 18181.155928249616,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 713295.9946882308,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 713295.9946882308
+   }
+  },
+  {
+   "year": 2044,
+   "total_gross_income": 52404.5329149385,
+   "total_expenses": 21247.15922049732,
+   "total_estimated_tax": 12577.08789958524,
+   "net_cashflow": 18580.28579485594,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 734694.8745288777,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 734694.8745288777
+   }
+  },
+  {
+   "year": 2045,
+   "total_gross_income": 53714.646237811954,
+   "total_expenses": 21836.42007590438,
+   "total_estimated_tax": 12891.51509707487,
+   "net_cashflow": 18986.711064832703,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 756735.720764744,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 756735.720764744
+   }
+  },
+  {
+   "year": 2046,
+   "total_gross_income": 55057.51239375724,
+   "total_expenses": 22443.209054880383,
+   "total_estimated_tax": 13213.802974501737,
+   "net_cashflow": 19400.500364375122,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 779437.7923876863,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 779437.7923876863
+   }
+  },
+  {
+   "year": 2047,
+   "total_gross_income": 56433.950203601176,
+   "total_expenses": 23068.082711887793,
+   "total_estimated_tax": 13544.148048864281,
+   "net_cashflow": 19821.719442849102,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 802820.9261593169,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 802820.9261593169
+   }
+  },
+  {
+   "year": 2048,
+   "total_gross_income": 57844.7989586912,
+   "total_expenses": 23711.616289673566,
+   "total_estimated_tax": 13882.751750085888,
+   "net_cashflow": 20250.43091893175,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 826905.5539440964,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 826905.5539440964
+   }
+  },
+  {
+   "year": 2049,
+   "total_gross_income": 59290.918932658475,
+   "total_expenses": 24374.404375579186,
+   "total_estimated_tax": 14229.820543838034,
+   "net_cashflow": 20686.694013241256,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 851712.7205624193,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 851712.7205624193
+   }
+  },
+  {
+   "year": 2050,
+   "total_gross_income": 60773.19190597493,
+   "total_expenses": 25057.061581704667,
+   "total_estimated_tax": 14585.566057433982,
+   "net_cashflow": 21130.564266836274,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 877264.1021792919,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 877264.1021792919
+   }
+  },
+  {
+   "year": 2051,
+   "total_gross_income": 62292.5217036243,
+   "total_expenses": 25760.223249815936,
+   "total_estimated_tax": 14950.205208869831,
+   "net_cashflow": 21582.09324493853,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 903582.0252446707,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 903582.0252446707
+   }
+  },
+  {
+   "year": 2052,
+   "total_gross_income": 63849.834746214896,
+   "total_expenses": 26484.546181918817,
+   "total_estimated_tax": 15323.960339091574,
+   "net_cashflow": 22041.328225204503,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 930689.4860020108,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 930689.4860020108
+   }
+  },
+  {
+   "year": 2053,
+   "total_gross_income": 65446.08061487027,
+   "total_expenses": 27230.7093974579,
+   "total_estimated_tax": 15707.059347568864,
+   "net_cashflow": 22508.3118698435,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 958610.1705820711,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 958610.1705820711
+   }
+  },
+  {
+   "year": 2054,
+   "total_gross_income": 67082.23263024203,
+   "total_expenses": 27999.41491813503,
+   "total_estimated_tax": 16099.735831258085,
+   "net_cashflow": 22983.081880848913,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 987368.4756995332,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 987368.4756995332
+   }
+  },
+  {
+   "year": 2055,
+   "total_gross_income": 68759.28844599807,
+   "total_expenses": 28791.388581380124,
+   "total_estimated_tax": 16502.229227039537,
+   "net_cashflow": 23465.67063757841,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 1016989.5299705192,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {
+    "real_estate_rental_1": 1016989.5299705192
+   }
+  }
+ ],
+ "spouse_a_earnings_only": [
+  {
+   "year": 2026,
+   "total_gross_income": 95000.0,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 22800.0,
+   "net_cashflow": 72200.0,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2027,
+   "total_gross_income": 96900.0,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 23256.0,
+   "net_cashflow": 73644.0,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2028,
+   "total_gross_income": 98838.0,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 23721.12,
+   "net_cashflow": 75116.88,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2029,
+   "total_gross_income": 12000.0,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 2880.0,
+   "net_cashflow": 9120.0,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2030,
+   "total_gross_income": 12000.0,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 2880.0,
+   "net_cashflow": 9120.0,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2031,
+   "total_gross_income": 12000.0,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 2880.0,
+   "net_cashflow": 9120.0,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2032,
+   "total_gross_income": 12000.0,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 2880.0,
+   "net_cashflow": 9120.0,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2033,
+   "total_gross_income": 40000.0,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 9600.0,
+   "net_cashflow": 30400.0,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2034,
+   "total_gross_income": 40840.0,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 9600.0,
+   "net_cashflow": 31240.0,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2035,
+   "total_gross_income": 41705.2,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 9600.0,
+   "net_cashflow": 32105.199999999997,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2036,
+   "total_gross_income": 42596.356,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 9600.0,
+   "net_cashflow": 32996.356,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2037,
+   "total_gross_income": 43514.246680000004,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 9600.0,
+   "net_cashflow": 33914.246680000004,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2038,
+   "total_gross_income": 44459.6740804,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 9600.0,
+   "net_cashflow": 34859.6740804,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2039,
+   "total_gross_income": 45433.464302812004,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 9600.0,
+   "net_cashflow": 35833.464302812004,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2040,
+   "total_gross_income": 46436.46823189637,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 9600.0,
+   "net_cashflow": 36836.46823189637,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2041,
+   "total_gross_income": 47469.56227885326,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 9600.0,
+   "net_cashflow": 37869.56227885326,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2042,
+   "total_gross_income": 48533.64914721886,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 9600.0,
+   "net_cashflow": 38933.64914721886,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2043,
+   "total_gross_income": 49629.65862163542,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 9600.0,
+   "net_cashflow": 40029.65862163542,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2044,
+   "total_gross_income": 50758.54838028448,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 9600.0,
+   "net_cashflow": 41158.54838028448,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2045,
+   "total_gross_income": 51921.30483169302,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 9600.0,
+   "net_cashflow": 42321.30483169302,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2046,
+   "total_gross_income": 53118.943976643815,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 9600.0,
+   "net_cashflow": 43518.943976643815,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2047,
+   "total_gross_income": 54352.51229594313,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 9600.0,
+   "net_cashflow": 44752.51229594313,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2048,
+   "total_gross_income": 55623.087664821425,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 9600.0,
+   "net_cashflow": 46023.087664821425,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2049,
+   "total_gross_income": 56931.78029476607,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 9600.0,
+   "net_cashflow": 47331.78029476607,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2050,
+   "total_gross_income": 58279.733703609054,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 9600.0,
+   "net_cashflow": 48679.733703609054,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2051,
+   "total_gross_income": 59668.12571471733,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 9600.0,
+   "net_cashflow": 50068.12571471733,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2052,
+   "total_gross_income": 61098.16948615885,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 9600.0,
+   "net_cashflow": 51498.16948615885,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2053,
+   "total_gross_income": 62571.114570743615,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 9600.0,
+   "net_cashflow": 52971.114570743615,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2054,
+   "total_gross_income": 64088.24800786592,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 9600.0,
+   "net_cashflow": 54488.24800786592,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  },
+  {
+   "year": 2055,
+   "total_gross_income": 65650.8954481019,
+   "total_expenses": 0.0,
+   "total_estimated_tax": 9600.0,
+   "net_cashflow": 56050.8954481019,
+   "withdrawal_amount": 0.0,
+   "reinvestment_amount": 0,
+   "total_net_worth": 0,
+   "liquid_net_worth": 0,
+   "asset_ending_values": {}
+  }
+ ]
+}

@@ -316,7 +316,7 @@ def render_assets_tab(portfolio: Portfolio) -> None:
                     f"{', '.join(referencing_bundles)}. Remove it from those Bundles first."
                 )
                 return False
-            portfolio.assets = [a for a in portfolio.assets if a.asset_id != asset_id]
+            portfolio.remove_asset(asset_id)  # also removes its linked cashflows
             _clear_simulation_cache()
             st.success(f"Deleted asset '{name}'.")
             return True
@@ -457,7 +457,6 @@ def _render_asset_editor(portfolio: Portfolio, editor: dict) -> None:
                     do_not_sell=do_not_sell,
                     active=active,
                     notes=notes,
-                    cashflows=existing.cashflows if existing else [],
                 )
 
                 if mode == "new":
@@ -481,10 +480,11 @@ def _render_asset_editor(portfolio: Portfolio, editor: dict) -> None:
                 f"⚠️ This asset is referenced by Bundle(s): {', '.join(referencing_bundles)}. "
                 "Deleting it will require updating those Bundles afterward."
             )
-        if existing.cashflows:
+        linked_flows = portfolio.cashflows_for_asset(record_id)
+        if linked_flows:
             st.caption(
-                f"⚠️ This asset has {len(existing.cashflows)} attached cashflow(s) "
-                f"({', '.join(cf.name for cf in existing.cashflows)}). Deleting the asset "
+                f"⚠️ This asset has {len(linked_flows)} linked cashflow(s) "
+                f"({', '.join(cf.name for cf in linked_flows)}). Deleting the asset "
                 "will delete those cashflows too."
             )
         confirm_key = f"_confirm_delete_asset_inline_{record_id}"
@@ -501,7 +501,7 @@ def _render_asset_editor(portfolio: Portfolio, editor: dict) -> None:
                             f"{', '.join(referencing_bundles)}. Remove it from those Bundles first."
                         )
                     else:
-                        portfolio.assets = [a for a in portfolio.assets if a.asset_id != record_id]
+                        portfolio.remove_asset(record_id)  # also removes its linked cashflows
                         _clear_simulation_cache()
                         st.session_state.pop(confirm_key, None)
                         _editor_close(kind)
@@ -545,16 +545,14 @@ def render_cashflows_tab(portfolio: Portfolio) -> None:
 
         def _delete_cashflow(flow_id: str) -> bool:
             name = next((cf.name for cf in all_flows if cf.flow_id == flow_id), flow_id)
-            referencing_bundles = [b.name for b in portfolio.bundles if flow_id in b.standalone_cashflow_ids]
+            referencing_bundles = [b.name for b in portfolio.bundles if flow_id in b.cashflow_ids]
             if referencing_bundles:
                 st.error(
                     f"Can't delete '{name}': it's referenced by Bundle(s) "
                     f"{', '.join(referencing_bundles)}. Remove it from those Bundles first."
                 )
                 return False
-            portfolio.household_cashflows = [cf for cf in portfolio.household_cashflows if cf.flow_id != flow_id]
-            for a in portfolio.assets:
-                a.cashflows = [cf for cf in a.cashflows if cf.flow_id != flow_id]
+            portfolio.remove_cashflow(flow_id)
             _clear_simulation_cache()
             st.success(f"Deleted cashflow '{name}'.")
             return True
@@ -720,31 +718,13 @@ def _render_cashflow_editor(portfolio: Portfolio, editor: dict) -> None:
                 )
 
                 if mode == "new":
-                    if new_asset_id is None:
-                        portfolio.add_household_cashflow(cashflow)
-                    else:
-                        portfolio.get_asset(new_asset_id).add_cashflow(cashflow)
+                    portfolio.add_cashflow(cashflow)
                     st.success(f"Added cashflow '{name}'.")
                 else:
-                    old_asset_id = existing.asset_id
-                    if old_asset_id == new_asset_id:
-                        portfolio.replace_cashflow(flow_id, cashflow)
-                    else:
-                        # Moved between household-level and an asset (or
-                        # between two assets) -- remove from the old
-                        # container, add to the new one.
-                        if old_asset_id is None:
-                            portfolio.household_cashflows = [
-                                cf for cf in portfolio.household_cashflows if cf.flow_id != flow_id
-                            ]
-                        else:
-                            old_asset = portfolio.get_asset(old_asset_id)
-                            if old_asset:
-                                old_asset.cashflows = [cf for cf in old_asset.cashflows if cf.flow_id != flow_id]
-                        if new_asset_id is None:
-                            portfolio.add_household_cashflow(cashflow)
-                        else:
-                            portfolio.get_asset(new_asset_id).add_cashflow(cashflow)
+                    # Re-linking a flow to a different asset (or to
+                    # household-level) is just a new asset_id -- all
+                    # cashflows live in one list.
+                    portfolio.replace_cashflow(flow_id, cashflow)
                     st.success(f"Saved changes to '{name}'.")
 
                 _clear_simulation_cache()
@@ -755,7 +735,7 @@ def _render_cashflow_editor(portfolio: Portfolio, editor: dict) -> None:
 
     if mode == "edit":
         st.divider()
-        referencing_bundles = [b.name for b in portfolio.bundles if record_id in b.standalone_cashflow_ids]
+        referencing_bundles = [b.name for b in portfolio.bundles if record_id in b.cashflow_ids]
         if referencing_bundles:
             st.caption(
                 f"⚠️ This cashflow is referenced by Bundle(s): {', '.join(referencing_bundles)}. "
@@ -775,11 +755,7 @@ def _render_cashflow_editor(portfolio: Portfolio, editor: dict) -> None:
                             f"{', '.join(referencing_bundles)}. Remove it from those Bundles first."
                         )
                     else:
-                        portfolio.household_cashflows = [
-                            cf for cf in portfolio.household_cashflows if cf.flow_id != record_id
-                        ]
-                        for a in portfolio.assets:
-                            a.cashflows = [cf for cf in a.cashflows if cf.flow_id != record_id]
+                        portfolio.remove_cashflow(record_id)
                         _clear_simulation_cache()
                         st.session_state.pop(confirm_key, None)
                         _editor_close(kind)
@@ -854,7 +830,7 @@ def render_entities_bundles_tab(portfolio: Portfolio) -> None:
     bundle_kind = "bundle"
     entity_name_lookup = {e.entity_id: e.name for e in portfolio.entities}
     asset_name_by_id = {a.asset_id: a.name for a in portfolio.assets}
-    flow_name_by_id = {cf.flow_id: cf.name for cf in portfolio.household_cashflows}
+    flow_name_by_id = {cf.flow_id: cf.name for cf in portfolio.cashflows}
 
     if portfolio.bundles:
         df = pd.DataFrame(
@@ -865,7 +841,7 @@ def render_entities_bundles_tab(portfolio: Portfolio) -> None:
                     "Entity": entity_name_lookup.get(b.entity_id, b.entity_id),
                     "Assets": ", ".join(asset_name_by_id.get(aid, aid) for aid in b.asset_ids),
                     "Standalone Cashflows": ", ".join(
-                        flow_name_by_id.get(fid, fid) for fid in b.standalone_cashflow_ids
+                        flow_name_by_id.get(fid, fid) for fid in b.cashflow_ids
                     ),
                 }
                 for b in portfolio.bundles
@@ -1014,7 +990,7 @@ def _render_bundle_editor(portfolio: Portfolio, editor: dict) -> None:
 
     entity_name_by_id = {e.entity_id: e.name for e in portfolio.entities}
     asset_name_by_id = {a.asset_id: a.name for a in portfolio.assets}
-    flow_name_by_id = {cf.flow_id: cf.name for cf in portfolio.household_cashflows}
+    flow_name_by_id = {cf.flow_id: cf.name for cf in portfolio.household_level_cashflows()}
     entity_ids = [e.entity_id for e in portfolio.entities]
 
     def field(name: str):
@@ -1024,7 +1000,7 @@ def _render_bundle_editor(portfolio: Portfolio, editor: dict) -> None:
         "name": existing.name if existing else "",
         "entity_choice": existing.entity_id if existing else (entity_ids[0] if entity_ids else None),
         "asset_ids": list(existing.asset_ids) if existing else [],
-        "flow_ids": list(existing.standalone_cashflow_ids) if existing else [],
+        "flow_ids": list(existing.cashflow_ids) if existing else [],
         "notes": existing.notes if existing else "",
     }
 
@@ -1047,7 +1023,7 @@ def _render_bundle_editor(portfolio: Portfolio, editor: dict) -> None:
             selected_flows = st.multiselect(
                 "Household cashflows in this bundle (asset-level cashflows "
                 "travel automatically with their asset)",
-                options=[cf.flow_id for cf in portfolio.household_cashflows],
+                options=[cf.flow_id for cf in portfolio.household_level_cashflows()],
                 default=[fid for fid in defaults["flow_ids"] if fid in flow_name_by_id],
                 format_func=lambda fid: flow_name_by_id.get(fid, fid), key=field("flow_ids"),
             )
@@ -1078,7 +1054,7 @@ def _render_bundle_editor(portfolio: Portfolio, editor: dict) -> None:
                     name=name,
                     entity_id=entity_choice,
                     asset_ids=list(selected_assets),
-                    standalone_cashflow_ids=list(selected_flows),
+                    cashflow_ids=list(selected_flows),
                     notes=notes,
                 )
 

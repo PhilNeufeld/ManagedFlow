@@ -163,7 +163,7 @@ def _write_inputs_sheet(wb: Workbook, portfolio: Portfolio) -> None:
         ["Inflation rate assumption", portfolio.assumptions.inflation_rate],
         ["Number of entities", len(portfolio.entities)],
         ["Number of assets", len(portfolio.assets)],
-        ["Number of household-level cashflows", len(portfolio.household_cashflows)],
+        ["Number of household-level cashflows", len(portfolio.household_level_cashflows())],
         ["Number of bundles", len(portfolio.bundles)],
         ["Number of scenarios defined", len(portfolio.scenarios)],
         ["File version", portfolio.file_version],
@@ -236,7 +236,7 @@ def _bundle_row(bundle, entity_name_by_id: Dict[str, str], asset_name_by_id: Dic
                  flow_name_by_id: Dict[str, str]) -> list:
     entity_label = entity_name_by_id.get(bundle.entity_id, bundle.entity_id)
     asset_labels = ", ".join(asset_name_by_id.get(aid, aid) for aid in bundle.asset_ids)
-    flow_labels = ", ".join(flow_name_by_id.get(fid, fid) for fid in bundle.standalone_cashflow_ids)
+    flow_labels = ", ".join(flow_name_by_id.get(fid, fid) for fid in bundle.cashflow_ids)
     return [bundle.bundle_id, bundle.name, entity_label, asset_labels, flow_labels, bundle.notes]
 
 
@@ -246,7 +246,7 @@ def _write_bundles_sheet(wb: Workbook, portfolio: Portfolio) -> None:
     ws["A1"].font = TITLE_FONT
     entity_name_by_id = {e.entity_id: e.name for e in portfolio.entities}
     asset_name_by_id = {a.asset_id: a.name for a in portfolio.assets}
-    flow_name_by_id = {cf.flow_id: cf.name for cf in portfolio.household_cashflows}
+    flow_name_by_id = {cf.flow_id: cf.name for cf in portfolio.cashflows}
     rows = [
         _bundle_row(b, entity_name_by_id, asset_name_by_id, flow_name_by_id)
         for b in portfolio.bundles

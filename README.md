@@ -323,5 +323,24 @@ the **Bundles** and **Scenario Settings** tabs respectively.
   Run `streamlit run app.py` on your own machine and click through
   each tab once, especially the add/remove forms and the new
   Entity/Bundle creation flow, before relying on it day to day.
-#   M a n a g e d F l o w  
- 
+
+## Data file versions
+
+Every saved portfolio records a `file_version` in its metadata. When the
+data model changes, `migrations.py` upgrades older files automatically on
+load; your original is kept as a timestamped backup the first time you
+save. Current version: **0.2** (all cashflows in one top-level list, each
+linked to its asset by `asset_id`).
+
+## Running the tests
+
+```
+pip install pytest
+python -m pytest
+```
+
+- `tests/test_regression.py` re-runs every sample scenario and checks the
+  results still match `tests/fixtures/baseline_v0_1.json`. If a change
+  makes it fail, the numbers moved -- find out why before committing.
+- `tests/test_migrations.py` checks old files still load.
+- `tests/test_roundtrip.py` checks save -> load changes nothing.
