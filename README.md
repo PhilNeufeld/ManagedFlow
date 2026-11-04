@@ -278,8 +278,8 @@ This is useful for questions like "how does the rental LLC perform on
 its own over 30 years?" or "what does Spouse A's income look like in
 isolation?" without the rest of the household's numbers blended in.
 
-In the UI, manage Entities and Bundles from the **Entities & Bundles**
-tab, and set a scenario's scope from the **Scenarios** tab when adding
+In the UI, manage Entities and Bundles from the **Entities** and **Bundles**
+tabs, and set a scenario's scope from the **Scenarios** tab when adding
 a new scenario (the "Limit to Entities" / "Limit to Bundles"
 multiselects). In the Excel export, every Bundle's full member list
 and every scenario's resolved scope are shown by name (not raw ids) on
@@ -329,13 +329,15 @@ the **Bundles** and **Scenario Settings** tabs respectively.
 Every saved portfolio records a `file_version` in its metadata. When the
 data model changes, `migrations.py` upgrades older files automatically on
 load; your original is kept as a timestamped backup the first time you
-save. Current version: **0.4**.
+save. Current version: **0.6**.
 
 | Version | Change |
 |---|---|
 | 0.2 | All cashflows in one top-level list, each linked to its asset by `asset_id` |
 | 0.3 | Liabilities: `Loan` (amortizing) and `CreditLine` (interest-only); bundles can hold `liability_ids` |
 | 0.4 | Events, start/end months on cashflows, `event_overrides` on scenarios |
+| 0.5 | People (birth year/month, planning age); age-based events |
+| 0.6 | Memberships: people <-> entities, many-to-many, with a role (owner, trustee, beneficiary...) |
 
 ## Liabilities
 
@@ -355,6 +357,23 @@ an event: things that start at it begin that month; things that end at it
 stop the month before, and partial years are prorated by month. Move the
 event (or move it in a scenario, e.g. "retire in 2028") and everything
 linked moves with it.
+
+## People and memberships
+
+People and entities are many-to-many, linked by a **Membership** with a
+role: the joint entity holds Phil *and* Debbie (owners); Phil is in his
+personal entity *and* the joint one; a trust can have a trustee and
+beneficiaries. Manage links under "Who's in each entity" on the
+**Entities** tab. Giving a personal entity a birthday creates its person
+and the owner link automatically.
+
+Add each household member on the **Entities** tab with a birth year and month
+and a planning age ("plan to age 92"). Events can then follow ages
+("Sam turns 65"), scenarios can change the age ("Sam retires at 65 instead
+of 63"), and the results show everyone's age by year. For a survivor
+scenario, add a planning "death" event tied to a person's age, end their
+pension at it, start the survivor benefit at it, and move the age in a
+scenario.
 
 ## Monte Carlo
 
@@ -396,6 +415,7 @@ python -m pytest
 - `tests/test_roundtrip.py` checks save -> load changes nothing.
 - `tests/test_liabilities.py`: loan math against mortgage-calculator answers.
 - `tests/test_events.py`: retirement splits the year; moving events moves records.
+- `tests/test_people.py`: birthdays drive events; ages in results; survivor scenario.
 - `tests/test_montecarlo.py`: no randomness = normal run; same seed = same answer.
 - `tests/test_quick_add.py`: Quick add with a fake Claude client (offline, free).
 - `tests/test_example.py`: the example household's numbers, by hand arithmetic.

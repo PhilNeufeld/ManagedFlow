@@ -111,6 +111,15 @@ def run_simulation(
 
     annual_results: List[AnnualHouseholdResult] = []
 
+    # Warn if the plan stops before someone's planning life expectancy.
+    for person in working_portfolio.people:
+        if person.final_year > assumptions.end_year:
+            scenario_warnings.append(
+                f"The plan ends in {assumptions.end_year}, when {person.name} is "
+                f"{person.age_in(assumptions.end_year)}; planning to age {person.life_expectancy} "
+                f"would run to {person.final_year}. Consider extending the end year."
+            )
+
     for year in range(assumptions.start_year, assumptions.end_year + 1):
         year_warnings = list(scenario_warnings) if year == assumptions.start_year else []
         result = _simulate_year(
@@ -118,6 +127,7 @@ def run_simulation(
             scope_liabilities, balances, scenario, assumptions, year_warnings,
             growth_rate_fn,
         )
+        result.ages = {p.name: p.age_in(year) for p in working_portfolio.people}
         annual_results.append(result)
 
     return SimulationResult(scenario_id=scenario.scenario_id, annual_results=annual_results)

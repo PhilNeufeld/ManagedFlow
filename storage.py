@@ -36,6 +36,8 @@ REQUIRED_TOP_LEVEL_KEYS = (
     "cashflows",
     "liabilities",
     "events",
+    "people",
+    "memberships",
     "scenarios",
 )
 

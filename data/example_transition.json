@@ -1,8 +1,8 @@
 {
   "metadata": {
-    "file_version": "0.4",
-    "created_at": "2026-11-03T23:14:13+00:00",
-    "updated_at": "2026-11-03T23:14:13+00:00",
+    "file_version": "0.5",
+    "created_at": "2026-11-04T02:38:32+00:00",
+    "updated_at": "2026-11-04T02:38:32+00:00",
     "notes": "Fictional example household for learning and testing. Not real data."
   },
   "household": {
@@ -331,20 +331,44 @@
       "name": "Alex retires",
       "year": 2026,
       "month": 7,
-      "notes": ""
+      "notes": "",
+      "person_id": "person_alex",
+      "age": 61
     },
     {
       "event_id": "event_sam_retires",
       "name": "Sam retires",
       "year": 2030,
       "month": 7,
-      "notes": ""
+      "notes": "",
+      "person_id": "person_sam",
+      "age": 63
     },
     {
       "event_id": "event_sell_elm",
       "name": "Sell Elm St rental",
       "year": 2034,
       "month": 1,
+      "notes": "",
+      "person_id": null,
+      "age": null
+    }
+  ],
+  "people": [
+    {
+      "person_id": "person_alex",
+      "name": "Alex",
+      "birth_year": 1965,
+      "birth_month": 7,
+      "life_expectancy": 92,
+      "notes": ""
+    },
+    {
+      "person_id": "person_sam",
+      "name": "Sam",
+      "birth_year": 1967,
+      "birth_month": 7,
+      "life_expectancy": 92,
       "notes": ""
     }
   ],
@@ -399,6 +423,27 @@
       "asset_overrides": {},
       "cashflow_overrides": {},
       "event_overrides": {},
+      "withdrawal_order_override": null,
+      "allow_illiquid_withdrawals": false,
+      "reinvest_surplus": true,
+      "entity_ids": [],
+      "bundle_ids": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "sam_retires_65",
+      "name": "Sam retires at 65",
+      "description": "",
+      "is_base_case": false,
+      "inflation_rate_override": null,
+      "expense_growth_rate_override": null,
+      "asset_overrides": {},
+      "cashflow_overrides": {},
+      "event_overrides": {
+        "event_sam_retires": {
+          "age": 65
+        }
+      },
       "withdrawal_order_override": null,
       "allow_illiquid_withdrawals": false,
       "reinvest_surplus": true,

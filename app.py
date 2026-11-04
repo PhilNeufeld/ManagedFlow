@@ -33,6 +33,9 @@ from models import (
     CashflowDirection,
     CreditLine,
     Event,
+    Membership,
+    MembershipRole,
+    Person,
     Entity,
     EntityType,
     FlowType,
@@ -60,7 +63,14 @@ st.set_page_config(page_title="ManagedFlow", layout="wide")
 # ---------------------------------------------------------------------------
 
 def _get_portfolio() -> Portfolio | None:
-    return st.session_state.get("portfolio")
+    portfolio = st.session_state.get("portfolio")
+    if portfolio is not None and type(portfolio) is not Portfolio:
+        # The code was updated while the app was running: the object in memory
+        # was built from the old classes. Round-trip it through a dict so the
+        # migrations upgrade it to the new model (unsaved edits are kept).
+        portfolio = Portfolio.from_dict(portfolio.to_dict())
+        st.session_state["portfolio"] = portfolio
+    return portfolio
 
 
 def _set_portfolio(portfolio: Portfolio, path: Path) -> None:
@@ -335,7 +345,7 @@ def render_assets_tab(portfolio: Portfolio) -> None:
 
     if not portfolio.entities:
         st.caption(
-            "💡 No Entities defined yet. Visit the Entities & Bundles tab first if "
+            "💡 No Entities defined yet. Visit the Entities tab first if "
             "you'd like to attribute assets to a holding structure (Personal, an LLC, "
             "a Trust, etc.) -- not required, but recommended."
         )
@@ -813,7 +823,7 @@ def _render_cashflow_editor(portfolio: Portfolio, editor: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Entities & Bundles tab
+# Entities tab and Bundles tab
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
@@ -825,6 +835,189 @@ MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "O
 
 def _event_label(ev) -> str:
     return f"{ev.name} ({MONTH_NAMES[ev.month - 1]} {ev.year})"
+
+
+def _personal_person(portfolio: Portfolio, entity) -> "Person | None":
+    """For a personal entity: the person who owns it (their birthday is shown on the entity)."""
+    if entity is None or entity.entity_type != EntityType.PERSONAL:
+        return None
+    owners = [p for p, role in portfolio.people_in(entity.entity_id) if role == MembershipRole.OWNER]
+    return owners[0] if owners else None
+
+
+def render_memberships_section(portfolio: Portfolio) -> None:
+    st.subheader("Who's in each entity")
+    st.caption(
+        "Links people to entities, with a role. One person can be in many entities (Phil in his "
+        "personal entity and the joint one); one entity can hold many people (the joint entity holds "
+        "Phil and Debbie). Roles record e.g. trustee or beneficiary of a trust."
+    )
+    kind = "membership"
+    entity_names = {e.entity_id: e.name for e in portfolio.entities}
+    person_names = {p.person_id: p.name for p in portfolio.people}
+    if portfolio.memberships:
+        df = pd.DataFrame([
+            {"Entity": entity_names.get(m.entity_id, m.entity_id), "Person": person_names.get(m.person_id, m.person_id),
+             "Role": m.role.value.replace("_", " "), "Notes": m.notes}
+            for m in portfolio.memberships
+        ])
+
+        def _delete_link(key: str) -> bool:
+            portfolio.remove_membership(key)
+            st.success("Link removed.")
+            return True
+
+        _render_selectable_table(kind, df, [m.key for m in portfolio.memberships], _delete_link,
+                                 delete_label="this link")
+        editor = _editor_get(kind)
+        if editor and editor["mode"] == "edit":
+            m = next((x for x in portfolio.memberships if x.key == editor["record_id"]), None)
+            if m is None:
+                _editor_close(kind)
+            else:
+                roles = [r.value for r in MembershipRole]
+                new_role = st.selectbox(f"Role of {person_names.get(m.person_id)} in {entity_names.get(m.entity_id)}",
+                                        roles, index=roles.index(m.role.value), key=_editor_widget_key(kind, "role"),
+                                        format_func=lambda r: r.replace("_", " "))
+                if st.button("💾 Save role", key=_editor_widget_key(kind, "save")):
+                    try:
+                        portfolio.remove_membership(m.key)
+                        portfolio.add_membership(Membership(entity_id=m.entity_id, person_id=m.person_id,
+                                                            role=new_role, notes=m.notes))
+                        _editor_close(kind)
+                        st.rerun()
+                    except ValidationError as exc:
+                        portfolio.memberships.append(m)  # put the original back
+                        st.error(str(exc))
+
+    if not (portfolio.entities and portfolio.people):
+        st.info("Add at least one entity and one person to link them.")
+        return
+    col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+    with col1:
+        eid = st.selectbox("Entity", list(entity_names), format_func=entity_names.get, key="link_entity")
+    with col2:
+        pid = st.selectbox("Person", list(person_names), format_func=person_names.get, key="link_person")
+    with col3:
+        role = st.selectbox("Role", [r.value for r in MembershipRole], key="link_role",
+                            format_func=lambda r: r.replace("_", " "))
+    with col4:
+        st.write("")
+        if st.button("➕ Link", key="link_add"):
+            try:
+                portfolio.add_membership(Membership(entity_id=eid, person_id=pid, role=role))
+                st.rerun()
+            except ValidationError as exc:
+                st.error(str(exc))
+
+
+def render_people_section(portfolio: Portfolio) -> None:
+    st.subheader("People")
+    st.caption(
+        "Everyone with a birthday: each personal entity's person, plus anyone else (e.g. each "
+        "spouse in a joint entity). Birthdays let events follow ages ('Sam turns 65') and show "
+        "ages in the results. 'Plan to age' is a planning age: plan long so you don't run short."
+    )
+    kind = "person"
+    if portfolio.people:
+        year = portfolio.assumptions.start_year
+        df = pd.DataFrame([
+            {"Name": p.name, "Born": f"{MONTH_NAMES[p.birth_month - 1]} {p.birth_year}",
+             f"Age in {year}": p.age_in(year), "Plan to age": p.life_expectancy,
+             "Through year": p.final_year,
+             "Entities (role)": "; ".join(f"{e.name} ({r.value.replace('_', ' ')})"
+                                         for e, r in portfolio.entities_of(p.person_id))}
+            for p in portfolio.people
+        ])
+
+        def _delete_person(person_id: str) -> bool:
+            p = portfolio.get_person(person_id)
+            portfolio.remove_person(person_id)
+            _clear_simulation_cache()
+            st.success(f"Removed {p.name}. Their age-based events kept their dates as fixed dates.")
+            return True
+
+        _render_selectable_table(kind, df, [p.person_id for p in portfolio.people], _delete_person,
+                                 delete_label="this person")
+    if st.button("➕ Add person", key="person_add_new_btn"):
+        _editor_open_new(kind)
+        st.rerun()
+
+    without_personal = [
+        p for p in portfolio.people
+        if not any(e.entity_type == EntityType.PERSONAL for e, _ in portfolio.entities_of(p.person_id))
+    ]
+    if without_personal:
+        col_pick, col_btn = st.columns([2, 1])
+        with col_pick:
+            pid = st.selectbox("Person without a personal entity", [p.person_id for p in without_personal],
+                               format_func=lambda x: portfolio.get_person(x).name, key="personal_entity_pick")
+        with col_btn:
+            st.write("")
+            if st.button("Create personal entity", key="personal_entity_create"):
+                p = portfolio.get_person(pid)
+                eid = _generate_id("entity", p.name, [e.entity_id for e in portfolio.entities])
+                portfolio.add_entity(Entity(entity_id=eid, name=p.name, entity_type=EntityType.PERSONAL))
+                portfolio.add_membership(Membership(entity_id=eid, person_id=pid, role="owner"))
+                _clear_simulation_cache()
+                st.rerun()
+
+    editor = _editor_get(kind)
+    if editor is None:
+        return
+    existing = portfolio.get_person(editor["record_id"]) if editor["mode"] == "edit" else None
+
+    def field(name: str):
+        return _editor_widget_key(kind, name)
+
+    # Plain widgets (not st.form) so the age below updates as you type.
+    st.markdown(f"**Editing {existing.name}**" if existing else "**New person**")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        name = st.text_input("Name", value=existing.name if existing else "", key=field("name"))
+    with col2:
+        birth_year = st.number_input("Birth year", min_value=1900, max_value=2100, step=1,
+                                     value=existing.birth_year if existing else 1965, key=field("birth_year"))
+    with col3:
+        birth_month = st.selectbox("Birth month", list(range(1, 13)), format_func=lambda m: MONTH_NAMES[m - 1],
+                                   index=(existing.birth_month - 1) if existing else 0, key=field("birth_month"))
+    with col4:
+        life_expectancy = st.number_input("Plan to age", min_value=50, max_value=120, step=1,
+                                          value=existing.life_expectancy if existing else 92,
+                                          key=field("life_expectancy"))
+    plan_start = portfolio.assumptions.start_year
+    st.info(
+        f"Age in {plan_start}: **{plan_start - int(birth_year)}** "
+        f"(birthday in {MONTH_NAMES[int(birth_month) - 1]}). "
+        f"Planning to age {int(life_expectancy)} runs through {int(birth_year) + int(life_expectancy)}."
+    )
+    col_save, col_cancel = st.columns([1, 1])
+    with col_save:
+        save_clicked = st.button("💾 Save person", type="primary", key=field("save"))
+    with col_cancel:
+        cancel_clicked = st.button("Cancel", key=field("cancel"))
+    if cancel_clicked:
+        _editor_close(kind)
+        st.rerun()
+    if save_clicked:
+        if not name.strip():
+            st.error("Name is required.")
+            return
+        try:
+            person_id = existing.person_id if existing else _generate_id(
+                "person", name, [p.person_id for p in portfolio.people])
+            person = Person(person_id=person_id, name=name, birth_year=int(birth_year),
+                            birth_month=int(birth_month), life_expectancy=int(life_expectancy),
+                            notes=existing.notes if existing else "")
+            if existing:
+                portfolio.replace_person(person_id, person)  # moves their age-based events
+            else:
+                portfolio.add_person(person)
+            _clear_simulation_cache()
+            _editor_close(kind)
+            st.rerun()
+        except ValidationError as exc:
+            st.error(str(exc))
 
 
 def _event_picker(label: str, portfolio: Portfolio, current, key: str):
@@ -852,6 +1045,8 @@ def render_events_tab(portfolio: Portfolio) -> None:
                 {
                     "Name": ev.name,
                     "Date": f"{MONTH_NAMES[ev.month - 1]} {ev.year}",
+                    "Based on": (f"{portfolio.get_person(ev.person_id).name} turns {ev.age}"
+                                 if ev.person_id and portfolio.get_person(ev.person_id) else "fixed date"),
                     "Linked records": len(portfolio.records_linked_to_event(ev.event_id)),
                     "Notes": ev.notes,
                 }
@@ -893,17 +1088,41 @@ def render_events_tab(portfolio: Portfolio) -> None:
         linked = portfolio.records_linked_to_event(record_id)
         if linked:
             st.caption(f"Changing the date moves: {', '.join(linked)}")
+    # Outside the form so the form can switch fields (forms don't rerun until Save).
+    timing_options = ["fixed", "age"] if portfolio.people else ["fixed"]
+    if not portfolio.people:
+        st.caption("To have this event follow someone's age (e.g. 'Phil turns 65'), give a personal "
+                   "entity a birthday on the Entities tab first.")
+    timing = st.radio(
+        "When", timing_options, horizontal=True, key=field("timing"),
+        index=1 if existing and existing.is_age_based and portfolio.people else 0,
+        format_func=lambda t: "A fixed date" if t == "fixed" else "When a person reaches an age",
+    )
+    people_names = {p.person_id: p.name for p in portfolio.people}
     with st.form(f"event_editor_form_{mode}_{record_id}"):
         col1, col2, col3 = st.columns(3)
         with col1:
             name = st.text_input("Name", value=existing.name if existing else "", key=field("name"))
-        with col2:
-            year = st.number_input("Year", step=1, key=field("year"),
-                                   value=int(existing.year) if existing else int(portfolio.assumptions.start_year))
-        with col3:
-            month = st.selectbox("First month of the change", list(range(1, 13)), key=field("month"),
-                                 index=(existing.month - 1) if existing else 0,
-                                 format_func=lambda m: MONTH_NAMES[m - 1])
+        if timing == "fixed":
+            person_id, age = None, None
+            with col2:
+                year = st.number_input("Year", step=1, key=field("year"),
+                                       value=int(existing.year) if existing else int(portfolio.assumptions.start_year))
+            with col3:
+                month = st.selectbox("First month of the change", list(range(1, 13)), key=field("month"),
+                                     index=(existing.month - 1) if existing else 0,
+                                     format_func=lambda m: MONTH_NAMES[m - 1])
+        else:
+            pids = list(people_names)
+            with col2:
+                person_id = st.selectbox("Person", pids, format_func=people_names.get, key=field("person"),
+                                         index=pids.index(existing.person_id)
+                                         if existing and existing.person_id in pids else 0)
+            with col3:
+                age = st.number_input("Age", min_value=0, max_value=120, step=1, key=field("age"),
+                                      value=int(existing.age) if existing and existing.age is not None else 65)
+            year, month = portfolio.get_person(person_id).date_at_age(int(age))
+            st.caption("The date follows the person's birthday month at that age.")
         notes = st.text_area("Notes", value=existing.notes if existing else "", key=field("notes"))
         col_save, col_cancel = st.columns([1, 1])
         with col_save:
@@ -919,13 +1138,14 @@ def render_events_tab(portfolio: Portfolio) -> None:
             st.error("Name is required.")
             return
         try:
+            age_fields = dict(person_id=person_id, age=int(age) if age is not None else None)
             if existing:
                 portfolio.replace_event(record_id, Event(event_id=record_id, name=name, year=int(year),
-                                                         month=int(month), notes=notes))
+                                                         month=int(month), notes=notes, **age_fields))
             else:
                 event_id = _generate_id("event", name, [ev.event_id for ev in portfolio.events])
                 portfolio.add_event(Event(event_id=event_id, name=name, year=int(year),
-                                          month=int(month), notes=notes))
+                                          month=int(month), notes=notes, **age_fields))
             _clear_simulation_cache()
             _editor_close(kind)
             st.rerun()
@@ -1152,24 +1372,28 @@ def _render_liability_editor(portfolio: Portfolio, editor: dict) -> None:
             st.error(str(exc))
 
 
-def render_entities_bundles_tab(portfolio: Portfolio) -> None:
-    st.header("Entities & Bundles")
+def render_entities_tab(portfolio: Portfolio) -> None:
+    st.header("Entities")
     st.caption(
-        "An Entity is a legal/tax holding structure (Personal, an LLC, a Trust, "
-        "etc.). A Bundle groups related Assets and/or household Cashflows under "
-        "an Entity -- e.g. \"Rental Address 1\" (a property plus its loan, rent, "
-        "and expenses) or \"Spouse A Earnings\" (just a salary cashflow, no asset). "
-        "Scenarios can be scoped to run against just one Entity or one Bundle."
+        "An Entity is a legal/tax holding structure: you personally, joint, an LLC, "
+        "an LP, a trust. Assets, liabilities and bundles can be attributed to one, "
+        "and scenarios can be scoped to run against just one Entity."
     )
-
-    # --- Entities -----------------------------------------------------------
-    st.subheader("Entities")
     entity_kind = "entity"
 
     if portfolio.entities:
         df = pd.DataFrame(
             [
-                {"Entity ID": e.entity_id, "Name": e.name, "Type": e.entity_type.value, "Notes": e.notes}
+                {
+                    "Name": e.name,
+                    "Type": e.entity_type.value,
+                    "People (role)": ", ".join(f"{p.name} ({r.value.replace('_', ' ')})"
+                                               for p, r in portfolio.people_in(e.entity_id)),
+                    "Born": (f"{MONTH_NAMES[p.birth_month - 1]} {p.birth_year}"
+                             if (p := _personal_person(portfolio, e)) else ""),
+                    f"Age in {portfolio.assumptions.start_year}": (p.age_in(portfolio.assumptions.start_year) if p else None),
+                    "Notes": e.notes,
+                }
                 for e in portfolio.entities
             ]
         )
@@ -1186,7 +1410,7 @@ def render_entities_bundles_tab(portfolio: Portfolio) -> None:
                     f"{', '.join(blockers)}. Reassign or remove those first."
                 )
                 return False
-            portfolio.entities = [e for e in portfolio.entities if e.entity_id != entity_id]
+            portfolio.remove_entity(entity_id)  # also removes its memberships
             st.success(f"Deleted entity '{name}'.")
             return True
 
@@ -1205,9 +1429,20 @@ def render_entities_bundles_tab(portfolio: Portfolio) -> None:
         _render_entity_editor(portfolio, editor)
 
     st.divider()
+    render_people_section(portfolio)
+    st.divider()
+    render_memberships_section(portfolio)
 
-    # --- Bundles --------------------------------------------------------------
-    st.subheader("Bundles")
+
+
+def render_bundles_tab(portfolio: Portfolio) -> None:
+    st.header("Bundles")
+    st.caption(
+        "A Bundle groups related assets, liabilities and household cashflows under an "
+        "Entity -- e.g. \"4392 Brix\" (the house, its loan, rent and expenses) or "
+        "\"Phil earnings\" (just a salary). Cashflows and loans linked to a bundled asset "
+        "come along automatically. Scenarios can be scoped to run against one Bundle."
+    )
     bundle_kind = "bundle"
     entity_name_lookup = {e.entity_id: e.name for e in portfolio.entities}
     asset_name_by_id = {a.asset_id: a.name for a in portfolio.assets}
@@ -1277,28 +1512,44 @@ def _render_entity_editor(portfolio: Portfolio, editor: dict) -> None:
     def field(name: str):
         return _editor_widget_key(kind, name)
 
-    defaults = {
-        "name": existing.name if existing else "",
-        "entity_type": existing.entity_type.value if existing else EntityType.PERSONAL.value,
-        "notes": existing.notes if existing else "",
-    }
+    person = _personal_person(portfolio, existing) if existing else None
+    type_values = [t.value for t in EntityType]
 
-    with st.form(f"entity_editor_form_{mode}_{record_id}"):
-        col1, col2 = st.columns(2)
-        with col1:
-            name = st.text_input("Name", value=defaults["name"], key=field("name"))
-            entity_type = st.selectbox(
-                "Entity type", [t.value for t in EntityType],
-                index=[t.value for t in EntityType].index(defaults["entity_type"]), key=field("entity_type"),
-            )
-        with col2:
-            notes = st.text_area("Notes", value=defaults["notes"], key=field("notes"))
+    # Plain widgets (not st.form) so picking "personal" shows the birthday fields right away.
+    col1, col2 = st.columns(2)
+    with col1:
+        name = st.text_input("Name", value=existing.name if existing else "", key=field("name"))
+        entity_type = st.selectbox(
+            "Entity type", type_values, key=field("entity_type"),
+            index=type_values.index(existing.entity_type.value) if existing else 0,
+        )
+    with col2:
+        notes = st.text_area("Notes", value=existing.notes if existing else "", key=field("notes"))
 
-        col_save, col_cancel = st.columns([1, 1])
-        with col_save:
-            save_clicked = st.form_submit_button("💾 Save", type="primary")
-        with col_cancel:
-            cancel_clicked = st.form_submit_button("Cancel")
+    if entity_type == EntityType.PERSONAL.value:
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            birth_year = st.number_input("Birth year (0 = skip)", min_value=0, max_value=2100, step=1,
+                                         value=person.birth_year if person else 0, key=field("birth_year"))
+        with c2:
+            birth_month = st.selectbox("Birth month", list(range(1, 13)), format_func=lambda m: MONTH_NAMES[m - 1],
+                                       index=(person.birth_month - 1) if person else 0, key=field("birth_month"))
+        with c3:
+            life_expectancy = st.number_input("Plan to age", min_value=50, max_value=120, step=1,
+                                              value=person.life_expectancy if person else 92,
+                                              key=field("life_expectancy"))
+        if birth_year:
+            start = portfolio.assumptions.start_year
+            st.info(f"Age in {start}: **{start - int(birth_year)}** (birthday in {MONTH_NAMES[int(birth_month) - 1]}). "
+                    f"Planning to age {int(life_expectancy)} runs through {int(birth_year) + int(life_expectancy)}.")
+    else:
+        birth_year = 0
+
+    col_save, col_cancel = st.columns([1, 1])
+    with col_save:
+        save_clicked = st.button("💾 Save entity", type="primary", key=field("save"))
+    with col_cancel:
+        cancel_clicked = st.button("Cancel", key=field("cancel"))
 
     if cancel_clicked:
         _editor_close(kind)
@@ -1309,16 +1560,31 @@ def _render_entity_editor(portfolio: Portfolio, editor: dict) -> None:
             st.error("Name is required.")
         else:
             try:
+                person_id = None
+                if birth_year:
+                    # Create or update the Person this personal entity represents.
+                    person_id = person.person_id if person else _generate_id(
+                        "person", name, [p.person_id for p in portfolio.people])
+                    new_person = Person(person_id=person_id, name=name, birth_year=int(birth_year),
+                                        birth_month=int(birth_month), life_expectancy=int(life_expectancy))
+                    if person:
+                        portfolio.replace_person(person_id, new_person)
+                    else:
+                        portfolio.add_person(new_person)
+
                 if mode == "new":
                     entity_id = _generate_id("entity", name, [e.entity_id for e in portfolio.entities])
-                    entity = Entity(entity_id=entity_id, name=name, entity_type=entity_type, notes=notes)
-                    portfolio.add_entity(entity)
+                    portfolio.add_entity(Entity(entity_id=entity_id, name=name, entity_type=entity_type, notes=notes))
                     st.success(f"Added entity '{name}'.")
                 else:
-                    entity = Entity(entity_id=record_id, name=name, entity_type=entity_type, notes=notes)
-                    portfolio.replace_entity(record_id, entity)
+                    entity_id = record_id
+                    portfolio.replace_entity(record_id, Entity(entity_id=record_id, name=name,
+                                                               entity_type=entity_type, notes=notes))
                     st.success(f"Saved changes to '{name}'.")
-
+                # A personal entity's birthday belongs to its owner: make sure that link exists.
+                if person_id and not any(m.key == f"{entity_id}|{person_id}|owner" for m in portfolio.memberships):
+                    portfolio.add_membership(Membership(entity_id=entity_id, person_id=person_id, role="owner"))
+                _clear_simulation_cache()
                 _editor_close(kind)
                 st.rerun()
             except ValidationError as exc:
@@ -1346,7 +1612,7 @@ def _render_entity_editor(portfolio: Portfolio, editor: dict) -> None:
                             f"{', '.join(blockers)}. Reassign or remove those first."
                         )
                     else:
-                        portfolio.entities = [e for e in portfolio.entities if e.entity_id != record_id]
+                        portfolio.remove_entity(record_id)  # also removes its memberships
                         st.session_state.pop(confirm_key, None)
                         _editor_close(kind)
                         st.success(f"Deleted entity '{existing.name}'.")
@@ -1642,22 +1908,33 @@ def _render_event_override_tool(portfolio: Portfolio) -> None:
         ev = portfolio.get_event(eid) if eid else None
         if ev is None:
             return
-        col1, col2 = st.columns(2)
-        with col1:
-            new_year = st.number_input("New year", value=int(ev.year), step=1, key="event_override_year")
-        with col2:
-            new_month = st.selectbox("New month", list(range(1, 13)), index=ev.month - 1,
-                                     format_func=lambda m: MONTH_NAMES[m - 1], key="event_override_month")
-        if st.button("Save event move", key="event_override_save"):
-            scenario = portfolio.get_scenario(sid)
-            scenario.event_overrides[eid] = {"year": int(new_year), "month": int(new_month)}
-            _clear_simulation_cache()
-            st.success(f"In '{scenario.name}', {ev.name} moves to {MONTH_NAMES[new_month - 1]} {new_year}.")
+        if ev.is_age_based:
+            person = portfolio.get_person(ev.person_id)
+            new_age = st.number_input(f"New age for {person.name}", min_value=0, max_value=120,
+                                      value=int(ev.age), step=1, key="event_override_age")
+            if st.button("Save event move", key="event_override_save"):
+                scenario = portfolio.get_scenario(sid)
+                scenario.event_overrides[eid] = {"age": int(new_age)}
+                _clear_simulation_cache()
+                st.success(f"In '{scenario.name}', {ev.name} happens at age {new_age}.")
+        else:
+            col1, col2 = st.columns(2)
+            with col1:
+                new_year = st.number_input("New year", value=int(ev.year), step=1, key="event_override_year")
+            with col2:
+                new_month = st.selectbox("New month", list(range(1, 13)), index=ev.month - 1,
+                                         format_func=lambda m: MONTH_NAMES[m - 1], key="event_override_month")
+            if st.button("Save event move", key="event_override_save"):
+                scenario = portfolio.get_scenario(sid)
+                scenario.event_overrides[eid] = {"year": int(new_year), "month": int(new_month)}
+                _clear_simulation_cache()
+                st.success(f"In '{scenario.name}', {ev.name} moves to {MONTH_NAMES[new_month - 1]} {new_year}.")
         current = portfolio.get_scenario(sid).event_overrides
         if current:
             st.caption("Event moves in this scenario: " + "; ".join(
                 f"{portfolio.get_event(k).name if portfolio.get_event(k) else k} -> "
-                f"{MONTH_NAMES[v.get('month', 1) - 1]} {v.get('year')}" for k, v in current.items()))
+                + (f"age {v['age']}" if "age" in v else f"{MONTH_NAMES[v.get('month', 1) - 1]} {v.get('year')}")
+                for k, v in current.items()))
 
 
 def _render_scenario_editor(portfolio: Portfolio, editor: dict) -> None:
@@ -1859,6 +2136,7 @@ def render_simulation_tab(portfolio: Portfolio) -> None:
         [
             {
                 "Year": r.year,
+                "Ages": ", ".join(f"{n} {a}" for n, a in r.ages.items()),
                 "Gross Income": r.total_gross_income,
                 "Expenses": r.total_expenses,
                 "Est. Tax": r.total_estimated_tax,
@@ -1875,10 +2153,12 @@ def render_simulation_tab(portfolio: Portfolio) -> None:
             for r in chosen.annual_results
         ]
     )
-    currency_cols = [c for c in numeric_df.columns if c != "Year"]
+    currency_cols = [c for c in numeric_df.columns if c not in ("Year", "Ages")]
     display_df = numeric_df.copy()
     for col in currency_cols:
         display_df[col] = display_df[col].apply(format_currency)
+    if not numeric_df["Ages"].any():  # no people defined yet
+        display_df = display_df.drop(columns=["Ages"])
     st.dataframe(display_df, use_container_width=True)
     st.line_chart(numeric_df.set_index("Year")[["Total Assets", "Total Liabilities", "Total Net Worth"]])
 
@@ -2060,29 +2340,22 @@ def main() -> None:
 
     render_quick_add(portfolio)
 
-    tabs = st.tabs(
-        ["Assets", "Liabilities", "Cashflows", "Events", "Entities & Bundles", "Assumptions",
-         "Scenarios", "Simulation", "Export"]
-    )
-    with tabs[0]:
-        render_assets_tab(portfolio)
-    with tabs[1]:
-        render_liabilities_tab(portfolio)
-    with tabs[2]:
-        render_cashflows_tab(portfolio)
-    with tabs[3]:
-        render_events_tab(portfolio)
-    with tabs[4]:
-        render_entities_bundles_tab(portfolio)
-    with tabs[5]:
-        render_assumptions_tab(portfolio)
-    with tabs[6]:
-        render_scenarios_tab(portfolio)
-    with tabs[7]:
-        render_simulation_tab(portfolio)
-        render_monte_carlo_section(portfolio)
-    with tabs[8]:
-        render_export_tab(portfolio)
+    # Tab order, left to right. Each tab is (label, function that draws it).
+    tab_layout = [
+        ("Entities", render_entities_tab),
+        ("Bundles", render_bundles_tab),
+        ("Assets", render_assets_tab),
+        ("Liabilities", render_liabilities_tab),
+        ("Cashflows", render_cashflows_tab),
+        ("Events", render_events_tab),
+        ("Assumptions", render_assumptions_tab),
+        ("Scenarios", render_scenarios_tab),
+        ("Simulation", lambda p: (render_simulation_tab(p), render_monte_carlo_section(p))),
+        ("Export", render_export_tab),
+    ]
+    for tab, (_label, render) in zip(st.tabs([label for label, _ in tab_layout]), tab_layout):
+        with tab:
+            render(portfolio)
 
 
 if __name__ == "__main__":

@@ -381,7 +381,7 @@ ANNUAL_RESULTS_HEADERS = [
     "Scenario", "Year", "Total Gross Income", "Total Expenses", "Estimated Tax",
     "Net Cashflow", "Surplus / (Deficit)", "Withdrawal Amount", "Reinvestment Amount",
     "Total Net Worth", "Liquid Net Worth", "Illiquid Net Worth",
-    "Total Assets", "Total Liabilities", "Debt Service", "Interest Paid",
+    "Total Assets", "Total Liabilities", "Debt Service", "Interest Paid", "Ages",
 ]
 
 
@@ -399,6 +399,7 @@ def _write_annual_results_sheet(wb: Workbook, simulation_results: List[Simulatio
                 r.withdrawal_amount, r.reinvestment_amount, r.total_net_worth,
                 r.liquid_net_worth, r.illiquid_net_worth,
                 r.total_assets, r.total_liabilities, r.total_debt_service, r.total_interest_paid,
+                ", ".join(f"{n} {a}" for n, a in r.ages.items()),
             ])
     _write_table(ws, 3, ANNUAL_RESULTS_HEADERS, rows, currency_cols=list(range(2, 16)))
 

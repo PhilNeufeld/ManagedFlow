@@ -92,13 +92,23 @@ def _apply_event_overrides(portfolio: Portfolio, scenario: Scenario, warnings: L
             )
             continue
         for key, value in overrides.items():
-            if key not in ("year", "month"):
+            if key == "age":
+                if not event.is_age_based:
+                    warnings.append(
+                        f"Scenario '{scenario.scenario_id}': event '{event_id}' isn't tied to a "
+                        "person, so an age override can't apply -- ignored"
+                    )
+                    continue
+                event.age = int(value)
+            elif key in ("year", "month"):
+                # A fixed date wins: in this scenario the event stops following a birthday.
+                event.person_id, event.age = None, None
+                setattr(event, key, int(value))
+            else:
                 warnings.append(
                     f"Scenario '{scenario.scenario_id}': unsupported event override "
                     f"key '{key}' for event '{event_id}' -- ignored"
                 )
-                continue
-            setattr(event, key, int(value))
     portfolio.apply_event_dates()
 
 

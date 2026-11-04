@@ -330,6 +330,51 @@ def month_before(year: int, month: int) -> Tuple[int, int]:
 
 
 @dataclass
+class Person:
+    """A member of the household. Ages drive events ("when Sam turns 65"),
+    and the results table shows everyone's age by year.
+
+    life_expectancy is a PLANNING age, not a prediction: plan to age 92+ so
+    you don't run short if you live long. Use a "death" event tied to a
+    person's age to model survivor scenarios -- end their pension at it,
+    start a survivor benefit at it, and move it in a scenario.
+    """
+
+    person_id: str
+    name: str
+    birth_year: int
+    birth_month: int = 1
+    life_expectancy: int = 92
+    notes: str = ""
+
+    def __post_init__(self) -> None:
+        _require(bool(self.person_id), "Person.person_id is required")
+        _require(bool(self.name), "Person.name is required")
+        _require(1 <= self.birth_month <= 12, f"Person '{self.name}': birth_month must be 1-12")
+        _require(1900 <= self.birth_year <= 2100, f"Person '{self.name}': birth_year looks wrong")
+        _require(0 < self.life_expectancy <= 120, f"Person '{self.name}': life_expectancy must be 1-120")
+
+    def age_in(self, year: int) -> int:
+        """Age reached during `year` (on the birthday)."""
+        return year - self.birth_year
+
+    def date_at_age(self, age: int) -> Tuple[int, int]:
+        """(year, month) of the birthday when this person turns `age`."""
+        return self.birth_year + age, self.birth_month
+
+    @property
+    def final_year(self) -> int:
+        return self.birth_year + self.life_expectancy
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Person":
+        return cls(**data)
+
+
+@dataclass
 class Event:
     """A named moment that other records can be tied to: Retirement,
     Debbie starts CalPERS, sell 2049 Broadway, Brix loan payoff.
@@ -342,6 +387,10 @@ class Event:
 
     Move the event and everything linked to it moves. A scenario can move
     it too: Scenario.event_overrides = {"event_retirement": {"year": 2028}}.
+
+    AGE-BASED events: set person_id and age, and the date is that person's
+    birthday at that age ("Sam turns 65" -> Sam's birth month, birth_year + 65).
+    A scenario can change the age: {"event_sam_claims_ss": {"age": 70}}.
     """
 
     event_id: str
@@ -349,11 +398,21 @@ class Event:
     year: int
     month: int = 1
     notes: str = ""
+    person_id: Optional[str] = None
+    age: Optional[int] = None
 
     def __post_init__(self) -> None:
         _require(bool(self.event_id), "Event.event_id is required")
         _require(bool(self.name), "Event.name is required")
         _require(1 <= self.month <= 12, f"Event '{self.event_id}': month must be 1-12")
+        _require(
+            (self.person_id is None) == (self.age is None),
+            f"Event '{self.name}': an age-based event needs both a person and an age",
+        )
+
+    @property
+    def is_age_based(self) -> bool:
+        return self.person_id is not None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -380,6 +439,7 @@ class Entity:
     name: str
     entity_type: EntityType = EntityType.PERSONAL
     notes: str = ""
+    # Who belongs to an entity (and as what) lives in Portfolio.memberships.
 
     def __post_init__(self) -> None:
         self.entity_type = _enum_value(self.entity_type, EntityType)
@@ -396,6 +456,57 @@ class Entity:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Entity":
+        return cls(**data)
+
+
+class MembershipRole(str, Enum):
+    OWNER = "owner"
+    MEMBER = "member"                 # LLC member
+    MANAGER = "manager"               # LLC manager
+    PARTNER = "partner"
+    GENERAL_PARTNER = "general_partner"
+    LIMITED_PARTNER = "limited_partner"
+    TRUSTEE = "trustee"
+    BENEFICIARY = "beneficiary"
+    OTHER = "other"
+
+
+@dataclass
+class Membership:
+    """A LINK between a Person and an Entity, with the role the person plays.
+
+    People and entities are many-to-many: Phil is in his personal entity AND
+    the joint entity; the joint entity holds Phil AND Debbie. A link class
+    (like a join table in SQL) is used instead of a list because the link
+    carries its own information -- the role:
+
+        entity_joint         person_phil    owner
+        entity_joint         person_debbie  owner
+        entity_family_trust  person_phil    trustee
+
+    The same person can hold several roles in one entity (one Membership each).
+    """
+
+    entity_id: str
+    person_id: str
+    role: MembershipRole = MembershipRole.OWNER
+    notes: str = ""
+
+    def __post_init__(self) -> None:
+        self.role = _enum_value(self.role, MembershipRole)
+        _require(bool(self.entity_id) and bool(self.person_id), "Membership needs an entity and a person")
+
+    @property
+    def key(self) -> str:
+        """Unique identity of a link: entity + person + role."""
+        return f"{self.entity_id}|{self.person_id}|{self.role.value}"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"entity_id": self.entity_id, "person_id": self.person_id,
+                "role": self.role.value, "notes": self.notes}
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Membership":
         return cls(**data)
 
 
@@ -935,6 +1046,7 @@ class AnnualHouseholdResult:
     total_liabilities: float = 0.0
     total_debt_service: float = 0.0
     total_interest_paid: float = 0.0
+    ages: Dict[str, int] = field(default_factory=dict)  # person name -> age reached this year
     asset_results: List[AnnualAssetResult] = field(default_factory=list)
     liability_results: List[AnnualLiabilityResult] = field(default_factory=list)
     tax_estimate: Optional[TaxEstimate] = None
@@ -958,6 +1070,7 @@ class AnnualHouseholdResult:
             "total_liabilities": self.total_liabilities,
             "total_debt_service": self.total_debt_service,
             "total_interest_paid": self.total_interest_paid,
+            "ages": dict(self.ages),
             "asset_results": [a.to_dict() for a in self.asset_results],
             "liability_results": [r.to_dict() for r in self.liability_results],
             "tax_estimate": self.tax_estimate.to_dict() if self.tax_estimate else None,
@@ -1020,6 +1133,8 @@ class Portfolio:
     cashflows: List[Cashflow] = field(default_factory=list)
     liabilities: List[Liability] = field(default_factory=list)
     events: List[Event] = field(default_factory=list)
+    people: List[Person] = field(default_factory=list)
+    memberships: List[Membership] = field(default_factory=list)
     bundles: List[Bundle] = field(default_factory=list)
     scenarios: List[Scenario] = field(default_factory=list)
     file_version: str = CURRENT_SCHEMA_VERSION
@@ -1043,6 +1158,20 @@ class Portfolio:
         liability_ids = [li.liability_id for li in self.liabilities]
         dup_liabilities = {x for x in liability_ids if liability_ids.count(x) > 1}
         _require(not dup_liabilities, f"Duplicate liability_id(s) found: {dup_liabilities}")
+
+        person_ids = [p.person_id for p in self.people]
+        dup_people = {x for x in person_ids if person_ids.count(x) > 1}
+        _require(not dup_people, f"Duplicate person_id(s) found: {dup_people}")
+        entity_id_list = [e.entity_id for e in self.entities]
+        seen_links = set()
+        for m in self.memberships:
+            _require(m.entity_id in entity_id_list, f"Membership points to unknown entity '{m.entity_id}'")
+            _require(m.person_id in person_ids, f"Membership points to unknown person '{m.person_id}'")
+            _require(m.key not in seen_links, f"Duplicate membership: {m.key}")
+            seen_links.add(m.key)
+        for ev in self.events:
+            _require(ev.person_id is None or ev.person_id in person_ids,
+                     f"Event '{ev.name}' is tied to person '{ev.person_id}' who doesn't exist")
 
         event_ids = [ev.event_id for ev in self.events]
         dup_events = {x for x in event_ids if event_ids.count(x) > 1}
@@ -1140,6 +1269,10 @@ class Portfolio:
         """Copy each linked Event's date onto the records that point at it.
         Called on load, after editing an event, and inside every scenario run
         (after the scenario has moved any events)."""
+        people = {p.person_id: p for p in self.people}
+        for ev in self.events:  # age-based events get their date from the birthday
+            if ev.person_id in people:
+                ev.year, ev.month = people[ev.person_id].date_at_age(ev.age)
         events = {ev.event_id: ev for ev in self.events}
         for cf in self.cashflows:
             if cf.start_event_id in events:
@@ -1162,7 +1295,40 @@ class Portfolio:
 
     def add_event(self, event: Event) -> None:
         _require(self.get_event(event.event_id) is None, f"Event with id '{event.event_id}' already exists")
+        _require(event.person_id is None or self.get_person(event.person_id) is not None,
+                 f"Event '{event.name}' is tied to unknown person '{event.person_id}'")
         self.events.append(event)
+        self.apply_event_dates()
+
+    # -- people ------------------------------------------------------------------
+
+    def get_person(self, person_id: str) -> Optional[Person]:
+        for p in self.people:
+            if p.person_id == person_id:
+                return p
+        return None
+
+    def add_person(self, person: Person) -> None:
+        _require(self.get_person(person.person_id) is None, f"Person with id '{person.person_id}' already exists")
+        self.people.append(person)
+
+    def replace_person(self, person_id: str, new_person: Person) -> None:
+        for i, p in enumerate(self.people):
+            if p.person_id == person_id:
+                self.people[i] = new_person
+                self.apply_event_dates()  # a new birthday moves their age-based events
+                return
+        _require(False, f"No person with id '{person_id}' found to replace")
+
+    def remove_person(self, person_id: str) -> None:
+        """Remove a person. Their age-based events keep their current date
+        but become fixed-date events."""
+        _require(self.get_person(person_id) is not None, f"No person with id '{person_id}' found to remove")
+        for ev in self.events:
+            if ev.person_id == person_id:
+                ev.person_id, ev.age = None, None
+        self.memberships = [m for m in self.memberships if m.person_id != person_id]
+        self.people = [p for p in self.people if p.person_id != person_id]
 
     def replace_event(self, event_id: str, new_event: Event) -> None:
         for i, ev in enumerate(self.events):
@@ -1405,6 +1571,33 @@ class Portfolio:
         )
         self.entities.append(entity)
 
+    def remove_entity(self, entity_id: str) -> None:
+        """Remove an entity and its memberships (the people themselves stay)."""
+        _require(self.get_entity(entity_id) is not None, f"No entity with id '{entity_id}' found to remove")
+        self.entities = [e for e in self.entities if e.entity_id != entity_id]
+        self.memberships = [m for m in self.memberships if m.entity_id != entity_id]
+
+    # -- memberships (people <-> entities, many-to-many) -----------------------------
+
+    def people_in(self, entity_id: str) -> List[Tuple[Person, MembershipRole]]:
+        """Everyone linked to an entity, with their role."""
+        return [(self.get_person(m.person_id), m.role) for m in self.memberships if m.entity_id == entity_id]
+
+    def entities_of(self, person_id: str) -> List[Tuple[Entity, MembershipRole]]:
+        """Every entity a person is linked to, with their role -- the reverse lookup."""
+        return [(self.get_entity(m.entity_id), m.role) for m in self.memberships if m.person_id == person_id]
+
+    def add_membership(self, membership: Membership) -> None:
+        _require(self.get_entity(membership.entity_id) is not None, f"Unknown entity '{membership.entity_id}'")
+        _require(self.get_person(membership.person_id) is not None, f"Unknown person '{membership.person_id}'")
+        _require(all(m.key != membership.key for m in self.memberships),
+                 "That person already has that role in that entity")
+        self.memberships.append(membership)
+
+    def remove_membership(self, key: str) -> None:
+        _require(any(m.key == key for m in self.memberships), f"No membership '{key}' found to remove")
+        self.memberships = [m for m in self.memberships if m.key != key]
+
     def replace_entity(self, entity_id: str, new_entity: Entity) -> None:
         for i, e in enumerate(self.entities):
             if e.entity_id == entity_id:
@@ -1447,6 +1640,8 @@ class Portfolio:
             "cashflows": [cf.to_dict() for cf in self.cashflows],
             "liabilities": [li.to_dict() for li in self.liabilities],
             "events": [ev.to_dict() for ev in self.events],
+            "people": [p.to_dict() for p in self.people],
+            "memberships": [m.to_dict() for m in self.memberships],
             "bundles": [b.to_dict() for b in self.bundles],
             "scenarios": [s.to_dict() for s in self.scenarios],
         }
@@ -1463,6 +1658,8 @@ class Portfolio:
             cashflows=[Cashflow.from_dict(cf) for cf in data.get("cashflows", [])],
             liabilities=[liability_from_dict(li) for li in data.get("liabilities", [])],
             events=[Event.from_dict(ev) for ev in data.get("events", [])],
+            people=[Person.from_dict(p) for p in data.get("people", [])],
+            memberships=[Membership.from_dict(m) for m in data.get("memberships", [])],
             bundles=[Bundle.from_dict(b) for b in data.get("bundles", [])],
             scenarios=[Scenario.from_dict(s) for s in data.get("scenarios", [])],
             file_version=metadata.get("file_version", CURRENT_SCHEMA_VERSION),

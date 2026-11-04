@@ -8,7 +8,8 @@ can check its numbers against hand arithmetic.
     python example_data.py      ->  writes data/example_transition.json
 
 Alex & Sam Example (fictional):
-  Events      Alex retires Jul 2026 | Sam retires Jul 2030 | Sell rental Jan 2034
+  People      Alex, born Jul 1965 | Sam, born Jul 1967 (both planned to age 92)
+  Events      Alex retires at 61 (Jul 2026) | Sam retires at 63 (Jul 2030) | Sell rental Jan 2034
   Assets      Brokerage $400k (equity) | Savings $60k (cash) | Elm St rental $350k
   Liabilities Elm St mortgage $180k at 4.5%, 240 months left (secured by the rental)
               HELOC $20k at 8%, interest-only
@@ -19,7 +20,7 @@ Alex & Sam Example (fictional):
               Elm St rent $2,200/month, expenses $6,000/yr -> end when the rental sells
               Elm St sale proceeds $420k one-time at the sale
               Living expenses $90k/yr, inflation adjusted
-  Scenarios   Base | Alex retires 2028 instead | Higher inflation (4.5%)
+  Scenarios   Base | Alex retires 2028 instead | Higher inflation (4.5%) | Sam retires at 65
 
 Hand-checkable numbers (see tests/test_example.py):
   2026 Alex salary   = 120,000 x 6/12 = 60,000
@@ -34,7 +35,8 @@ from pathlib import Path
 import storage
 from models import (
     Asset, AssetType, Assumptions, Cashflow, CashflowDirection, CreditLine, Entity, EntityType, Event,
-    FlowType, Frequency, Household, LiabilityType, LiquidityCategory, Loan, Portfolio, Scenario, TaxCategory,
+    FlowType, Frequency, Household, LiabilityType, LiquidityCategory, Loan, Person, Portfolio, Scenario,
+    TaxCategory,
 )
 
 OUT = Path(__file__).parent / "data" / "example_transition.json"
@@ -52,9 +54,14 @@ def build_example_portfolio() -> Portfolio:
             default_tax_rates={"ordinary_income": 0.22, "pension_income": 0.20, "rental_income": 0.22},
         ),
         entities=[Entity(entity_id="entity_joint", name="Alex & Sam (joint)", entity_type=EntityType.JOINT)],
+        people=[
+            Person(person_id="person_alex", name="Alex", birth_year=1965, birth_month=7, life_expectancy=92),
+            Person(person_id="person_sam", name="Sam", birth_year=1967, birth_month=7, life_expectancy=92),
+        ],
         events=[
-            Event(event_id="event_alex_retires", name="Alex retires", year=2026, month=7),
-            Event(event_id="event_sam_retires", name="Sam retires", year=2030, month=7),
+            # Age-based: the date comes from the birthday (year/month here are filled in automatically).
+            Event(event_id="event_alex_retires", name="Alex retires", year=0, person_id="person_alex", age=61),
+            Event(event_id="event_sam_retires", name="Sam retires", year=0, person_id="person_sam", age=63),
             Event(event_id="event_sell_elm", name="Sell Elm St rental", year=2034, month=1),
         ],
         assets=[
@@ -109,6 +116,8 @@ def build_example_portfolio() -> Portfolio:
                      event_overrides={"event_alex_retires": {"year": 2028, "month": 1}}),
             Scenario(scenario_id="higher_inflation", name="Higher inflation (4.5%)",
                      inflation_rate_override=0.045),
+            Scenario(scenario_id="sam_retires_65", name="Sam retires at 65",
+                     event_overrides={"event_sam_retires": {"age": 65}}),
         ],
         metadata_notes="Fictional example household for learning and testing. Not real data.",
     )

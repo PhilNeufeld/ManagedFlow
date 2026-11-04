@@ -10,7 +10,7 @@ Every saved file records its schema in metadata.file_version. migrate()
 looks at that version and applies each upgrade step in order until the
 data is current -- like climbing a ladder one rung at a time:
 
-    "0.1" --(_v0_1_to_v0_2)--> "0.2" --(_v0_2_to_v0_3)--> "0.3" --(_v0_3_to_v0_4)--> "0.4"
+    "0.1" --(_v0_1_to_v0_2)--> "0.2" --(_v0_2_to_v0_3)--> "0.3" --(_v0_3_to_v0_4)--> "0.4" --(_v0_4_to_v0_5)--> "0.5" --(_v0_5_to_v0_6)--> "0.6"
 
 To change the model in the future:
   1. Bump CURRENT_SCHEMA_VERSION.
@@ -27,7 +27,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Callable, Dict
 
-CURRENT_SCHEMA_VERSION = "0.4"
+CURRENT_SCHEMA_VERSION = "0.6"
 
 
 class MigrationError(ValueError):
@@ -81,11 +81,36 @@ def _v0_3_to_v0_4(data: Dict[str, Any]) -> Dict[str, Any]:
     return data
 
 
+def _v0_4_to_v0_5(data: Dict[str, Any]) -> Dict[str, Any]:
+    """v0.5 adds People (birth year/month, life expectancy) and age-based
+    events. Household.members (plain names) is kept as-is: birthdays can't
+    be invented, so people are added by the user."""
+    data.setdefault("people", [])
+    data.setdefault("metadata", {})["file_version"] = "0.5"
+    return data
+
+
+def _v0_5_to_v0_6(data: Dict[str, Any]) -> Dict[str, Any]:
+    """v0.6 links people and entities many-to-many through Memberships
+    (entity, person, role). A brief interim version stored a single
+    Entity.person_id; any such link becomes an 'owner' membership."""
+    memberships = data.setdefault("memberships", [])
+    for entity in data.get("entities", []) or []:
+        person_id = entity.pop("person_id", None)
+        if person_id:
+            memberships.append({"entity_id": entity["entity_id"], "person_id": person_id,
+                                "role": "owner", "notes": ""})
+    data.setdefault("metadata", {})["file_version"] = "0.6"
+    return data
+
+
 # version found in the file -> function that upgrades it one step
 _STEPS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "0.1": _v0_1_to_v0_2,
     "0.2": _v0_2_to_v0_3,
     "0.3": _v0_3_to_v0_4,
+    "0.4": _v0_4_to_v0_5,
+    "0.5": _v0_5_to_v0_6,
 }
 
 
