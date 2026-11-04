@@ -40,6 +40,8 @@ SUPPORTED_CASHFLOW_OVERRIDE_KEYS = {
     "amount",
     "start_year",
     "end_year",
+    "start_month",
+    "end_month",
     "annual_growth_rate",
     "frequency",
     "taxable",
@@ -64,6 +66,9 @@ def apply_scenario(portfolio: Portfolio, scenario: Scenario) -> Tuple[Portfolio,
     warnings: List[str] = []
 
     _apply_assumption_overrides(working.assumptions, scenario, warnings)
+    # Move events first and re-date everything linked to them; explicit
+    # asset/cashflow overrides below are applied after, so they still win.
+    _apply_event_overrides(working, scenario, warnings)
     _apply_asset_overrides(working, scenario, warnings)
     _apply_cashflow_overrides(working, scenario, warnings)
 
@@ -75,6 +80,26 @@ def _apply_assumption_overrides(assumptions: Assumptions, scenario: Scenario, wa
         assumptions.inflation_rate = scenario.inflation_rate_override
     # expense_growth_rate_override is consumed directly by simulation.py when
     # growing flagged living-expense flows; nothing to do to Assumptions itself.
+
+
+def _apply_event_overrides(portfolio: Portfolio, scenario: Scenario, warnings: List[str]) -> None:
+    for event_id, overrides in (scenario.event_overrides or {}).items():
+        event = portfolio.get_event(event_id)
+        if event is None:
+            warnings.append(
+                f"Scenario '{scenario.scenario_id}': event_overrides references "
+                f"unknown event_id '{event_id}' -- ignored"
+            )
+            continue
+        for key, value in overrides.items():
+            if key not in ("year", "month"):
+                warnings.append(
+                    f"Scenario '{scenario.scenario_id}': unsupported event override "
+                    f"key '{key}' for event '{event_id}' -- ignored"
+                )
+                continue
+            setattr(event, key, int(value))
+    portfolio.apply_event_dates()
 
 
 def _apply_asset_overrides(portfolio: Portfolio, scenario: Scenario, warnings: List[str]) -> None:

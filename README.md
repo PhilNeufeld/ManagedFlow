@@ -329,12 +329,13 @@ the **Bundles** and **Scenario Settings** tabs respectively.
 Every saved portfolio records a `file_version` in its metadata. When the
 data model changes, `migrations.py` upgrades older files automatically on
 load; your original is kept as a timestamped backup the first time you
-save. Current version: **0.3**.
+save. Current version: **0.4**.
 
 | Version | Change |
 |---|---|
 | 0.2 | All cashflows in one top-level list, each linked to its asset by `asset_id` |
 | 0.3 | Liabilities: `Loan` (amortizing) and `CreditLine` (interest-only); bundles can hold `liability_ids` |
+| 0.4 | Events, start/end months on cashflows, `event_overrides` on scenarios |
 
 ## Liabilities
 
@@ -345,6 +346,41 @@ principal. Debt service counts as an expense, and net worth is assets
 minus liabilities. A loan secured by an asset is paid off in full the
 year that asset is sold. Don't also enter loan payments as cashflows, or
 they'll be counted twice.
+
+## Events
+
+An **Event** is a named month, the first month things are different
+("Alex retires, Jul 2026"). Cashflows, assets and loans can start or end at
+an event: things that start at it begin that month; things that end at it
+stop the month before, and partial years are prorated by month. Move the
+event (or move it in a scenario, e.g. "retire in 2028") and everything
+linked moves with it.
+
+## Monte Carlo
+
+Simulation tab -> Monte Carlo. Re-runs one scenario many times with random
+yearly growth around each asset's rate (volatility set per asset type) and
+a random long-run inflation rate. Reports the share of runs that never ran
+short of liquid money, and 10th/50th/90th percentile net worth. See the
+notes at the top of `montecarlo.py` for its simplifications.
+
+## Quick add (Claude)
+
+Describe records in plain English; Claude drafts them and you review before
+anything is added. Needs an API key from console.anthropic.com:
+
+```
+setx ANTHROPIC_API_KEY "your-key"
+```
+
+(then open a new PowerShell window). Text you type is sent to the
+Anthropic API with the *names* of your existing records, not their amounts.
+
+## Example household
+
+`python example_data.py` writes `data/example_transition.json`: a fictional
+household using every feature (events, a mortgage, a HELOC, a rental sale,
+three scenarios). Load it from the sidebar to explore.
 
 ## Running the tests
 
@@ -358,3 +394,11 @@ python -m pytest
   makes it fail, the numbers moved -- find out why before committing.
 - `tests/test_migrations.py` checks old files still load.
 - `tests/test_roundtrip.py` checks save -> load changes nothing.
+- `tests/test_liabilities.py`: loan math against mortgage-calculator answers.
+- `tests/test_events.py`: retirement splits the year; moving events moves records.
+- `tests/test_montecarlo.py`: no randomness = normal run; same seed = same answer.
+- `tests/test_quick_add.py`: Quick add with a fake Claude client (offline, free).
+- `tests/test_example.py`: the example household's numbers, by hand arithmetic.
+
+Run one file with `python -m pytest tests/test_events.py`, or one test with
+`python -m pytest -k retirement`. Add `-v` to see every test name.

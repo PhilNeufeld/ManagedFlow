@@ -28,7 +28,7 @@ a year.
 
 from __future__ import annotations
 
-from typing import List
+from typing import Callable, List, Optional
 
 from models import (
     Asset,
@@ -47,7 +47,16 @@ import scenarios as scenario_engine
 import taxes as tax_engine
 
 
-def run_simulation(portfolio: Portfolio, scenario: Scenario) -> SimulationResult:
+# A function (asset, year) -> growth rate for that asset in that year.
+# None (the default) means "use each asset's own annual_growth_rate" --
+# the normal, deterministic run. montecarlo.py passes one that adds random
+# market swings.
+GrowthRateFn = Callable[[Asset, int], float]
+
+
+def run_simulation(
+    portfolio: Portfolio, scenario: Scenario, growth_rate_fn: Optional[GrowthRateFn] = None
+) -> SimulationResult:
     """Run a full year-by-year simulation for one scenario.
 
     Returns a SimulationResult containing one AnnualHouseholdResult per
@@ -107,6 +116,7 @@ def run_simulation(portfolio: Portfolio, scenario: Scenario) -> SimulationResult
         result = _simulate_year(
             year, scope_assets, scope_household_cashflows, flows_by_asset,
             scope_liabilities, balances, scenario, assumptions, year_warnings,
+            growth_rate_fn,
         )
         annual_results.append(result)
 
@@ -123,6 +133,7 @@ def _simulate_year(
     scenario: Scenario,
     assumptions: Assumptions,
     warnings: List[str],
+    growth_rate_fn: Optional[GrowthRateFn] = None,
 ) -> AnnualHouseholdResult:
     asset_results: List[AnnualAssetResult] = []
     total_asset_income = 0.0
@@ -131,8 +142,9 @@ def _simulate_year(
     inflation_rate = assumptions.inflation_rate
 
     for asset in assets:
+        growth_rate = growth_rate_fn(asset, year) if growth_rate_fn else asset.annual_growth_rate
         asset_result = _simulate_asset_year(
-            asset, flows_by_asset.get(asset.asset_id, []), year, inflation_rate
+            asset, flows_by_asset.get(asset.asset_id, []), year, inflation_rate, growth_rate
         )
         asset_results.append(asset_result)
         total_asset_income += asset_result.gross_income
@@ -223,7 +235,8 @@ def _simulate_year(
 
 
 def _simulate_asset_year(
-    asset: Asset, asset_flows: list, year: int, inflation_rate: float = 0.0
+    asset: Asset, asset_flows: list, year: int, inflation_rate: float = 0.0,
+    growth_rate: Optional[float] = None,
 ) -> AnnualAssetResult:
     """Advance a single asset by one year: apply growth, then apply any
     cashflows flagged affects_asset_value, and report gross income/expense
@@ -259,7 +272,9 @@ def _simulate_asset_year(
             ending_value=0.0,
         )
 
-    growth_amount = beginning_value * asset.annual_growth_rate
+    if growth_rate is None:
+        growth_rate = asset.annual_growth_rate
+    growth_amount = beginning_value * growth_rate
     value_after_growth = beginning_value + growth_amount
 
     gross_income = 0.0
@@ -339,8 +354,10 @@ def _simulate_liability_year(
 
     interest, principal, ending = liability.year_activity(beginning)
 
-    if liability.secured_by_asset_id in sold_asset_ids and ending > 0:
-        principal += ending  # pay off the rest of the loan at sale
+    sold = liability.secured_by_asset_id in sold_asset_ids
+    payoff = liability.payoff_year is not None and year >= liability.payoff_year
+    if (sold or payoff) and ending > 0:
+        principal += ending  # pay off the rest: asset sold, or scheduled payoff/refinance
         ending = 0.0
 
     balances[lid] = ending

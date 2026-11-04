@@ -19,6 +19,8 @@ import pandas as pd
 import streamlit as st
 
 import exports
+import montecarlo
+import quick_add
 import scenarios as scenario_engine
 import simulation
 import storage
@@ -30,6 +32,7 @@ from models import (
     Cashflow,
     CashflowDirection,
     CreditLine,
+    Event,
     Entity,
     EntityType,
     FlowType,
@@ -420,6 +423,17 @@ def _render_asset_editor(portfolio: Portfolio, editor: dict) -> None:
             "Tax category", [c.value for c in TaxCategory],
             index=[c.value for c in TaxCategory].index(defaults["tax_category"]), key=field("tax_category"),
         )
+        ev_col1, ev_col2 = st.columns(2)
+        with ev_col1:
+            asset_start_event = _event_picker(
+                "Bought at event (sets start year)", portfolio,
+                existing.start_event_id if existing else None, field("start_event"),
+            )
+        with ev_col2:
+            asset_end_event = _event_picker(
+                "Sold at event (sets sale year)", portfolio,
+                existing.end_event_id if existing else None, field("end_event"),
+            )
         do_not_sell = st.checkbox("Do not sell", value=defaults["do_not_sell"], key=field("do_not_sell"))
         active = st.checkbox("Active", value=defaults["active"], key=field("active"))
         notes = st.text_area("Notes", value=defaults["notes"], key=field("notes"))
@@ -460,6 +474,11 @@ def _render_asset_editor(portfolio: Portfolio, editor: dict) -> None:
                     do_not_sell=do_not_sell,
                     active=active,
                     notes=notes,
+                    # keep sale details the form doesn't show (previously lost on edit)
+                    sale_year=existing.sale_year if existing else None,
+                    sale_assumptions=dict(existing.sale_assumptions) if existing else {},
+                    start_event_id=asset_start_event,
+                    end_event_id=asset_end_event,
                 )
 
                 if mode == "new":
@@ -645,6 +664,25 @@ def _render_cashflow_editor(portfolio: Portfolio, editor: dict) -> None:
             end_year_input = st.text_input(
                 "End year, e.g. 2032 (blank = no end)", value=defaults["end_year"], key=field("end_year"),
             )
+            month_col1, month_col2 = st.columns(2)
+            with month_col1:
+                start_month = st.selectbox(
+                    "Start month", list(range(1, 13)), format_func=lambda m: MONTH_NAMES[m - 1],
+                    index=(existing.start_month - 1) if existing else 0, key=field("start_month"),
+                )
+            with month_col2:
+                end_month = st.selectbox(
+                    "End month", list(range(1, 13)), format_func=lambda m: MONTH_NAMES[m - 1],
+                    index=(existing.end_month - 1) if existing else 11, key=field("end_month"),
+                )
+            start_event_id = _event_picker(
+                "Starts at event (overrides start date)", portfolio,
+                existing.start_event_id if existing else None, field("start_event"),
+            )
+            end_event_id = _event_picker(
+                "Ends at event (stops the month before)", portfolio,
+                existing.end_event_id if existing else None, field("end_event"),
+            )
 
         col4, col5, col6 = st.columns(3)
         with col4:
@@ -718,6 +756,10 @@ def _render_cashflow_editor(portfolio: Portfolio, editor: dict) -> None:
                     affects_asset_value=affects_asset_value,
                     affects_debt_balance=affects_debt_balance,
                     notes=notes,
+                    start_month=int(start_month),
+                    end_month=int(end_month),
+                    start_event_id=start_event_id,
+                    end_event_id=end_event_id,
                 )
 
                 if mode == "new":
@@ -773,6 +815,123 @@ def _render_cashflow_editor(portfolio: Portfolio, editor: dict) -> None:
 # ---------------------------------------------------------------------------
 # Entities & Bundles tab
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Events tab (+ a picker the other editors use)
+# ---------------------------------------------------------------------------
+
+MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def _event_label(ev) -> str:
+    return f"{ev.name} ({MONTH_NAMES[ev.month - 1]} {ev.year})"
+
+
+def _event_picker(label: str, portfolio: Portfolio, current, key: str):
+    """Selectbox of '(none)' + every Event; returns an event_id or None."""
+    options = [None] + [ev.event_id for ev in portfolio.events]
+    labels = {ev.event_id: _event_label(ev) for ev in portfolio.events}
+    return st.selectbox(
+        label, options, index=options.index(current) if current in options else 0,
+        format_func=lambda eid: "(none)" if eid is None else labels.get(eid, eid), key=key,
+    )
+
+
+def render_events_tab(portfolio: Portfolio) -> None:
+    st.header("Events")
+    st.caption(
+        "Named dates that other records hang off: Retirement, sell a property, pay off a loan. "
+        "An event's month is the FIRST month things change: anything that starts at it begins "
+        "that month, anything that ends at it stops the month before. Move an event and every "
+        "linked cashflow, asset and loan moves with it."
+    )
+    kind = "event"
+    if portfolio.events:
+        df = pd.DataFrame(
+            [
+                {
+                    "Name": ev.name,
+                    "Date": f"{MONTH_NAMES[ev.month - 1]} {ev.year}",
+                    "Linked records": len(portfolio.records_linked_to_event(ev.event_id)),
+                    "Notes": ev.notes,
+                }
+                for ev in portfolio.events
+            ]
+        )
+        st.caption("Click a row to select it, then Edit or Delete.")
+
+        def _delete_event(event_id: str) -> bool:
+            ev = portfolio.get_event(event_id)
+            portfolio.remove_event(event_id)  # linked records keep their dates, just unlinked
+            _clear_simulation_cache()
+            st.success(f"Deleted event '{ev.name}'. Linked records kept their current dates.")
+            return True
+
+        _render_selectable_table(kind, df, [ev.event_id for ev in portfolio.events], _delete_event,
+                                 delete_label="this event")
+    else:
+        st.info("No events yet. Click 'Add new event' below, e.g. 'Retirement', July 2026.")
+
+    if st.button("➕ Add new event", key="event_add_new_btn"):
+        _editor_open_new(kind)
+        st.rerun()
+
+    editor = _editor_get(kind)
+    if editor is None:
+        return
+    mode, record_id = editor["mode"], editor["record_id"]
+    existing = portfolio.get_event(record_id) if mode == "edit" else None
+    if mode == "edit" and existing is None:
+        _editor_close(kind)
+        return
+
+    def field(name: str):
+        return _editor_widget_key(kind, name)
+
+    st.markdown(f"**Editing '{existing.name}'**" if existing else "**New event**")
+    if existing:
+        linked = portfolio.records_linked_to_event(record_id)
+        if linked:
+            st.caption(f"Changing the date moves: {', '.join(linked)}")
+    with st.form(f"event_editor_form_{mode}_{record_id}"):
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            name = st.text_input("Name", value=existing.name if existing else "", key=field("name"))
+        with col2:
+            year = st.number_input("Year", step=1, key=field("year"),
+                                   value=int(existing.year) if existing else int(portfolio.assumptions.start_year))
+        with col3:
+            month = st.selectbox("First month of the change", list(range(1, 13)), key=field("month"),
+                                 index=(existing.month - 1) if existing else 0,
+                                 format_func=lambda m: MONTH_NAMES[m - 1])
+        notes = st.text_area("Notes", value=existing.notes if existing else "", key=field("notes"))
+        col_save, col_cancel = st.columns([1, 1])
+        with col_save:
+            save_clicked = st.form_submit_button("💾 Save", type="primary")
+        with col_cancel:
+            cancel_clicked = st.form_submit_button("Cancel")
+
+    if cancel_clicked:
+        _editor_close(kind)
+        st.rerun()
+    if save_clicked:
+        if not name.strip():
+            st.error("Name is required.")
+            return
+        try:
+            if existing:
+                portfolio.replace_event(record_id, Event(event_id=record_id, name=name, year=int(year),
+                                                         month=int(month), notes=notes))
+            else:
+                event_id = _generate_id("event", name, [ev.event_id for ev in portfolio.events])
+                portfolio.add_event(Event(event_id=event_id, name=name, year=int(year),
+                                          month=int(month), notes=notes))
+            _clear_simulation_cache()
+            _editor_close(kind)
+            st.rerun()
+        except ValidationError as exc:
+            st.error(str(exc))
+
 
 # ---------------------------------------------------------------------------
 # Liabilities tab
@@ -936,6 +1095,13 @@ def _render_liability_editor(portfolio: Portfolio, editor: dict) -> None:
                 format_func=lambda eid: "(none)" if eid is None else entity_names.get(eid, eid),
                 key=field("entity_id"),
             )
+        ev_col1, ev_col2 = st.columns(2)
+        with ev_col1:
+            li_start_event = _event_picker("Starts at event (sets start year)", portfolio,
+                                           existing.start_event_id if existing else None, field("start_event"))
+        with ev_col2:
+            li_end_event = _event_picker("Paid off at event (sets payoff year)", portfolio,
+                                         existing.end_event_id if existing else None, field("end_event"))
         active = st.checkbox("Active", value=existing.active if existing else True, key=field("active"))
         notes = st.text_area("Notes", value=existing.notes if existing else "", key=field("notes"))
 
@@ -961,6 +1127,8 @@ def _render_liability_editor(portfolio: Portfolio, editor: dict) -> None:
                 liability_id=liability_id, name=name, liability_type=liability_type, lender=lender,
                 balance=balance, annual_interest_rate=rate_pct / 100, start_year=int(start_year),
                 secured_by_asset_id=secured_by, entity_id=entity_id, active=active, notes=notes,
+                start_event_id=li_start_event, end_event_id=li_end_event,
+                payoff_year=existing.payoff_year if existing and not li_end_event else None,
             )
             if liability_kind == "loan":
                 liability = Loan(
@@ -1402,6 +1570,7 @@ def render_scenarios_tab(portfolio: Portfolio) -> None:
                     "Inflation override": s.inflation_rate_override,
                     "Asset overrides": len(s.asset_overrides),
                     "Cashflow overrides": len(s.cashflow_overrides),
+                    "Event moves": len(s.event_overrides),
                 }
                 for s in portfolio.scenarios
             ]
@@ -1428,6 +1597,8 @@ def render_scenarios_tab(portfolio: Portfolio) -> None:
     editor = _editor_get(kind)
     if editor is not None:
         _render_scenario_editor(portfolio, editor)
+
+    _render_event_override_tool(portfolio)
 
     if portfolio.scenarios and portfolio.assets:
         with st.expander("Add an asset override to an existing scenario"):
@@ -1456,6 +1627,37 @@ def render_scenarios_tab(portfolio: Portfolio) -> None:
                     f"Set {override_key}={parsed_value} for asset '{asset_name_lookup.get(target_asset_id, target_asset_id)}' "
                     f"in scenario '{scenario_name_lookup.get(target_scenario_id, target_scenario_id)}'."
                 )
+
+
+def _render_event_override_tool(portfolio: Portfolio) -> None:
+    """'Retire two years later' = a scenario that moves the Retirement event."""
+    if not (portfolio.scenarios and portfolio.events):
+        return
+    with st.expander("Move an event in a scenario (e.g. retire later)"):
+        scenario_ids = [s.scenario_id for s in portfolio.scenarios]
+        scenario_names = {s.scenario_id: s.name for s in portfolio.scenarios}
+        sid = st.selectbox("Scenario", scenario_ids, format_func=lambda x: scenario_names.get(x, x),
+                           key="event_override_scenario")
+        eid = _event_picker("Event", portfolio, portfolio.events[0].event_id, "event_override_event")
+        ev = portfolio.get_event(eid) if eid else None
+        if ev is None:
+            return
+        col1, col2 = st.columns(2)
+        with col1:
+            new_year = st.number_input("New year", value=int(ev.year), step=1, key="event_override_year")
+        with col2:
+            new_month = st.selectbox("New month", list(range(1, 13)), index=ev.month - 1,
+                                     format_func=lambda m: MONTH_NAMES[m - 1], key="event_override_month")
+        if st.button("Save event move", key="event_override_save"):
+            scenario = portfolio.get_scenario(sid)
+            scenario.event_overrides[eid] = {"year": int(new_year), "month": int(new_month)}
+            _clear_simulation_cache()
+            st.success(f"In '{scenario.name}', {ev.name} moves to {MONTH_NAMES[new_month - 1]} {new_year}.")
+        current = portfolio.get_scenario(sid).event_overrides
+        if current:
+            st.caption("Event moves in this scenario: " + "; ".join(
+                f"{portfolio.get_event(k).name if portfolio.get_event(k) else k} -> "
+                f"{MONTH_NAMES[v.get('month', 1) - 1]} {v.get('year')}" for k, v in current.items()))
 
 
 def _render_scenario_editor(portfolio: Portfolio, editor: dict) -> None:
@@ -1687,6 +1889,75 @@ def render_simulation_tab(portfolio: Portfolio) -> None:
             st.warning(f"Year {year}: {w}")
 
 
+def render_monte_carlo_section(portfolio: Portfolio) -> None:
+    st.divider()
+    st.header("Monte Carlo")
+    st.caption(
+        "Runs one scenario many times with random market years (each asset's growth swings "
+        "around your rate by its volatility) and a random long-run inflation rate. "
+        "Success = every year's shortfall could be covered from liquid assets. "
+        "Asset swings are independent here, so real bad years can be worse than the 10th percentile."
+    )
+    scenarios = portfolio.scenarios or [scenario_engine.make_base_case_scenario()]
+    names = {s.scenario_id: s.name for s in scenarios}
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        sid = st.selectbox("Scenario", list(names), format_func=names.get, key="mc_scenario")
+    with col2:
+        n_runs = st.number_input("Runs", min_value=100, max_value=10_000, value=1_000, step=100, key="mc_runs")
+    with col3:
+        seed = st.number_input("Seed (0 = new random draw each time)", min_value=0, value=42, step=1,
+                               key="mc_seed")
+
+    with st.expander("Volatility assumptions (yearly swing, in percentage points)"):
+        vol = {}
+        cols = st.columns(4)
+        for i, (asset_type, default) in enumerate(montecarlo.DEFAULT_VOLATILITY.items()):
+            with cols[i % 4]:
+                vol[asset_type] = st.number_input(
+                    asset_type.replace("_", " "), min_value=0.0, max_value=60.0, step=1.0,
+                    value=default * 100, key=f"mc_vol_{asset_type}",
+                ) / 100
+        inflation_vol = st.number_input(
+            "Inflation (long-run rate spread)", min_value=0.0, max_value=5.0, step=0.25,
+            value=montecarlo.DEFAULT_INFLATION_VOLATILITY * 100, key="mc_vol_inflation",
+        ) / 100
+
+    if st.button("Run Monte Carlo", type="primary", key="mc_run_btn"):
+        bar = st.progress(0.0, text="Running...")
+        result = montecarlo.run_monte_carlo(
+            portfolio, next(s for s in scenarios if s.scenario_id == sid),
+            n_runs=int(n_runs), seed=int(seed) or None, volatility=vol,
+            inflation_volatility=inflation_vol,
+            progress=lambda done, total: bar.progress(done / total, text=f"Run {done:,} of {total:,}"),
+        )
+        bar.empty()
+        st.session_state["mc_result"] = result
+
+    result = st.session_state.get("mc_result")
+    if result is None:
+        return
+    m1, m2, m3 = st.columns(3)
+    final = result.percentiles()
+    m1.metric("Success rate", f"{result.success_rate:.0%}", help="Runs that never ran short of liquid money")
+    m2.metric(f"Median net worth, {result.years[-1]}", format_currency(final[50][-1]))
+    m3.metric(f"10th percentile, {result.years[-1]}", format_currency(final[10][-1]))
+
+    rows = result.summary_rows()
+    chart_df = pd.DataFrame(rows).set_index("Year")[
+        ["Net worth, 10th pct", "Net worth, median", "Net worth, 90th pct"]
+    ]
+    st.line_chart(chart_df)
+    display = pd.DataFrame(rows)
+    for col in display.columns[1:]:
+        display[col] = display[col].apply(format_currency)
+    st.dataframe(display, use_container_width=True, hide_index=True)
+
+    failures = result.failure_year_counts()
+    if failures:
+        st.caption("First year runs ran short: " + ", ".join(f"{y}: {n} runs" for y, n in failures.items()))
+
+
 # ---------------------------------------------------------------------------
 # Export tab
 # ---------------------------------------------------------------------------
@@ -1723,6 +1994,56 @@ def render_export_tab(portfolio: Portfolio) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
+def render_quick_add(portfolio: Portfolio) -> None:
+    with st.expander("✨ Quick add with Claude: describe it in plain English"):
+        if not quick_add.api_key_configured():
+            st.info(
+                "Quick add needs an Anthropic API key. Create one at console.anthropic.com, then in "
+                "PowerShell run:  setx ANTHROPIC_API_KEY \"your-key\"  and restart PowerShell and the app."
+            )
+            return
+        st.caption(
+            "Claude drafts the records; you review them before anything is added. What you type is "
+            "sent to the Anthropic API along with the names (not amounts) of your existing records."
+        )
+        text = st.text_area(
+            "Description",
+            placeholder="4392 Brix rental worth $295k with a Nation Star loan of $194,613 at 4.25%, "
+                        "25 years left; rent $1,150 a month",
+            key="quick_add_text",
+        )
+        if st.button("Draft records", key="quick_add_draft"):
+            with st.spinner("Asking Claude..."):
+                try:
+                    st.session_state["quick_add_result"] = quick_add.draft_records(text, portfolio)
+                except Exception as exc:  # network, key, or API errors -- show, don't crash
+                    st.error(f"Quick add failed: {exc}")
+
+        result = st.session_state.get("quick_add_result")
+        if not result:
+            return
+        for q in result.questions:
+            st.warning(f"Claude asks: {q}")
+        accepted = []
+        for i, d in enumerate(result.drafts):
+            label = f"{d.record_type.replace('_', ' ').title()}: {d.name}"
+            if d.ok:
+                keep = st.checkbox(f"Add {label}", value=True, key=f"quick_add_keep_{i}")
+                shown = {k: v for k, v in d.record.to_dict().items() if v not in (None, "", [], {}, False)}
+                st.json(shown, expanded=False)
+                for a in d.assumptions:
+                    st.caption(f"Assumed: {a}")
+                if keep:
+                    accepted.append(d)
+            else:
+                st.error(f"{label} can't be added: " + "; ".join(d.errors))
+        if accepted and st.button(f"Add {len(accepted)} record(s)", type="primary", key="quick_add_apply"):
+            for msg in quick_add.add_drafts(portfolio, accepted):
+                st.success(msg)
+            _clear_simulation_cache()
+            st.session_state.pop("quick_add_result", None)
+
+
 def main() -> None:
     st.title("ManagedFlow")
     st.caption("Asset, Cashflow, Events and Transitions Planner")
@@ -1737,8 +2058,10 @@ def main() -> None:
         )
         return
 
+    render_quick_add(portfolio)
+
     tabs = st.tabs(
-        ["Assets", "Liabilities", "Cashflows", "Entities & Bundles", "Assumptions",
+        ["Assets", "Liabilities", "Cashflows", "Events", "Entities & Bundles", "Assumptions",
          "Scenarios", "Simulation", "Export"]
     )
     with tabs[0]:
@@ -1748,14 +2071,17 @@ def main() -> None:
     with tabs[2]:
         render_cashflows_tab(portfolio)
     with tabs[3]:
-        render_entities_bundles_tab(portfolio)
+        render_events_tab(portfolio)
     with tabs[4]:
-        render_assumptions_tab(portfolio)
+        render_entities_bundles_tab(portfolio)
     with tabs[5]:
-        render_scenarios_tab(portfolio)
+        render_assumptions_tab(portfolio)
     with tabs[6]:
-        render_simulation_tab(portfolio)
+        render_scenarios_tab(portfolio)
     with tabs[7]:
+        render_simulation_tab(portfolio)
+        render_monte_carlo_section(portfolio)
+    with tabs[8]:
         render_export_tab(portfolio)
 
 

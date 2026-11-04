@@ -213,6 +213,13 @@ class Cashflow:
     affects_asset_value: bool = False
     affects_debt_balance: bool = False
     notes: str = ""
+    # Partial years: the flow runs from start_month of start_year through
+    # end_month of end_year, and those years are prorated by month.
+    start_month: int = 1
+    end_month: int = 12
+    # Optional links to Events; when set, they decide the dates above.
+    start_event_id: Optional[str] = None
+    end_event_id: Optional[str] = None
 
     def __post_init__(self) -> None:
         self.flow_type = _enum_value(self.flow_type, FlowType)
@@ -230,6 +237,24 @@ class Cashflow:
             self.cashflow_timing in ("start_of_year", "end_of_year"),
             f"Cashflow '{self.flow_id}': cashflow_timing must be 'start_of_year' or 'end_of_year'",
         )
+        self.check_dates()
+
+    def check_dates(self) -> None:
+        _require(1 <= self.start_month <= 12 and 1 <= self.end_month <= 12,
+                 f"Cashflow '{self.flow_id}': months must be 1-12")
+        _require(
+            self.end_year is None or (self.end_year, self.end_month) >= (self.start_year, self.start_month),
+            f"Cashflow '{self.flow_id}': ends ({self.end_month}/{self.end_year}) before it starts "
+            f"({self.start_month}/{self.start_year})",
+        )
+
+    def months_active_in_year(self, year: int) -> int:
+        """How many months of `year` this flow runs (0-12)."""
+        if year < self.start_year or (self.end_year is not None and year > self.end_year):
+            return 0
+        first = self.start_month if year == self.start_year else 1
+        last = self.end_month if (self.end_year is not None and year == self.end_year) else 12
+        return max(0, last - first + 1)
 
     def annual_amount_in_year(self, year: int, inflation_rate: float = 0.0) -> float:
         """Return the (sign-aware magnitude, pre-tax) annual cash amount for a
@@ -269,6 +294,8 @@ class Cashflow:
         grown = base_annual * ((1 + self.annual_growth_rate) ** years_elapsed)
         if self.inflation_adjusted:
             grown *= (1 + inflation_rate) ** years_elapsed
+        if self.frequency != Frequency.ONE_TIME:
+            grown *= self.months_active_in_year(year) / 12  # partial first/last year
         return grown
 
     def signed_amount_in_year(self, year: int, inflation_rate: float = 0.0) -> float:
@@ -290,6 +317,49 @@ class Cashflow:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Cashflow":
+        return cls(**data)
+
+
+# ---------------------------------------------------------------------------
+# Event
+# ---------------------------------------------------------------------------
+
+def month_before(year: int, month: int) -> Tuple[int, int]:
+    """(2026, 7) -> (2026, 6);  (2026, 1) -> (2025, 12)."""
+    return (year, month - 1) if month > 1 else (year - 1, 12)
+
+
+@dataclass
+class Event:
+    """A named moment that other records can be tied to: Retirement,
+    Debbie starts CalPERS, sell 2049 Broadway, Brix loan payoff.
+
+    (year, month) is the FIRST month things are different. Records linked
+    with start_event_id begin that month; records linked with end_event_id
+    stop the month before. So with Retirement = July 2026, salary (ends at
+    Retirement) runs through June and the pension (starts at Retirement)
+    begins in July -- no double-counted month.
+
+    Move the event and everything linked to it moves. A scenario can move
+    it too: Scenario.event_overrides = {"event_retirement": {"year": 2028}}.
+    """
+
+    event_id: str
+    name: str
+    year: int
+    month: int = 1
+    notes: str = ""
+
+    def __post_init__(self) -> None:
+        _require(bool(self.event_id), "Event.event_id is required")
+        _require(bool(self.name), "Event.name is required")
+        _require(1 <= self.month <= 12, f"Event '{self.event_id}': month must be 1-12")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Event":
         return cls(**data)
 
 
@@ -354,6 +424,10 @@ class Asset:
     do_not_sell: bool = False
     sale_year: Optional[int] = None
     sale_assumptions: Dict[str, Any] = field(default_factory=dict)
+    # Optional Events: start_event_id sets start_year (purchase);
+    # end_event_id sets sale_year (sold in that event's year).
+    start_event_id: Optional[str] = None
+    end_event_id: Optional[str] = None
     # Cashflows are NOT stored on the asset (schema v0.2). They live in
     # Portfolio.cashflows and point here via Cashflow.asset_id. Use
     # Portfolio.cashflows_for_asset(asset_id) to get them.
@@ -396,6 +470,8 @@ class Asset:
             "do_not_sell": self.do_not_sell,
             "sale_year": self.sale_year,
             "sale_assumptions": self.sale_assumptions,
+            "start_event_id": self.start_event_id,
+            "end_event_id": self.end_event_id,
         }
 
     @classmethod
@@ -451,6 +527,11 @@ class Liability:
     lender: str = ""
     notes: str = ""
     active: bool = True
+    # Pay the remaining balance in full in this year (refinance, payoff).
+    payoff_year: Optional[int] = None
+    # Optional Events: start_event_id sets start_year; end_event_id sets payoff_year.
+    start_event_id: Optional[str] = None
+    end_event_id: Optional[str] = None
 
     # ClassVar = belongs to the class, not stored per-object or in __init__.
     # Saved in JSON as "kind" so from_dict knows which subclass to rebuild.
@@ -486,6 +567,9 @@ class Liability:
             "lender": self.lender,
             "notes": self.notes,
             "active": self.active,
+            "payoff_year": self.payoff_year,
+            "start_event_id": self.start_event_id,
+            "end_event_id": self.end_event_id,
         }
 
     @staticmethod
@@ -721,6 +805,10 @@ class Scenario:
     # Per-cashflow overrides: {flow_id: {"start_year": 2030, "amount": 5000, ...}}
     cashflow_overrides: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
+    # Move events: {event_id: {"year": 2028, "month": 7}}. Everything linked
+    # to the event moves with it.
+    event_overrides: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+
     # Withdrawal / reinvestment behavior
     withdrawal_order_override: Optional[List[str]] = None
     allow_illiquid_withdrawals: bool = False
@@ -931,6 +1019,7 @@ class Portfolio:
     assets: List[Asset] = field(default_factory=list)
     cashflows: List[Cashflow] = field(default_factory=list)
     liabilities: List[Liability] = field(default_factory=list)
+    events: List[Event] = field(default_factory=list)
     bundles: List[Bundle] = field(default_factory=list)
     scenarios: List[Scenario] = field(default_factory=list)
     file_version: str = CURRENT_SCHEMA_VERSION
@@ -954,6 +1043,13 @@ class Portfolio:
         liability_ids = [li.liability_id for li in self.liabilities]
         dup_liabilities = {x for x in liability_ids if liability_ids.count(x) > 1}
         _require(not dup_liabilities, f"Duplicate liability_id(s) found: {dup_liabilities}")
+
+        event_ids = [ev.event_id for ev in self.events]
+        dup_events = {x for x in event_ids if event_ids.count(x) > 1}
+        _require(not dup_events, f"Duplicate event_id(s) found: {dup_events}")
+        event_id_set = set(event_ids)
+        for record_id, link in self._event_links():
+            _require(link in event_id_set, f"'{record_id}' is linked to event '{link}' which doesn't exist")
 
         bundle_ids = [b.bundle_id for b in self.bundles]
         dup_bundles = {b for b in bundle_ids if bundle_ids.count(b) > 1}
@@ -1015,6 +1111,77 @@ class Portfolio:
                     f"Bundle '{b.bundle_id}' references liability_id '{lid}' "
                     "which is not defined in portfolio.liabilities",
                 )
+
+        self.apply_event_dates()
+
+    # -- events ------------------------------------------------------------------
+
+    def _event_links(self):
+        """Yield (record_id, event_id) for every event link in the portfolio."""
+        for rec_id, rec in (
+            [(cf.flow_id, cf) for cf in self.cashflows]
+            + [(a.asset_id, a) for a in self.assets]
+            + [(li.liability_id, li) for li in self.liabilities]
+        ):
+            for link in (rec.start_event_id, rec.end_event_id):
+                if link:
+                    yield rec_id, link
+
+    def get_event(self, event_id: str) -> Optional[Event]:
+        for ev in self.events:
+            if ev.event_id == event_id:
+                return ev
+        return None
+
+    def records_linked_to_event(self, event_id: str) -> List[str]:
+        return [rec_id for rec_id, link in self._event_links() if link == event_id]
+
+    def apply_event_dates(self) -> None:
+        """Copy each linked Event's date onto the records that point at it.
+        Called on load, after editing an event, and inside every scenario run
+        (after the scenario has moved any events)."""
+        events = {ev.event_id: ev for ev in self.events}
+        for cf in self.cashflows:
+            if cf.start_event_id in events:
+                ev = events[cf.start_event_id]
+                cf.start_year, cf.start_month = ev.year, ev.month
+            if cf.end_event_id in events:
+                ev = events[cf.end_event_id]
+                cf.end_year, cf.end_month = month_before(ev.year, ev.month)
+            cf.check_dates()
+        for a in self.assets:
+            if a.start_event_id in events:
+                a.start_year = events[a.start_event_id].year
+            if a.end_event_id in events:
+                a.sale_year = events[a.end_event_id].year
+        for li in self.liabilities:
+            if li.start_event_id in events:
+                li.start_year = events[li.start_event_id].year
+            if li.end_event_id in events:
+                li.payoff_year = events[li.end_event_id].year
+
+    def add_event(self, event: Event) -> None:
+        _require(self.get_event(event.event_id) is None, f"Event with id '{event.event_id}' already exists")
+        self.events.append(event)
+
+    def replace_event(self, event_id: str, new_event: Event) -> None:
+        for i, ev in enumerate(self.events):
+            if ev.event_id == event_id:
+                self.events[i] = new_event
+                self.apply_event_dates()  # move everything linked to it
+                return
+        _require(False, f"No event with id '{event_id}' found to replace")
+
+    def remove_event(self, event_id: str) -> None:
+        """Remove an event. Linked records keep their current dates but are
+        un-linked."""
+        _require(self.get_event(event_id) is not None, f"No event with id '{event_id}' found to remove")
+        for rec in [*self.cashflows, *self.assets, *self.liabilities]:
+            if rec.start_event_id == event_id:
+                rec.start_event_id = None
+            if rec.end_event_id == event_id:
+                rec.end_event_id = None
+        self.events = [ev for ev in self.events if ev.event_id != event_id]
 
     # -- lookups -------------------------------------------------------------
 
@@ -1106,6 +1273,11 @@ class Portfolio:
             cashflow.asset_id is None or self.get_asset(cashflow.asset_id) is not None,
             f"Cashflow '{cashflow.flow_id}' references unknown asset_id '{cashflow.asset_id}'",
         )
+        self._require_known_events(cashflow)
+
+    def _require_known_events(self, record) -> None:
+        for link in (record.start_event_id, record.end_event_id):
+            _require(link is None or self.get_event(link) is not None, f"Unknown event '{link}'")
 
     def add_cashflow(self, cashflow: Cashflow) -> None:
         _require(
@@ -1114,6 +1286,7 @@ class Portfolio:
         )
         self._require_known_asset(cashflow)
         self.cashflows.append(cashflow)
+        self.apply_event_dates()
 
     def replace_cashflow(self, flow_id: str, new_cashflow: Cashflow) -> None:
         """Replace the cashflow with id `flow_id` in place. Moving a flow to
@@ -1123,6 +1296,7 @@ class Portfolio:
         for i, cf in enumerate(self.cashflows):
             if cf.flow_id == flow_id:
                 self.cashflows[i] = new_cashflow
+                self.apply_event_dates()
                 return
         _require(False, f"No cashflow with id '{flow_id}' found to replace")
 
@@ -1137,12 +1311,16 @@ class Portfolio:
             self.get_asset(asset.asset_id) is None,
             f"Asset with id '{asset.asset_id}' already exists",
         )
+        self._require_known_events(asset)
         self.assets.append(asset)
+        self.apply_event_dates()
 
     def replace_asset(self, asset_id: str, new_asset: Asset) -> None:
         for i, a in enumerate(self.assets):
             if a.asset_id == asset_id:
+                self._require_known_events(new_asset)
                 self.assets[i] = new_asset
+                self.apply_event_dates()
                 return
         _require(False, f"No asset with id '{asset_id}' found to replace")
 
@@ -1180,6 +1358,7 @@ class Portfolio:
             liability.entity_id is None or self.get_entity(liability.entity_id) is not None,
             f"Liability '{liability.liability_id}' references unknown entity '{liability.entity_id}'",
         )
+        self._require_known_events(liability)
 
     def add_liability(self, liability: Liability) -> None:
         _require(
@@ -1188,12 +1367,14 @@ class Portfolio:
         )
         self._require_valid_liability_links(liability)
         self.liabilities.append(liability)
+        self.apply_event_dates()
 
     def replace_liability(self, liability_id: str, new_liability: Liability) -> None:
         self._require_valid_liability_links(new_liability)
         for i, li in enumerate(self.liabilities):
             if li.liability_id == liability_id:
                 self.liabilities[i] = new_liability
+                self.apply_event_dates()
                 return
         _require(False, f"No liability with id '{liability_id}' found to replace")
 
@@ -1265,6 +1446,7 @@ class Portfolio:
             "assets": [a.to_dict() for a in self.assets],
             "cashflows": [cf.to_dict() for cf in self.cashflows],
             "liabilities": [li.to_dict() for li in self.liabilities],
+            "events": [ev.to_dict() for ev in self.events],
             "bundles": [b.to_dict() for b in self.bundles],
             "scenarios": [s.to_dict() for s in self.scenarios],
         }
@@ -1280,6 +1462,7 @@ class Portfolio:
             assets=[Asset.from_dict(a) for a in data.get("assets", [])],
             cashflows=[Cashflow.from_dict(cf) for cf in data.get("cashflows", [])],
             liabilities=[liability_from_dict(li) for li in data.get("liabilities", [])],
+            events=[Event.from_dict(ev) for ev in data.get("events", [])],
             bundles=[Bundle.from_dict(b) for b in data.get("bundles", [])],
             scenarios=[Scenario.from_dict(s) for s in data.get("scenarios", [])],
             file_version=metadata.get("file_version", CURRENT_SCHEMA_VERSION),

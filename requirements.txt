@@ -7,4 +7,5 @@
 openpyxl>=3.1        # Excel (.xlsx) reading/writing for exports.py
 pandas>=2.0           # Dataframes for the Streamlit UI's tables/editors
 streamlit>=1.35        # Local desktop UI (run with: streamlit run app.py) -- 1.35+ needed for selectable dataframe rows
+anthropic>=0.40          # Quick add (Claude API); needs ANTHROPIC_API_KEY
 pytest>=8             # Tests (run with: python -m pytest)

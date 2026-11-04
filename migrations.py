@@ -10,7 +10,7 @@ Every saved file records its schema in metadata.file_version. migrate()
 looks at that version and applies each upgrade step in order until the
 data is current -- like climbing a ladder one rung at a time:
 
-    "0.1" --(_v0_1_to_v0_2)--> "0.2" --(_v0_2_to_v0_3)--> "0.3"
+    "0.1" --(_v0_1_to_v0_2)--> "0.2" --(_v0_2_to_v0_3)--> "0.3" --(_v0_3_to_v0_4)--> "0.4"
 
 To change the model in the future:
   1. Bump CURRENT_SCHEMA_VERSION.
@@ -27,7 +27,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Callable, Dict
 
-CURRENT_SCHEMA_VERSION = "0.3"
+CURRENT_SCHEMA_VERSION = "0.4"
 
 
 class MigrationError(ValueError):
@@ -71,10 +71,21 @@ def _v0_2_to_v0_3(data: Dict[str, Any]) -> Dict[str, Any]:
     return data
 
 
+def _v0_3_to_v0_4(data: Dict[str, Any]) -> Dict[str, Any]:
+    """v0.4 adds Events (named dates that records link to) and month-level
+    start/end dates on cashflows. Older files have no events; all new
+    record fields have defaults (months 1-12 = whole years), so nothing
+    else needs to change."""
+    data.setdefault("events", [])
+    data.setdefault("metadata", {})["file_version"] = "0.4"
+    return data
+
+
 # version found in the file -> function that upgrades it one step
 _STEPS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "0.1": _v0_1_to_v0_2,
     "0.2": _v0_2_to_v0_3,
+    "0.3": _v0_3_to_v0_4,
 }
 
 
