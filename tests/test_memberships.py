@@ -112,3 +112,29 @@ def test_interim_entity_person_link_becomes_an_owner_membership():
 
 def test_old_files_get_an_empty_membership_list(v0_1_data):
     assert migrate(v0_1_data)["memberships"] == []
+
+
+# --- a personal entity is one person ---------------------------------------------------------
+
+def test_personal_entity_can_have_only_one_owner():
+    with pytest.raises(ValidationError, match="only one owner"):
+        household().add_membership(Membership(entity_id="phil_personal", person_id="debbie"))
+
+
+def test_personal_entity_can_still_have_other_roles():
+    p = household()
+    p.add_membership(Membership(entity_id="phil_personal", person_id="debbie", role="beneficiary"))
+    assert names(p.people_in("phil_personal")) == [("Debbie", "beneficiary"), ("Phil", "owner")]
+
+
+def test_joint_entity_cant_become_personal_while_it_has_two_owners():
+    p = household()
+    with pytest.raises(ValidationError, match="only one owner"):
+        p.replace_entity("joint", Entity(entity_id="joint", name="Philip & Debbie Neufeld", entity_type="personal"))
+
+
+def test_file_with_two_owners_on_a_personal_entity_is_rejected():
+    data = household().to_dict()
+    data["memberships"].append({"entity_id": "phil_personal", "person_id": "debbie", "role": "owner", "notes": ""})
+    with pytest.raises(ValidationError, match="only one owner"):
+        Portfolio.from_dict(data)

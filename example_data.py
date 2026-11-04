@@ -11,6 +11,8 @@ Alex & Sam Example (fictional):
   People      Alex, born Jul 1965 | Sam, born Jul 1967 (both planned to age 92)
   Events      Alex retires at 61 (Jul 2026) | Sam retires at 63 (Jul 2030) | Sell rental Jan 2034
   Assets      Brokerage $400k (equity) | Savings $60k (cash) | Elm St rental $350k
+              (depreciation: $250k basis from 2015 over 27.5 yrs = $9,091/yr; the rental
+              is sold in 2034, before it runs out in 2042)
   Liabilities Elm St mortgage $180k at 4.5%, 240 months left (secured by the rental)
               HELOC $20k at 8%, interest-only
   Cashflows   Alex salary $120k  -> ends at Alex retires
@@ -74,7 +76,8 @@ def build_example_portfolio() -> Portfolio:
             Asset(asset_id="asset_elm_rental", name="Elm St rental", asset_type=AssetType.REAL_ESTATE,
                   owner="Joint", initial_value=350_000, start_year=2026, annual_growth_rate=0.03,
                   liquidity_category=LiquidityCategory.ILLIQUID, tax_category=TaxCategory.RENTAL_INCOME,
-                  entity_id="entity_joint", end_event_id="event_sell_elm"),
+                  entity_id="entity_joint", end_event_id="event_sell_elm",
+                  depreciable_basis=250_000, placed_in_service_year=2015, recovery_years=27.5),
         ],
         liabilities=[
             Loan(liability_id="liability_elm_mortgage", name="Elm St mortgage", balance=180_000,

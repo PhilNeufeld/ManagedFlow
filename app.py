@@ -18,6 +18,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+import actuals as actuals_engine
 import exports
 import montecarlo
 import quick_add
@@ -319,6 +320,8 @@ def render_assets_tab(portfolio: Portfolio) -> None:
                     "Active": a.active,
                     "Do Not Sell": a.do_not_sell,
                     "Your share": f"{portfolio.asset_share(a.asset_id):.2%}",
+                    "Depreciation/yr": (format_currency(a.depreciable_basis / a.recovery_years)
+                                        if a.depreciable_basis and a.recovery_years else ""),
                 }
                 for a in portfolio.assets
             ]
@@ -446,6 +449,24 @@ def _render_asset_editor(portfolio: Portfolio, editor: dict) -> None:
                 "Sold at event (sets sale year)", portfolio,
                 existing.end_event_id if existing else None, field("end_event"),
             )
+        st.caption("Depreciation (detailed tax method): the depreciable part only -- building, trees, "
+                   "equipment, never land. 27.5 years residential rental, 39 commercial.")
+        dep1, dep2, dep3, dep4 = st.columns(4)
+        with dep1:
+            depreciable_basis = st.number_input(
+                "Depreciable basis ($)", min_value=0.0, step=1000.0, key=field("depreciable_basis"),
+                value=float(existing.depreciable_basis) if existing else 0.0)
+        with dep2:
+            placed_year = st.number_input(
+                "Placed in service (year, 0 = none)", min_value=0, max_value=2100, step=1, key=field("placed_year"),
+                value=int(existing.placed_in_service_year or 0) if existing else 0)
+        with dep3:
+            recovery_years = st.number_input(
+                "Recovery period (years)", min_value=0.0, max_value=100.0, step=0.5, key=field("recovery_years"),
+                value=float(existing.recovery_years) if existing else 0.0)
+        with dep4:
+            subject_to_se = st.checkbox("Self-employment tax on its net income", key=field("subject_to_se"),
+                                        value=existing.subject_to_se_tax if existing else False)
         do_not_sell = st.checkbox("Do not sell", value=defaults["do_not_sell"], key=field("do_not_sell"))
         active = st.checkbox("Active", value=defaults["active"], key=field("active"))
         notes = st.text_area("Notes", value=defaults["notes"], key=field("notes"))
@@ -491,6 +512,10 @@ def _render_asset_editor(portfolio: Portfolio, editor: dict) -> None:
                     sale_assumptions=dict(existing.sale_assumptions) if existing else {},
                     start_event_id=asset_start_event,
                     end_event_id=asset_end_event,
+                    depreciable_basis=depreciable_basis,
+                    placed_in_service_year=int(placed_year) or None,
+                    recovery_years=recovery_years,
+                    subject_to_se_tax=subject_to_se,
                 )
 
                 if mode == "new":
@@ -827,6 +852,158 @@ def _render_cashflow_editor(portfolio: Portfolio, editor: dict) -> None:
 # ---------------------------------------------------------------------------
 # Entities tab and Bundles tab
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Actuals tab
+# ---------------------------------------------------------------------------
+
+def _flow_labels(portfolio: Portfolio) -> dict:
+    """flow_id -> 'Name (asset)' label, unique even when names repeat."""
+    asset_names = {a.asset_id: a.name for a in portfolio.assets}
+    labels = {}
+    for cf in portfolio.cashflows:
+        label = f"{cf.name} ({asset_names.get(cf.asset_id, 'household')})"
+        while label in labels.values():
+            label += " *"
+        labels[cf.flow_id] = label
+    return labels
+
+
+def _money_cols(df, cols):
+    for c in cols:
+        if c in df.columns:
+            df[c] = df[c].apply(lambda v: "" if v is None or pd.isna(v) else format_currency(v))
+    return df
+
+
+def render_actuals_tab(portfolio: Portfolio) -> None:
+    st.header("Actuals")
+    st.caption(
+        "What really happened (actuals) and near-term estimates (forecasts), compared with the plan. "
+        "Amounts are what YOUR household received or paid. Records linked to a planned cashflow replace "
+        "the plan in simulations for their year (actual beats forecast beats plan; a part-year of "
+        "monthly records is topped up with the plan for the other months)."
+    )
+    st.download_button("⬇ Download CSV template", actuals_engine.TEMPLATE_CSV, file_name="actuals_template.csv",
+                       mime="text/csv", key="actuals_template")
+
+    # --- import ---------------------------------------------------------------
+    st.subheader("Import a CSV")
+    col1, col2 = st.columns(2)
+    with col1:
+        uploaded = st.file_uploader("Upload", type=["csv"], key="actuals_upload")
+    with col2:
+        data_csvs = sorted(p.name for p in DATA_DIR.glob("*.csv"))
+        picked = st.selectbox("...or pick a CSV in your data folder", ["(none)"] + data_csvs, key="actuals_pick")
+    if st.button("Read file", key="actuals_read"):
+        text = (uploaded.getvalue().decode("utf-8-sig") if uploaded is not None
+                else (DATA_DIR / picked).read_text(encoding="utf-8-sig") if picked != "(none)" else None)
+        if text is None:
+            st.error("Upload a CSV or pick one from the data folder first.")
+        else:
+            try:
+                rows = actuals_engine.parse_csv(text)
+                st.session_state["actuals_preview"] = actuals_engine.match_rows(rows, portfolio)
+            except ValueError as exc:
+                st.error(str(exc))
+
+    preview = st.session_state.get("actuals_preview")
+    if preview:
+        labels = _flow_labels(portfolio)
+        not_in_plan = "(not in the plan)"
+        label_to_flow = {v: k for k, v in labels.items()}
+        df = pd.DataFrame([
+            {"Import": r.ok, "Line": r.line, "Year": r.year, "Kind": r.kind, "Name": r.name,
+             "Direction": r.direction, "Amount": r.amount, "Month": r.month, "Asset": r.asset_text,
+             "Status": r.status, "Class": r.record_class,
+             "Planned cashflow": labels.get(r.flow_id, not_in_plan),
+             "Notes": "; ".join(r.errors) if r.errors else r.match_note}
+            for r in preview
+        ])
+        st.caption("Check each match (change 'Planned cashflow' if needed), untick rows to skip, then import.")
+        edited = st.data_editor(
+            df, hide_index=True, use_container_width=True, key="actuals_editor",
+            disabled=[c for c in df.columns if c not in ("Import", "Planned cashflow")],
+            column_config={"Planned cashflow": st.column_config.SelectboxColumn(
+                options=[not_in_plan] + list(labels.values()))},
+        )
+        bad = sum(1 for r in preview if not r.ok)
+        if bad:
+            st.warning(f"{bad} row(s) have problems (see Notes) and will be skipped.")
+        if st.button("Import selected rows", type="primary", key="actuals_import"):
+            chosen = []
+            for r, (_, e) in zip(preview, edited.iterrows()):
+                if bool(e["Import"]) and r.ok:
+                    r.flow_id = label_to_flow.get(e["Planned cashflow"])
+                    chosen.append(r)
+            saved = actuals_engine.commit_rows(chosen, portfolio)
+            st.session_state.pop("actuals_preview", None)
+            _clear_simulation_cache()
+            st.success(f"Imported {saved} record(s). Click Save portfolio in the sidebar to keep them.")
+
+    # --- stored records ---------------------------------------------------------
+    st.subheader("Recorded actuals and forecasts")
+    if portfolio.actuals:
+        labels = _flow_labels(portfolio)
+        df = pd.DataFrame([
+            {"Year": a.year, "Month": MONTH_NAMES[a.month - 1] if a.month else "full year", "Kind": a.kind,
+             "Item": a.name, "Direction": a.direction.value, "Amount": format_currency(a.amount),
+             "Status": a.status, "Class": a.record_class,
+             "Planned cashflow": labels.get(a.flow_id, "(not in the plan)"), "Notes": a.notes}
+            for a in sorted(portfolio.actuals, key=lambda a: (a.year, a.month or 0, a.name))
+        ])
+        ordered = sorted(portfolio.actuals, key=lambda a: (a.year, a.month or 0, a.name))
+
+        def _delete(actual_id: str) -> bool:
+            portfolio.remove_actual(actual_id)
+            _clear_simulation_cache()
+            return True
+
+        _render_selectable_table("actual", df, [a.actual_id for a in ordered], _delete, delete_label="this record")
+    else:
+        st.info("No actuals yet. Import a CSV above.")
+        return
+
+    # --- reports ----------------------------------------------------------------------
+    st.subheader("Plan vs. actual")
+    years = actuals_engine.years_with_records(portfolio)
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        year = st.selectbox("Year", years, index=0, key="pva_year")
+    with col2:
+        pct = st.number_input("Flag differences of at least (%)", min_value=0.0, value=10.0, step=1.0,
+                              key="pva_pct") / 100
+    with col3:
+        dollars = st.number_input("...and at least ($)", min_value=0.0, value=1_000.0, step=500.0, key="pva_dollars")
+
+    rows = actuals_engine.plan_vs_actual(portfolio, year, pct, dollars)
+    inflow = [r for r in rows if r["Direction"] == "inflow"]
+    m1, m2, m3 = st.columns(3)
+    m1.metric(f"Planned inflows {year}", format_currency(sum(r["Planned"] for r in inflow)))
+    m2.metric(f"Actual/forecast inflows {year}", format_currency(sum(r["Actual / forecast"] for r in inflow)),
+              delta=format_currency(sum(r["Difference"] for r in inflow)))
+    m3.metric("Flagged lines", sum(1 for r in rows if r["Flag"]))
+    df = pd.DataFrame(rows).drop(columns=["flow_id"])
+    df["Difference %"] = df["Difference %"].apply(lambda v: f"{v:+.1%}" if v is not None else "")
+    df["Flag"] = df["Flag"].apply(lambda f: "⚠" if f else "")
+    st.dataframe(_money_cols(df, ["Planned", "Actual / forecast", "Difference"]), hide_index=True,
+                 use_container_width=True)
+
+    st.subheader("Trend breaks")
+    st.caption(
+        f"Does {year}'s number continue each line's own path? Expected = last year's value (actual if "
+        "recorded, else plan) grown by the line's growth rate. A flag means this year breaks from the "
+        "longer-run shape of the curve."
+    )
+    breaks = actuals_engine.trend_breaks(portfolio, year, pct, dollars)
+    if breaks:
+        df = pd.DataFrame(breaks).drop(columns=["flow_id"])
+        df["Growth used"] = df["Growth used"].apply(lambda v: f"{v:.1%}")
+        df["Gap %"] = df["Gap %"].apply(lambda v: f"{v:+.1%}" if v is not None else "")
+        df["Flag"] = df["Flag"].apply(lambda f: "⚠" if f else "")
+        money = ["Prior year", "Expected", "This year", "Gap", "Plan for year"]
+        st.dataframe(_money_cols(df, money), hide_index=True, use_container_width=True)
+
 
 # ---------------------------------------------------------------------------
 # Events tab (+ a picker the other editors use)
@@ -1875,6 +2052,30 @@ def render_assumptions_tab(portfolio: Portfolio) -> None:
     with col3:
         inflation_rate = st.number_input("Inflation rate", value=a.inflation_rate, step=0.005, format="%.3f")
 
+    st.subheader("Taxes")
+    col4, col5, col6 = st.columns(3)
+    methods = {"detailed": "Detailed: federal + state brackets, deductions, depreciation",
+               "flat": "Flat: one rate per income category (table below)"}
+    with col4:
+        tax_method = st.selectbox("Tax method", list(methods), index=list(methods).index(a.tax_method),
+                                  format_func=methods.get, key="assump_tax_method")
+    with col5:
+        statuses = {"married_joint": "Married filing jointly", "single": "Single"}
+        filing_status = st.selectbox("Filing status", list(statuses), format_func=statuses.get,
+                                     index=list(statuses).index(a.filing_status), key="assump_filing")
+    with col6:
+        states = {"CA": "California", "none": "No state income tax"}
+        state = st.selectbox("State", list(states), format_func=states.get,
+                             index=list(states).index(a.state), key="assump_state")
+    if tax_method == "detailed":
+        st.caption(
+            "Uses federal 2026 and California 2025 tables (later years indexed by inflation) -- see "
+            "tax_tables.py for every number and its source. Rentals and farms are taxed on NET income "
+            "(set each asset's tax category to rental_income or business_income, and its depreciation "
+            "on the asset). People's birthdays drive the 65+ deductions. Not modeled: AMT, most credits, "
+            "depreciation recapture on sale, QBI deduction."
+        )
+
     if st.button("Update assumptions"):
         try:
             updated = Assumptions(
@@ -1882,6 +2083,9 @@ def render_assumptions_tab(portfolio: Portfolio) -> None:
                 end_year=int(end_year),
                 inflation_rate=inflation_rate,
                 default_tax_rates=dict(a.default_tax_rates),
+                tax_method=tax_method,
+                filing_status=filing_status,
+                state=state,
             )
             portfolio.assumptions = updated
             _clear_simulation_cache()
@@ -1889,7 +2093,7 @@ def render_assumptions_tab(portfolio: Portfolio) -> None:
         except ValidationError as exc:
             st.error(str(exc))
 
-    st.subheader("Default tax rates by category")
+    st.subheader("Flat tax rates by category (used only by the flat method)")
     rate_df = pd.DataFrame(
         [{"Tax category": k, "Rate": v} for k, v in sorted(portfolio.assumptions.default_tax_rates.items())]
     )
@@ -1936,6 +2140,7 @@ def render_scenarios_tab(portfolio: Portfolio) -> None:
                     "Cashflow overrides": len(s.cashflow_overrides),
                     "Event moves": len(s.event_overrides),
                     "View": "100%" if s.ownership_view == "full" else "your share",
+                    "Uses actuals": s.use_actuals,
                 }
                 for s in portfolio.scenarios
             ]
@@ -2082,6 +2287,10 @@ def _render_scenario_editor(portfolio: Portfolio, editor: dict) -> None:
             value=defaults["allow_illiquid"], key=field("allow_illiquid"),
         )
         reinvest = st.checkbox("Reinvest surplus", value=defaults["reinvest"], key=field("reinvest"))
+        use_actuals = st.checkbox(
+            "Use recorded actuals and forecasts where they exist (untick to see the pure plan)",
+            value=existing.use_actuals if existing else True, key=field("use_actuals"),
+        )
         full_view = st.checkbox(
             "100% view: ignore ownership % (show every asset, loan and cashflow at full size)",
             value=(existing.ownership_view == "full") if existing else False, key=field("full_view"),
@@ -2161,6 +2370,7 @@ def _render_scenario_editor(portfolio: Portfolio, editor: dict) -> None:
                     cashflow_overrides=cashflow_overrides,
                     is_base_case=existing.is_base_case if existing else False,
                     ownership_view="full" if full_view else "share",
+                    use_actuals=use_actuals,
                     # keep settings this form doesn't show (previously lost when editing)
                     event_overrides=dict(existing.event_overrides) if existing else {},
                     expense_growth_rate_override=existing.expense_growth_rate_override if existing else None,
@@ -2270,6 +2480,29 @@ def render_simulation_tab(portfolio: Portfolio) -> None:
         display_df = display_df.drop(columns=["Ages"])
     st.dataframe(display_df, use_container_width=True)
     st.line_chart(numeric_df.set_index("Year")[["Total Assets", "Total Liabilities", "Total Net Worth"]])
+
+    details = [r for r in chosen.annual_results if r.tax_estimate and r.tax_estimate.details]
+    if details:
+        st.subheader("Taxes by year")
+        st.caption(
+            "Detailed tax method. Watch Depreciation: when a property's recovery period ends, its "
+            "deduction stops and taxable income steps up. Rental losses above the passive limits are "
+            "carried forward."
+        )
+        lines = ["Depreciation", "Rental net (allowed this year)", "Suspended rental losses carried forward",
+                 "Social Security taxable", "AGI", "Deduction used", "Senior deduction", "Taxable income",
+                 "Federal tax on ordinary income", "Federal tax on capital gains", "NIIT", "FICA",
+                 "Self-employment tax", "CA tax", "Total tax"]
+        tax_df = pd.DataFrame([{"Year": r.year, **{k: r.tax_estimate.details.get(k, 0.0) for k in lines},
+                                "Effective rate": r.tax_estimate.details.get("Effective rate on AGI", 0.0)}
+                               for r in details])
+        chart_cols = ["Depreciation", "Taxable income", "Total tax"]
+        st.line_chart(tax_df.set_index("Year")[chart_cols])
+        shown = tax_df.copy()
+        for col in lines:
+            shown[col] = shown[col].apply(format_currency)
+        shown["Effective rate"] = shown["Effective rate"].apply(lambda v: f"{v:.1%}")
+        st.dataframe(shown, hide_index=True, use_container_width=True)
 
     all_warnings = [(r.year, w) for r in chosen.annual_results for w in r.warnings]
     if all_warnings:
@@ -2456,6 +2689,7 @@ def main() -> None:
         ("Assets", render_assets_tab),
         ("Liabilities", render_liabilities_tab),
         ("Cashflows", render_cashflows_tab),
+        ("Actuals", render_actuals_tab),
         ("Events", render_events_tab),
         ("Assumptions", render_assumptions_tab),
         ("Scenarios", render_scenarios_tab),

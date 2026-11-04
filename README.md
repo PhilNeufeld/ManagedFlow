@@ -329,7 +329,7 @@ the **Bundles** and **Scenario Settings** tabs respectively.
 Every saved portfolio records a `file_version` in its metadata. When the
 data model changes, `migrations.py` upgrades older files automatically on
 load; your original is kept as a timestamped backup the first time you
-save. Current version: **0.7**.
+save. Current version: **0.9**.
 
 | Version | Change |
 |---|---|
@@ -339,6 +339,8 @@ save. Current version: **0.7**.
 | 0.5 | People (birth year/month, planning age); age-based events |
 | 0.6 | Memberships: people <-> entities, many-to-many, with a role (owner, trustee, beneficiary...) |
 | 0.7 | Ownership %: entities owning entities/assets by percent; your-share vs. 100% view per scenario |
+| 0.8 | Actuals and forecasts: CSV import, plan-vs-actual, trend breaks; used in simulations |
+| 0.9 | Detailed tax engine (federal + California) with depreciation; month-accurate sales and payoffs |
 
 ## Liabilities
 
@@ -358,6 +360,48 @@ an event: things that start at it begin that month; things that end at it
 stop the month before, and partial years are prorated by month. Move the
 event (or move it in a scenario, e.g. "retire in 2028") and everything
 linked moves with it.
+
+## Taxes
+
+**Assumptions** tab -> Tax method:
+
+- **Detailed** (default for new portfolios): federal and California tax the
+  way the returns work, simplified -- brackets, standard vs. itemized
+  deduction (SALT cap), 65+ and senior deductions, taxable Social Security,
+  capital gains stacked at 0/15/20%, NIIT, FICA and self-employment tax,
+  California brackets and credits (no CA tax on Social Security). Rentals
+  and farms are taxed on NET income: receipts - deductible expenses - loan
+  interest - **depreciation** (set the depreciable basis, placed-in-service
+  year and recovery period on the asset). Rental losses follow the passive
+  rules and are carried forward. Every number is in `tax_tables.py` with
+  its source; update that file each year.
+- **Flat**: one rate per income category. Files saved before v0.9 stay on
+  flat until you switch.
+
+The Simulation tab's **Taxes by year** table and chart show depreciation,
+taxable income and each tax by year -- e.g. the step up in taxable income
+when a property's depreciation runs out. Not modeled: AMT, most credits,
+depreciation recapture on sale, the QBI deduction.
+
+## Actuals and forecasts
+
+The **Actuals** tab imports a CSV of what really happened (`kind` = actual)
+and near-term estimates (`kind` = forecast), in this layout (download the
+template from the tab):
+
+```
+year,kind,name,category,direction,amount,month,entity,asset,notes
+```
+
+Rows are matched to your planned cashflows (by asset and name, then by
+asset and category); you review the matches before importing. Amounts are
+what your household received or paid. In simulations, a linked record
+replaces the plan for its year: actual beats forecast beats plan, and a
+part-year of monthly records is topped up with the plan for the remaining
+months (untick "Use recorded actuals" on a scenario to see the pure plan).
+The **Plan vs. actual** report flags lines that missed the plan, and
+**Trend breaks** flags a year that jumps off the line's own path from the
+year before. Put real CSVs in `data/`: they're kept off GitHub.
 
 ## Ownership %
 
@@ -428,6 +472,13 @@ python -m pytest
 - `tests/test_liabilities.py`: loan math against mortgage-calculator answers.
 - `tests/test_events.py`: retirement splits the year; moving events moves records.
 - `tests/test_people.py`: birthdays drive events; ages in results; survivor scenario.
+- `tests/test_memberships.py`: people <-> entities many-to-many with roles; one owner per personal entity.
+- `tests/test_ownership.py`: share math on the Neufeld chain (LVM 7.45%); loops and >100% refused.
+- `tests/test_actuals.py`: CSV import and matching; actual > forecast > plan; plan-vs-actual; trend breaks.
+- `tests/test_taxes.py`: the tax engine against hand arithmetic from the published tables.
+- `tests/test_app_ui.py`: **screen tests** -- drives the app headlessly (fills forms,
+  clicks buttons) and checks the screen and the stored data. Slower; skip with
+  `python -m pytest -m "not ui"`.
 - `tests/test_montecarlo.py`: no randomness = normal run; same seed = same answer.
 - `tests/test_quick_add.py`: Quick add with a fake Claude client (offline, free).
 - `tests/test_example.py`: the example household's numbers, by hand arithmetic.

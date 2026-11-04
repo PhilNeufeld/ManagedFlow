@@ -72,6 +72,11 @@ def apply_scenario(portfolio: Portfolio, scenario: Scenario) -> Tuple[Portfolio,
     _apply_asset_overrides(working, scenario, warnings)
     _apply_cashflow_overrides(working, scenario, warnings)
 
+    # Recorded actuals/forecasts replace the plan for their years (before the
+    # ownership scaling below, which they're designed to pass through).
+    if getattr(scenario, "use_actuals", True):
+        working.apply_actuals(working.assumptions.inflation_rate)
+
     # Last: scale to your ownership % unless this scenario asks for the 100% view.
     if getattr(scenario, "ownership_view", "share") != "full":
         working.apply_ownership_shares()

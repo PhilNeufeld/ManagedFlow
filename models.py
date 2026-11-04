@@ -62,6 +62,7 @@ class TaxCategory(str, Enum):
     ANNUITY_INCOME = "annuity_income"
     BUSINESS_INCOME = "business_income"
     TRUST_INCOME = "trust_income"
+    SELF_EMPLOYMENT_INCOME = "self_employment_income"  # consulting etc.: ordinary + self-employment tax
     NONE = "none"  # non-taxable flows (e.g. principal repayment, transfers)
 
 
@@ -107,6 +108,8 @@ class FlowType(str, Enum):
     REFINANCE_PROCEEDS = "refinance_proceeds"
     DEBT_PAYOFF = "debt_payoff"
     NONCASH_DEPRECIATION = "noncash_depreciation"
+    CROP_SALES = "crop_sales"
+    CONSULTING_INCOME = "consulting_income"
     OTHER = "other"
 
 
@@ -220,6 +223,9 @@ class Cashflow:
     # Optional links to Events; when set, they decide the dates above.
     start_event_id: Optional[str] = None
     end_event_id: Optional[str] = None
+    # {year: annual amount} that replaces the planned amount in that year.
+    # Filled in on a scenario's working copy from recorded Actuals; never saved.
+    year_overrides: Dict[int, float] = field(default_factory=dict, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         self.flow_type = _enum_value(self.flow_type, FlowType)
@@ -256,6 +262,21 @@ class Cashflow:
         last = self.end_month if (self.end_year is not None and year == self.end_year) else 12
         return max(0, last - first + 1)
 
+    def month_is_active(self, year: int, month: int) -> bool:
+        if year < self.start_year or (self.end_year is not None and year > self.end_year):
+            return False
+        first = self.start_month if year == self.start_year else 1
+        last = self.end_month if (self.end_year is not None and year == self.end_year) else 12
+        return first <= month <= last
+
+    def planned_amount_in_year(self, year: int, inflation_rate: float = 0.0) -> float:
+        """The PLAN for a year, ignoring any recorded actuals."""
+        overrides, self.year_overrides = self.year_overrides, {}
+        try:
+            return self.annual_amount_in_year(year, inflation_rate)
+        finally:
+            self.year_overrides = overrides
+
     def annual_amount_in_year(self, year: int, inflation_rate: float = 0.0) -> float:
         """Return the (sign-aware magnitude, pre-tax) annual cash amount for a
         given year, applying frequency normalization and growth, or 0.0 if
@@ -274,7 +295,12 @@ class Cashflow:
         Passing inflation_rate=0.0 (the default) reproduces the pre-inflation
         behavior, which is useful for callers that only care about the flow's
         own stated growth.
+
+        If year_overrides has this year (from recorded actuals/forecasts), that
+        amount is returned instead of the plan.
         """
+        if year in self.year_overrides:
+            return self.year_overrides[year]
         if year < self.start_year:
             return 0.0
         if self.end_year is not None and year > self.end_year:
@@ -309,6 +335,7 @@ class Cashflow:
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
+        d.pop("year_overrides", None)  # derived at run time, never saved
         d["flow_type"] = self.flow_type.value
         d["direction"] = self.direction.value
         d["frequency"] = self.frequency.value
@@ -583,6 +610,18 @@ class Asset:
     # end_event_id sets sale_year (sold in that event's year).
     start_event_id: Optional[str] = None
     end_event_id: Optional[str] = None
+    # Month of the sale (the first month the asset is gone), set from end_event_id.
+    # None = sold at the end of sale_year.
+    sale_month: Optional[int] = None
+    # Depreciation (detailed tax method): straight-line over recovery_years
+    # from placed_in_service_year. Basis = the depreciable part (building,
+    # trees, equipment -- never land). Typical recovery periods: 27.5
+    # residential rental, 39 commercial; orchards and equipment vary.
+    depreciable_basis: float = 0.0
+    placed_in_service_year: Optional[int] = None
+    recovery_years: float = 0.0
+    # Business/farm income from this asset is subject to self-employment tax.
+    subject_to_se_tax: bool = False
     # Cashflows are NOT stored on the asset (schema v0.2). They live in
     # Portfolio.cashflows and point here via Cashflow.asset_id. Use
     # Portfolio.cashflows_for_asset(asset_id) to get them.
@@ -606,6 +645,21 @@ class Asset:
         if self.liquidity_category == LiquidityCategory.DO_NOT_SELL:
             self.do_not_sell = True
 
+    def depreciation_in_year(self, year: int) -> float:
+        """Straight-line depreciation for one calendar year: basis / recovery
+        years, a partial year at the end (27.5 years -> half in the last year),
+        nothing after the recovery period or after the asset is sold.
+        (Simplified: no mid-month convention, no bonus depreciation.)"""
+        if self.depreciable_basis <= 0 or self.recovery_years <= 0 or self.placed_in_service_year is None:
+            return 0.0
+        if year < self.placed_in_service_year or (self.sale_year is not None and year > self.sale_year):
+            return 0.0
+        elapsed = year - self.placed_in_service_year
+        portion = min(1.0, max(0.0, self.recovery_years - elapsed))
+        if year == self.sale_year and self.sale_month:
+            portion = min(portion, (self.sale_month - 1) / 12)  # only the months it was held
+        return self.depreciable_basis / self.recovery_years * portion
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "asset_id": self.asset_id,
@@ -627,6 +681,11 @@ class Asset:
             "sale_assumptions": self.sale_assumptions,
             "start_event_id": self.start_event_id,
             "end_event_id": self.end_event_id,
+            "sale_month": self.sale_month,
+            "depreciable_basis": self.depreciable_basis,
+            "placed_in_service_year": self.placed_in_service_year,
+            "recovery_years": self.recovery_years,
+            "subject_to_se_tax": self.subject_to_se_tax,
         }
 
     @classmethod
@@ -682,8 +741,10 @@ class Liability:
     lender: str = ""
     notes: str = ""
     active: bool = True
-    # Pay the remaining balance in full in this year (refinance, payoff).
+    # Pay the remaining balance in full in this year (refinance, payoff),
+    # at the start of payoff_month (None = at the end of the year).
     payoff_year: Optional[int] = None
+    payoff_month: Optional[int] = None
     # Optional Events: start_event_id sets start_year; end_event_id sets payoff_year.
     start_event_id: Optional[str] = None
     end_event_id: Optional[str] = None
@@ -703,9 +764,11 @@ class Liability:
             f"(0.06 for 6%), got {self.annual_interest_rate}",
         )
 
-    def year_activity(self, beginning_balance: float) -> Tuple[float, float, float]:
-        """Return (interest_paid, principal_paid, ending_balance) for one
-        year that starts at beginning_balance. Each subclass defines this."""
+    def year_activity(self, beginning_balance: float, months: int = 12) -> Tuple[float, float, float]:
+        """Return (interest_paid, principal_paid, ending_balance) for the first
+        `months` months of a year that starts at beginning_balance (12 = the
+        whole year; fewer when the loan is paid off part-way through).
+        Each subclass defines this."""
         raise NotImplementedError
 
     def to_dict(self) -> Dict[str, Any]:
@@ -723,6 +786,7 @@ class Liability:
             "notes": self.notes,
             "active": self.active,
             "payoff_year": self.payoff_year,
+            "payoff_month": self.payoff_month,
             "start_event_id": self.start_event_id,
             "end_event_id": self.end_event_id,
         }
@@ -767,15 +831,15 @@ class Loan(Liability):
             return self.monthly_payment
         return amortized_monthly_payment(self.balance, self.annual_interest_rate, self.term_months)
 
-    def year_activity(self, beginning_balance: float) -> Tuple[float, float, float]:
-        """Walk 12 monthly payments. Each month: interest = balance x rate/12;
+    def year_activity(self, beginning_balance: float, months: int = 12) -> Tuple[float, float, float]:
+        """Walk `months` monthly payments. Each month: interest = balance x rate/12;
         the rest of the payment reduces the balance. Stops at payoff."""
         monthly_rate = self.annual_interest_rate / 12
         payment = self.scheduled_monthly_payment()
         balance = beginning_balance
         interest_paid = 0.0
         principal_paid = 0.0
-        for _month in range(12):
+        for _month in range(months):
             if balance <= 0.005:  # paid off (allow for rounding pennies)
                 balance = 0.0
                 break
@@ -810,8 +874,8 @@ class CreditLine(Liability):
                 f"the ${self.credit_limit:,.0f} limit",
             )
 
-    def year_activity(self, beginning_balance: float) -> Tuple[float, float, float]:
-        return beginning_balance * self.annual_interest_rate, 0.0, beginning_balance
+    def year_activity(self, beginning_balance: float, months: int = 12) -> Tuple[float, float, float]:
+        return beginning_balance * self.annual_interest_rate * months / 12, 0.0, beginning_balance
 
     def to_dict(self) -> Dict[str, Any]:
         data = super().to_dict()
@@ -828,6 +892,81 @@ def liability_from_dict(data: Dict[str, Any]) -> Liability:
     kind = data.pop("kind", "loan")
     _require(kind in LIABILITY_KINDS, f"Unknown liability kind '{kind}'")
     return LIABILITY_KINDS[kind](**data)
+
+
+# ---------------------------------------------------------------------------
+# Actual (what really happened, or a near-term forecast)
+# ---------------------------------------------------------------------------
+
+ACTUAL_STATUSES = ("confirmed", "provisional", "estimated")
+
+
+@dataclass
+class Actual:
+    """A recorded amount for one year (or one month of a year).
+
+    kind: "actual"   -- what really came in or went out (e.g. 2026)
+          "forecast" -- your best near-term estimate (e.g. 2027)
+
+    amount is what YOUR household received or paid (your share), always
+    positive; direction says which way it went.
+
+    flow_id links it to the planned Cashflow it measures. Linked records
+    replace the plan in simulations for that year (actual beats forecast
+    beats plan; a part-year of monthly records is topped up with the plan
+    for the other months). Unlinked records are "not in the plan" and only
+    show in the plan-vs-actual report.
+    """
+
+    actual_id: str
+    year: int
+    amount: float
+    name: str = ""
+    kind: str = "actual"
+    direction: CashflowDirection = CashflowDirection.INFLOW
+    category: FlowType = FlowType.OTHER
+    month: Optional[int] = None
+    flow_id: Optional[str] = None
+    asset_id: Optional[str] = None
+    entity_id: Optional[str] = None
+    notes: str = ""
+    # How sure the number is: "confirmed" (verified against a statement),
+    # "provisional" (recorded but not yet reconciled) or "estimated".
+    status: str = "estimated"
+    # A QuickBooks-like class, e.g. "Crop 2025" -- groups records that belong
+    # together even when the cash lands in different calendar years.
+    record_class: str = ""
+
+    def __post_init__(self) -> None:
+        self.direction = _enum_value(self.direction, CashflowDirection)
+        self.category = _enum_value(self.category, FlowType)
+        self.status = (self.status or "estimated").lower()
+        _require(self.status in ACTUAL_STATUSES,
+                 f"Actual '{self.name}': status must be one of {', '.join(ACTUAL_STATUSES)}")
+        _require(bool(self.actual_id), "Actual.actual_id is required")
+        _require(self.kind in ("actual", "forecast"), f"Actual '{self.name}': kind must be 'actual' or 'forecast'")
+        _require(self.amount >= 0, f"Actual '{self.name}': amount must be positive (direction says in or out)")
+        _require(self.month is None or 1 <= self.month <= 12, f"Actual '{self.name}': month must be 1-12")
+
+    @property
+    def slot(self) -> tuple:
+        """Two records in the same slot describe the same thing (re-imports replace).
+        A linked record is identified by its cashflow and name (so several receipts for one
+        flow -- e.g. crop sales and crop insurance -- can sit side by side); an unlinked one
+        by name and asset."""
+        if self.flow_id:
+            return ("flow", self.flow_id, self.name.lower(), self.year, self.month, self.kind)
+        return ("name", self.name.lower(), self.asset_id, self.year, self.month, self.kind)
+
+    def to_dict(self) -> Dict[str, Any]:
+        d = asdict(self)
+        d["direction"] = self.direction.value
+        d["category"] = self.category.value
+        return d
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Actual":
+        return cls(**data)
 
 
 # ---------------------------------------------------------------------------
@@ -900,9 +1039,18 @@ class Assumptions:
     end_year: int
     inflation_rate: float = 0.03
     default_tax_rates: Dict[str, float] = field(default_factory=dict)
+    # "detailed": federal + state brackets, deductions, depreciation (taxes.py)
+    # "flat":     one flat rate per income category (default_tax_rates)
+    tax_method: str = "detailed"
+    filing_status: str = "married_joint"   # or "single"
+    state: str = "CA"                      # "CA" or "none"
 
     def __post_init__(self) -> None:
         _require(self.end_year >= self.start_year, "Assumptions.end_year must be >= start_year")
+        _require(self.tax_method in ("detailed", "flat"), "Assumptions.tax_method must be 'detailed' or 'flat'")
+        _require(self.filing_status in ("married_joint", "single"),
+                 "Assumptions.filing_status must be 'married_joint' or 'single'")
+        _require(self.state in ("CA", "none"), "Assumptions.state must be 'CA' or 'none'")
         _require(-0.5 < self.inflation_rate < 1.0, "Assumptions.inflation_rate looks out of range")
 
         defaults = {
@@ -967,6 +1115,9 @@ class Scenario:
     # "share": scale everything by your ownership % (the default).
     # "full":  the 100% view -- every asset, loan and cashflow at full size.
     ownership_view: str = "share"
+
+    # Use recorded actuals/forecasts in place of the plan where they exist.
+    use_actuals: bool = True
 
     # Withdrawal / reinvestment behavior
     withdrawal_order_override: Optional[List[str]] = None
@@ -1067,6 +1218,7 @@ class TaxEstimate:
     taxable_income_by_category: Dict[str, float] = field(default_factory=dict)
     tax_by_category: Dict[str, float] = field(default_factory=dict)
     total_estimated_tax: float = 0.0
+    details: Dict[str, float] = field(default_factory=dict)  # line items (detailed method)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -1184,6 +1336,7 @@ class Portfolio:
     people: List[Person] = field(default_factory=list)
     memberships: List[Membership] = field(default_factory=list)
     ownerships: List[Ownership] = field(default_factory=list)
+    actuals: List[Actual] = field(default_factory=list)
     bundles: List[Bundle] = field(default_factory=list)
     scenarios: List[Scenario] = field(default_factory=list)
     file_version: str = CURRENT_SCHEMA_VERSION
@@ -1218,7 +1371,15 @@ class Portfolio:
             _require(m.person_id in person_ids, f"Membership points to unknown person '{m.person_id}'")
             _require(m.key not in seen_links, f"Duplicate membership: {m.key}")
             seen_links.add(m.key)
+        for e in self.entities:
+            self._check_one_personal_owner(e, self.memberships)
         self._check_ownerships()
+        actual_ids = [a.actual_id for a in self.actuals]
+        _require(len(actual_ids) == len(set(actual_ids)), "Duplicate actual_id(s) found")
+        known_flows = {cf.flow_id for cf in self.cashflows}
+        for a in self.actuals:
+            _require(a.flow_id is None or a.flow_id in known_flows,
+                     f"Actual '{a.name}' points to cashflow '{a.flow_id}' which doesn't exist")
         for ev in self.events:
             _require(ev.person_id is None or ev.person_id in person_ids,
                      f"Event '{ev.name}' is tied to person '{ev.person_id}' who doesn't exist")
@@ -1336,12 +1497,12 @@ class Portfolio:
             if a.start_event_id in events:
                 a.start_year = events[a.start_event_id].year
             if a.end_event_id in events:
-                a.sale_year = events[a.end_event_id].year
+                a.sale_year, a.sale_month = events[a.end_event_id].year, events[a.end_event_id].month
         for li in self.liabilities:
             if li.start_event_id in events:
                 li.start_year = events[li.start_event_id].year
             if li.end_event_id in events:
-                li.payoff_year = events[li.end_event_id].year
+                li.payoff_year, li.payoff_month = events[li.end_event_id].year, events[li.end_event_id].month
 
     def add_event(self, event: Event) -> None:
         _require(self.get_event(event.event_id) is None, f"Event with id '{event.event_id}' already exists")
@@ -1519,6 +1680,9 @@ class Portfolio:
     def remove_cashflow(self, flow_id: str) -> None:
         _require(self.get_cashflow(flow_id) is not None, f"No cashflow with id '{flow_id}' found to remove")
         self.cashflows = [cf for cf in self.cashflows if cf.flow_id != flow_id]
+        for a in self.actuals:
+            if a.flow_id == flow_id:
+                a.flow_id = None  # the record stays, as "not in the plan"
 
     # -- assets ----------------------------------------------------------------
 
@@ -1550,6 +1714,12 @@ class Portfolio:
         for li in self.liabilities_secured_by(asset_id):
             li.secured_by_asset_id = None
         removed = self.cashflows_for_asset(asset_id)
+        removed_ids = {cf.flow_id for cf in removed}
+        for a in self.actuals:
+            if a.flow_id in removed_ids:
+                a.flow_id = None
+            if a.asset_id == asset_id:
+                a.asset_id = None
         self.ownerships = [o for o in self.ownerships if not (o.owned_type == "asset" and o.owned_id == asset_id)]
         self.assets = [a for a in self.assets if a.asset_id != asset_id]
         self.cashflows = [cf for cf in self.cashflows if cf.asset_id != asset_id]
@@ -1727,15 +1897,75 @@ class Portfolio:
             s = asset_shares[a.asset_id]
             a.initial_value *= s
             a.current_value *= s
+            a.depreciable_basis *= s
         for cf in self.cashflows:
             if cf.asset_id is not None:
-                cf.amount *= asset_shares.get(cf.asset_id, 1.0)
+                s = asset_shares.get(cf.asset_id, 1.0)
+                cf.amount *= s
+                cf.year_overrides = {y: v * s for y, v in cf.year_overrides.items()}
         for li in self.liabilities:
             s = liability_shares[li.liability_id]
             li.balance *= s
             for attr in ("monthly_payment", "credit_limit"):
                 if getattr(li, attr, None) is not None:
                     setattr(li, attr, getattr(li, attr) * s)
+
+    def actual_annual_amount(self, cf: Cashflow, year: int, inflation_rate: float = 0.0):
+        """What the linked records say for one cashflow in one year, in YOUR
+        share, as (amount, source) -- or None if nothing is recorded.
+
+        Priority: full-year actual > full-year forecast > monthly records
+        (actual beats forecast month by month) topped up with the plan for
+        months with no record. source is "actual", "forecast",
+        or "actual + plan" / "forecast + plan" for a part year.
+        """
+        records = [a for a in self.actuals if a.flow_id == cf.flow_id and a.year == year]
+        if not records:
+            return None
+        for kind in ("actual", "forecast"):
+            full = [a.amount for a in records if a.kind == kind and a.month is None]
+            if full:
+                return sum(full), kind
+        by_month = {}
+        for a in sorted(records, key=lambda r: r.kind == "actual"):  # actuals overwrite forecasts
+            by_month[a.month] = a
+        share = self.asset_share(cf.asset_id) if cf.asset_id else 1.0
+        active = [m for m in range(1, 13) if cf.month_is_active(year, m)]
+        planned_year = cf.planned_amount_in_year(year, inflation_rate) * share
+        planned_per_month = planned_year / len(active) if active else 0.0
+        recorded = sum(a.amount for a in by_month.values())
+        rest = sum(planned_per_month for m in active if m not in by_month)
+        kinds = {a.kind for a in by_month.values()}
+        label = "actual" if kinds == {"actual"} else "forecast" if kinds == {"forecast"} else "actual/forecast"
+        return recorded + rest, (label if rest == 0 else f"{label} + plan")
+
+    def apply_actuals(self, inflation_rate: float = 0.0) -> None:
+        """On a scenario's working copy: put recorded amounts in place of the
+        plan (cf.year_overrides). Stored in 100%-of-asset terms (divided by
+        your share) so that apply_ownership_shares() brings them back to
+        exactly what you recorded."""
+        years_by_flow = {}
+        for a in self.actuals:
+            if a.flow_id:
+                years_by_flow.setdefault(a.flow_id, set()).add(a.year)
+        for cf in self.cashflows:
+            share = self.asset_share(cf.asset_id) if cf.asset_id else 1.0
+            for year in years_by_flow.get(cf.flow_id, ()):
+                result = self.actual_annual_amount(cf, year, inflation_rate)
+                if result is not None and share > 0:
+                    cf.year_overrides[year] = result[0] / share
+
+    def add_actual(self, actual: Actual) -> None:
+        """Add a record; one already in the same slot (same item, year, month
+        and kind) is replaced, so re-importing a corrected file is safe."""
+        _require(actual.flow_id is None or self.get_cashflow(actual.flow_id) is not None,
+                 f"Actual '{actual.name}' points to unknown cashflow '{actual.flow_id}'")
+        self.actuals = [a for a in self.actuals if a.slot != actual.slot]
+        self.actuals.append(actual)
+
+    def remove_actual(self, actual_id: str) -> None:
+        _require(any(a.actual_id == actual_id for a in self.actuals), f"No actual '{actual_id}' found to remove")
+        self.actuals = [a for a in self.actuals if a.actual_id != actual_id]
 
     def add_ownership(self, ownership: Ownership) -> None:
         self._check_ownerships(self.ownerships + [ownership])  # checks loops and totals first
@@ -1755,11 +1985,23 @@ class Portfolio:
         """Every entity a person is linked to, with their role -- the reverse lookup."""
         return [(self.get_entity(m.entity_id), m.role) for m in self.memberships if m.person_id == person_id]
 
+    def _check_one_personal_owner(self, entity: Entity, memberships: List[Membership]) -> None:
+        """A personal entity IS one person: it can have at most one owner.
+        (Use a joint entity for two owners.)"""
+        if entity.entity_type != EntityType.PERSONAL:
+            return
+        owners = {m.person_id for m in memberships
+                  if m.entity_id == entity.entity_id and m.role == MembershipRole.OWNER}
+        _require(len(owners) <= 1,
+                 f"'{entity.name}' is a personal entity, so it can have only one owner "
+                 f"(found {len(owners)}). Use a joint entity for shared ownership.")
+
     def add_membership(self, membership: Membership) -> None:
         _require(self.get_entity(membership.entity_id) is not None, f"Unknown entity '{membership.entity_id}'")
         _require(self.get_person(membership.person_id) is not None, f"Unknown person '{membership.person_id}'")
         _require(all(m.key != membership.key for m in self.memberships),
                  "That person already has that role in that entity")
+        self._check_one_personal_owner(self.get_entity(membership.entity_id), self.memberships + [membership])
         self.memberships.append(membership)
 
     def remove_membership(self, key: str) -> None:
@@ -1767,6 +2009,7 @@ class Portfolio:
         self.memberships = [m for m in self.memberships if m.key != key]
 
     def replace_entity(self, entity_id: str, new_entity: Entity) -> None:
+        self._check_one_personal_owner(new_entity, self.memberships)  # e.g. switching joint -> personal
         for i, e in enumerate(self.entities):
             if e.entity_id == entity_id:
                 self.entities[i] = new_entity
@@ -1811,6 +2054,7 @@ class Portfolio:
             "people": [p.to_dict() for p in self.people],
             "memberships": [m.to_dict() for m in self.memberships],
             "ownerships": [o.to_dict() for o in self.ownerships],
+            "actuals": [a.to_dict() for a in self.actuals],
             "bundles": [b.to_dict() for b in self.bundles],
             "scenarios": [s.to_dict() for s in self.scenarios],
         }
@@ -1830,6 +2074,7 @@ class Portfolio:
             people=[Person.from_dict(p) for p in data.get("people", [])],
             memberships=[Membership.from_dict(m) for m in data.get("memberships", [])],
             ownerships=[Ownership.from_dict(o) for o in data.get("ownerships", [])],
+            actuals=[Actual.from_dict(a) for a in data.get("actuals", [])],
             bundles=[Bundle.from_dict(b) for b in data.get("bundles", [])],
             scenarios=[Scenario.from_dict(s) for s in data.get("scenarios", [])],
             file_version=metadata.get("file_version", CURRENT_SCHEMA_VERSION),

@@ -27,6 +27,8 @@ Workbook tabs:
 
 from __future__ import annotations
 
+import actuals as actuals_engine
+
 from pathlib import Path
 from typing import Dict, List
 
@@ -139,8 +141,10 @@ def export_to_excel(
     _write_liability_detail_sheet(wb, simulation_results)
     _write_cashflow_detail_sheet(wb, portfolio, simulation_results)
     _write_tax_estimate_sheet(wb, simulation_results)
+    _write_tax_detail_sheet(wb, simulation_results)
     _write_drawdowns_sheet(wb, simulation_results)
     _write_charts_sheet(wb, simulation_results)
+    _write_actuals_sheets(wb, portfolio)
     _write_notes_warnings_sheet(wb, simulation_results)
 
     wb.save(output_path)
@@ -439,6 +443,45 @@ def _write_asset_detail_sheet(wb: Workbook, simulation_results: List[SimulationR
     _write_table(ws, 3, ASSET_DETAIL_HEADERS, rows, currency_cols=list(range(3, 9)) + [10])
 
 
+def _write_actuals_sheets(wb: Workbook, portfolio: Portfolio) -> None:
+    """Actuals (raw records), Plan vs Actual and Trend Breaks, one block per year."""
+    if not portfolio.actuals:
+        return
+    names = {cf.flow_id: cf.name for cf in portfolio.cashflows}
+    ws = wb.create_sheet("Actuals")
+    ws["A1"] = "Recorded actuals and forecasts (your share)"
+    ws["A1"].font = TITLE_FONT
+    rows = [[a.year, a.month or "", a.kind, a.name, a.direction.value, a.amount,
+             names.get(a.flow_id, "(not in plan)"), a.notes]
+            for a in sorted(portfolio.actuals, key=lambda a: (a.year, a.month or 0, a.name))]
+    _write_table(ws, 3, ["Year", "Month", "Kind", "Item", "Direction", "Amount", "Planned Cashflow", "Notes"],
+                 rows, currency_cols=[5])
+
+    ws = wb.create_sheet("Plan vs Actual")
+    ws["A1"] = "Plan vs actual (your share); Flag = at least 10% and $1,000 different"
+    ws["A1"].font = TITLE_FONT
+    rows = []
+    for year in actuals_engine.years_with_records(portfolio):
+        for r in actuals_engine.plan_vs_actual(portfolio, year):
+            rows.append([year, r["Item"], r["Direction"], r["Planned"], r["Actual / forecast"], r["Source"],
+                         r["Difference"], r["Difference %"], "FLAG" if r["Flag"] else ""])
+    _write_table(ws, 3, ["Year", "Item", "Direction", "Planned", "Actual / Forecast", "Source", "Difference",
+                         "Difference %", "Flag"], rows, currency_cols=[3, 4, 6], percent_cols=[7])
+
+    ws = wb.create_sheet("Trend Breaks")
+    ws["A1"] = "Does each year continue the line's own path? (expected = prior year grown at the line's rate)"
+    ws["A1"].font = TITLE_FONT
+    rows = []
+    for year in actuals_engine.years_with_records(portfolio):
+        for r in actuals_engine.trend_breaks(portfolio, year):
+            rows.append([year, r["Item"], r["Prior year"], r["Prior year is"], r["Growth used"], r["Expected"],
+                         r["This year"], r["This year is"], r["Gap"], r["Gap %"], r["Plan for year"],
+                         "FLAG" if r["Flag"] else ""])
+    _write_table(ws, 3, ["Year", "Item", "Prior Year", "Prior Year Is", "Growth Used", "Expected", "This Year",
+                         "This Year Is", "Gap", "Gap %", "Plan for Year", "Flag"], rows,
+                 currency_cols=[2, 5, 6, 8, 10], percent_cols=[4, 9])
+
+
 def _write_ownership_sheet(wb: Workbook, portfolio: Portfolio) -> None:
     ws = wb.create_sheet("Ownership")
     ws["A1"] = "Ownership % (your share = percents multiplied along each path, added across paths)"
@@ -541,6 +584,24 @@ def _write_cashflow_detail_sheet(
 # 9. Tax Estimate
 # ---------------------------------------------------------------------------
 
+def _write_tax_detail_sheet(wb: Workbook, simulation_results: List[SimulationResult]) -> None:
+    """Line-by-line detailed tax, one row per scenario and year (detailed method only)."""
+    rows, keys = [], None
+    for sim in simulation_results:
+        for r in sim.annual_results:
+            if r.tax_estimate and r.tax_estimate.details:
+                keys = keys or list(r.tax_estimate.details)
+                rows.append([sim.scenario_id, r.year] + [r.tax_estimate.details.get(k, 0.0) for k in keys])
+    if not rows:
+        return
+    ws = wb.create_sheet("Tax Detail")
+    ws["A1"] = "Detailed tax by year (federal 2026 / California 2025 tables, indexed by inflation)"
+    ws["A1"].font = TITLE_FONT
+    rate_col = keys.index("Effective rate on AGI") + 2
+    _write_table(ws, 3, ["Scenario", "Year"] + keys, rows,
+                 currency_cols=[i for i in range(2, len(keys) + 2) if i != rate_col], percent_cols=[rate_col])
+
+
 def _write_tax_estimate_sheet(wb: Workbook, simulation_results: List[SimulationResult]) -> None:
     ws = wb.create_sheet("Tax Estimate")
     ws["A1"] = "Estimated Tax by Category and Year"
@@ -555,6 +616,9 @@ def _write_tax_estimate_sheet(wb: Workbook, simulation_results: List[SimulationR
             for category, income in r.tax_estimate.taxable_income_by_category.items():
                 tax = r.tax_estimate.tax_by_category.get(category, 0.0)
                 rows.append([sim.scenario_id, r.year, category, income, tax])
+            if r.tax_estimate.details:  # detailed method: list each tax too
+                for kind, tax in r.tax_estimate.tax_by_category.items():
+                    rows.append([sim.scenario_id, r.year, f"tax: {kind}", None, tax])
     _write_table(ws, 3, headers, rows, currency_cols=[3, 4])
 
 

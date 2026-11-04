@@ -11,7 +11,11 @@ data/*.backup_*.json
 # Your real household data and reports (keep off GitHub)
 data/PDNeufeld.json
 outputs/
+# Actuals/forecast imports (real household numbers)
+data/*.csv
 
 # Editor / OS clutter
 .vscode/
 Thumbs.db
+# Builder scripts for real household data
+data/build_*.py

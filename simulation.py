@@ -120,12 +120,14 @@ def run_simulation(
                 f"would run to {person.final_year}. Consider extending the end year."
             )
 
+    tax_state: dict = {}  # carried from year to year (e.g. suspended rental losses)
+
     for year in range(assumptions.start_year, assumptions.end_year + 1):
         year_warnings = list(scenario_warnings) if year == assumptions.start_year else []
         result = _simulate_year(
             year, scope_assets, scope_household_cashflows, flows_by_asset,
             scope_liabilities, balances, scenario, assumptions, year_warnings,
-            growth_rate_fn,
+            growth_rate_fn, tax_state, working_portfolio.people,
         )
         result.ages = {p.name: p.age_in(year) for p in working_portfolio.people}
         annual_results.append(result)
@@ -144,6 +146,8 @@ def _simulate_year(
     assumptions: Assumptions,
     warnings: List[str],
     growth_rate_fn: Optional[GrowthRateFn] = None,
+    tax_state: Optional[dict] = None,
+    people: Optional[list] = None,
 ) -> AnnualHouseholdResult:
     asset_results: List[AnnualAssetResult] = []
     total_asset_income = 0.0
@@ -161,8 +165,9 @@ def _simulate_year(
         total_asset_expense += asset_result.gross_expense
 
     sold_asset_ids = {r.asset_id for r in asset_results if r.sold_this_year}
+    sale_months = {a.asset_id: a.sale_month for a in assets if a.asset_id in sold_asset_ids}
     liability_results: List[AnnualLiabilityResult] = [
-        _simulate_liability_year(li, year, balances, sold_asset_ids) for li in liabilities
+        _simulate_liability_year(li, year, balances, sold_asset_ids, sale_months) for li in liabilities
     ]
     total_debt_service = sum(r.debt_service for r in liability_results)
     total_interest_paid = sum(r.interest_paid for r in liability_results)
@@ -187,7 +192,13 @@ def _simulate_year(
         )
         if _flow_active_in_year(cf, year)
     ]
-    tax_estimate = tax_engine.estimate_taxes_for_year(year, this_year_cashflows, assumptions)
+    tax_context = tax_engine.TaxContext(
+        assets=assets, flows_by_asset=flows_by_asset, household_flows=household_cashflows,
+        liability_results=liability_results, liabilities={li.liability_id: li for li in liabilities},
+        people=people or [], sold_asset_ids=sold_asset_ids,
+        carryforward=tax_state if tax_state is not None else {},
+    )
+    tax_estimate = tax_engine.estimate_taxes_for_year(year, this_year_cashflows, assumptions, tax_context)
 
     net_cashflow = total_gross_income - total_expenses - tax_estimate.total_estimated_tax
     surplus_or_deficit = net_cashflow
@@ -344,7 +355,7 @@ def _simulate_asset_year(
 
 
 def _simulate_liability_year(
-    liability: Liability, year: int, balances: dict, sold_asset_ids: set
+    liability: Liability, year: int, balances: dict, sold_asset_ids: set, sale_months: Optional[dict] = None
 ) -> AnnualLiabilityResult:
     """Advance one debt by one year and update balances[liability_id].
 
@@ -362,10 +373,17 @@ def _simulate_liability_year(
     if beginning <= 0:
         return AnnualLiabilityResult(liability_id=lid, year=year)
 
-    interest, principal, ending = liability.year_activity(beginning)
-
     sold = liability.secured_by_asset_id in sold_asset_ids
     payoff = liability.payoff_year is not None and year >= liability.payoff_year
+    # Paid off part-way through the year: only the months before the payoff
+    # month carry interest and payments.
+    months = 12
+    if sold and (sale_months or {}).get(liability.secured_by_asset_id):
+        months = sale_months[liability.secured_by_asset_id] - 1
+    if payoff and year == liability.payoff_year and liability.payoff_month:
+        months = min(months, liability.payoff_month - 1)
+    interest, principal, ending = liability.year_activity(beginning, months)
+
     if (sold or payoff) and ending > 0:
         principal += ending  # pay off the rest: asset sold, or scheduled payoff/refinance
         ending = 0.0
@@ -383,6 +401,8 @@ def _simulate_liability_year(
 
 
 def _flow_active_in_year(cf, year: int) -> bool:
+    if year in cf.year_overrides:  # a recorded actual/forecast for this year
+        return True
     if year < cf.start_year:
         return False
     if cf.end_year is not None and year > cf.end_year:

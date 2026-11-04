@@ -10,7 +10,7 @@ Every saved file records its schema in metadata.file_version. migrate()
 looks at that version and applies each upgrade step in order until the
 data is current -- like climbing a ladder one rung at a time:
 
-    "0.1" --(_v0_1_to_v0_2)--> "0.2" --(_v0_2_to_v0_3)--> "0.3" --(_v0_3_to_v0_4)--> "0.4" --(_v0_4_to_v0_5)--> "0.5" --(_v0_5_to_v0_6)--> "0.6" --(_v0_6_to_v0_7)--> "0.7"
+    "0.1" --(_v0_1_to_v0_2)--> "0.2" --(_v0_2_to_v0_3)--> "0.3" --(_v0_3_to_v0_4)--> "0.4" --(_v0_4_to_v0_5)--> "0.5" --(_v0_5_to_v0_6)--> "0.6" --(_v0_6_to_v0_7)--> "0.7" --(_v0_7_to_v0_8)--> "0.8" --(_v0_8_to_v0_9)--> "0.9"
 
 To change the model in the future:
   1. Bump CURRENT_SCHEMA_VERSION.
@@ -27,7 +27,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Callable, Dict
 
-CURRENT_SCHEMA_VERSION = "0.7"
+CURRENT_SCHEMA_VERSION = "0.9"
 
 
 class MigrationError(ValueError):
@@ -114,6 +114,28 @@ def _v0_6_to_v0_7(data: Dict[str, Any]) -> Dict[str, Any]:
     return data
 
 
+def _v0_7_to_v0_8(data: Dict[str, Any]) -> Dict[str, Any]:
+    """v0.8 adds Actuals (what really happened / near-term forecasts) and a
+    per-scenario switch to use them in place of the plan."""
+    data.setdefault("actuals", [])
+    for scenario in data.get("scenarios", []) or []:
+        scenario.setdefault("use_actuals", True)
+    data.setdefault("metadata", {})["file_version"] = "0.8"
+    return data
+
+
+def _v0_8_to_v0_9(data: Dict[str, Any]) -> Dict[str, Any]:
+    """v0.9 adds the detailed tax engine. Files saved before it keep the flat
+    method (so their numbers don't change by surprise) until switched on the
+    Assumptions tab. Depreciation fields on assets start empty."""
+    assumptions = data.setdefault("assumptions", {})
+    assumptions.setdefault("tax_method", "flat")
+    assumptions.setdefault("filing_status", "married_joint")
+    assumptions.setdefault("state", "CA")
+    data.setdefault("metadata", {})["file_version"] = "0.9"
+    return data
+
+
 # version found in the file -> function that upgrades it one step
 _STEPS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "0.1": _v0_1_to_v0_2,
@@ -122,6 +144,8 @@ _STEPS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "0.4": _v0_4_to_v0_5,
     "0.5": _v0_5_to_v0_6,
     "0.6": _v0_6_to_v0_7,
+    "0.7": _v0_7_to_v0_8,
+    "0.8": _v0_8_to_v0_9,
 }
 
 

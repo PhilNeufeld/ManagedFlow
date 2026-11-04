@@ -21,3 +21,9 @@ def v0_1_data():
 def sample_portfolio():
     import sample_data
     return sample_data.build_sample_portfolio()
+
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers", "ui: drives the Streamlit screens headlessly (slower; skip with -m \"not ui\")"
+    )

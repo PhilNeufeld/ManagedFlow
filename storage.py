@@ -39,6 +39,7 @@ REQUIRED_TOP_LEVEL_KEYS = (
     "people",
     "memberships",
     "ownerships",
+    "actuals",
     "scenarios",
 )
 

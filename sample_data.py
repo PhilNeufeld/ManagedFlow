@@ -35,7 +35,7 @@ import storage
 
 def build_sample_portfolio() -> Portfolio:
     household = Household(name="Sample Household", members=["Spouse A", "Spouse B"])
-    assumptions = Assumptions(start_year=2026, end_year=2055, inflation_rate=0.03)
+    assumptions = Assumptions(start_year=2026, end_year=2055, inflation_rate=0.03, tax_method="flat")
 
     entities = [
         Entity(
