@@ -712,6 +712,42 @@ def amortized_monthly_payment(principal: float, annual_rate: float, months: int)
     return principal * r / (1 - (1 + r) ** -months)
 
 
+def months_between(from_year: int, from_month: int, to_year: int, to_month: int) -> int:
+    """(2016, 1) -> (2026, 1) = 120."""
+    return (to_year - from_year) * 12 + (to_month - from_month)
+
+
+def balance_after_payments(principal: float, annual_rate: float, payment: float, payments: int) -> float:
+    """What's still owed after `payments` monthly payments (closed-form amortization):
+    B_k = P(1+r)^k - pmt * ((1+r)^k - 1) / r."""
+    if payments <= 0:
+        return principal
+    r = annual_rate / 12.0
+    if r == 0:
+        return max(0.0, principal - payment * payments)
+    growth = (1 + r) ** payments
+    return max(0.0, principal * growth - payment * (growth - 1) / r)
+
+
+def months_to_pay_off(balance: float, annual_rate: float, payment: float) -> Optional[int]:
+    """How many monthly payments are left (rounded up), or None if the payment
+    never pays it off. n = -ln(1 - B r / pmt) / ln(1 + r)."""
+    import math
+    if balance <= 0.005:
+        return 0
+    r = annual_rate / 12.0
+    if r == 0:
+        return math.ceil(balance / payment) if payment > 0 else None
+    if payment <= balance * r:
+        return None
+    n = -math.log(1 - balance * r / payment) / math.log(1 + r)
+    whole = math.floor(n)
+    # a payment rounded to the cent can leave a few cents over: don't count an extra month for that
+    if balance_after_payments(balance, annual_rate, payment, whole) < 1.0:
+        return whole
+    return whole + 1
+
+
 @dataclass
 class Liability:
     """Money owed. This is the BASE class: it holds what every debt has in
@@ -807,8 +843,53 @@ class Loan(Liability):
 
     term_months: Optional[int] = None
     monthly_payment: Optional[float] = None
+    # Original terms, for reference (and to work out the balance -- see from_original_terms).
+    original_amount: Optional[float] = None
+    original_term_months: Optional[int] = None
+    origination_year: Optional[int] = None    # month/year of the FIRST payment
+    origination_month: int = 1
 
     kind: ClassVar[str] = "loan"
+
+    @classmethod
+    def from_original_terms(cls, *, liability_id: str, name: str, original_amount: float,
+                            annual_interest_rate: float, original_term_months: int, origination_year: int,
+                            origination_month: int = 1, as_of_year: int, monthly_payment: Optional[float] = None,
+                            **kwargs) -> "Loan":
+        """Build a loan from what's on the note -- amount, rate, term, first payment
+        date -- with the balance and months left worked out as of January of
+        `as_of_year` (the plan's start). monthly_payment overrides the calculated
+        principal-and-interest payment if the lender bills a different amount.
+
+        Example: $300,000 at 6% for 30 years, first payment Jan 2016 -> as of Jan 2026,
+        120 payments made, 240 left, balance $251,057.17, payment $1,798.65."""
+        _require(original_amount > 0, f"Loan '{name}': original amount must be > 0")
+        _require(original_term_months > 0, f"Loan '{name}': original term must be > 0")
+        payment = monthly_payment or amortized_monthly_payment(original_amount, annual_interest_rate,
+                                                               original_term_months)
+        made = max(0, months_between(origination_year, origination_month, as_of_year, 1))
+        left = original_term_months - made
+        _require(left > 0, f"Loan '{name}': by Jan {as_of_year} all {original_term_months} payments are made")
+        balance = round(balance_after_payments(original_amount, annual_interest_rate, payment, made), 2)
+        return cls(liability_id=liability_id, name=name, balance=balance, annual_interest_rate=annual_interest_rate,
+                   start_year=as_of_year, term_months=left, monthly_payment=monthly_payment,
+                   original_amount=original_amount, original_term_months=original_term_months,
+                   origination_year=origination_year, origination_month=origination_month, **kwargs)
+
+    def months_left(self) -> Optional[int]:
+        """Payments left as of January of start_year."""
+        if self.monthly_payment is None and self.term_months is not None:
+            return self.term_months
+        return months_to_pay_off(self.balance, self.annual_interest_rate, self.scheduled_monthly_payment())
+
+    def payoff_date(self) -> Optional[Tuple[int, int]]:
+        """(year, month) of the last scheduled payment, counting from Jan of start_year."""
+        left = self.months_left()
+        if left is None:
+            return None
+        if left == 0:
+            return (self.start_year - 1, 12)
+        return (self.start_year + (left - 1) // 12, (left - 1) % 12 + 1)
 
     def __post_init__(self) -> None:
         super().__post_init__()  # run the base-class checks first
@@ -852,7 +933,9 @@ class Loan(Liability):
 
     def to_dict(self) -> Dict[str, Any]:
         data = super().to_dict()
-        data.update({"term_months": self.term_months, "monthly_payment": self.monthly_payment})
+        data.update({"term_months": self.term_months, "monthly_payment": self.monthly_payment,
+                     "original_amount": self.original_amount, "original_term_months": self.original_term_months,
+                     "origination_year": self.origination_year, "origination_month": self.origination_month})
         return data
 
 

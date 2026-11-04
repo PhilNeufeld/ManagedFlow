@@ -43,6 +43,18 @@ changes, a schema migration so existing files keep loading.
   any record or to the portfolio.
 - **Classes on actuals** (like QuickBooks classes) -- e.g. "Crop 2025" vs.
   "Crop 2026", since crop payments span calendar years; with notes per class.
+- [x] **Mortgages on rentals, from gross operating income** (built 2026-11-04: "Add a rental
+  property" on the Assets tab, original-terms fields on loans, Rental pro forma on the
+  Simulation tab and in the export). Still to do: enter each property's figures and split
+  the five Fresno rentals 4+1. Originally: per rental (and the
+  4+1 split of the five Fresno rentals): gross operating income (GOI), operating
+  expenses by type, and a mortgage with its terms (original amount, years,
+  years left / origination date, interest rate, payment). The model then
+  forecasts interest (deductible), principal, operating expenses and net cash
+  flow over time, instead of today's single net-cash-flow line. Builds on the
+  existing Loan liability (term, rate, payment, secured by an asset; interest
+  already flows to the tax engine) -- adds "years left"/origination date and a
+  GOI-based rental template in the app.
 - **Relative events** -- an event defined as an offset from another (e.g.
   each LVM distribution step relative to the start of distributions), so
   moving one event moves the whole schedule.

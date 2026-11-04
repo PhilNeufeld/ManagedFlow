@@ -273,3 +273,57 @@ def test_depreciation_is_saved_from_the_asset_editor(tmp_path):
     house = stored(at).get_asset("rental")
     assert (house.depreciable_basis, house.recovery_years, house.placed_in_service_year) == (390_000, 39.0, 2000)
     assert house.depreciation_in_year(2026) == pytest.approx(10_000)
+
+
+# --- rentals with a mortgage --------------------------------------------------------------------------
+
+def _empty_plan():
+    from models import Assumptions, Scenario
+    return Portfolio(assumptions=Assumptions(start_year=2026, end_year=2028, inflation_rate=0.0),
+                     scenarios=[Scenario(scenario_id="base", name="Base", is_base_case=True)])
+
+
+def test_add_rental_form_builds_property_and_mortgage_then_pro_forma_shows(tmp_path):
+    at = start(_empty_plan(), tmp_path)
+    at.text_input(key="rental_name").set_value("4392 N Brix")
+    at.number_input(key="rental_value").set_value(400_000.0)
+    at.number_input(key="rental_rent").set_value(24_000.0)
+    at.number_input(key="rental_rgrowth").set_value(0.0)
+    at.number_input(key="rental_egrowth").set_value(0.0)
+    at.number_input(key="rental_exp_property_tax").set_value(4_000.0)
+    at.number_input(key="rental_exp_insurance").set_value(1_200.0)
+    at.number_input(key="rental_exp_repairs").set_value(1_800.0)
+    at.number_input(key="rental_exp_management").set_value(1_920.0)
+    at.number_input(key="rental_orig").set_value(300_000.0)
+    at.number_input(key="rental_fpy").set_value(2016)
+    at = click(at, label="Add rental")
+    no_crash(at)
+    p = stored(at)
+    assert [a.name for a in p.assets] == ["4392 N Brix"]
+    loan = p.liabilities[0]
+    assert loan.balance == pytest.approx(251_057.17, abs=0.01) and loan.term_months == 240
+    assert any("240 (20.0 yrs; last Dec 2045)" in s.value for s in at.success)
+
+    at = click(at, label="Run simulation for all scenarios")
+    no_crash(at)
+    pf = next(d.value for d in at.dataframe if "2026" in d.value.columns and "Net operating income (NOI)" in d.value.index)
+    assert pf.loc["Gross operating income (GOI)", "2026"] == "$22,800"   # 24,000 less 5% vacancy
+    assert pf.loc["Net operating income (NOI)", "2026"] == "$13,880"
+    assert pf.loc["Debt service", "2026"] == "$21,584"
+
+
+def test_loan_editor_works_out_balance_from_original_terms(tmp_path):
+    at = start(_empty_plan(), tmp_path)
+    at = click(at, key="liability_add_new_btn")
+    editor_widget(at, at.text_input, "liability", "name").set_value("Brix mortgage")
+    editor_widget(at, at.number_input, "liability", "rate").set_value(6.0)
+    editor_widget(at, at.number_input, "liability", "original_amount").set_value(300_000.0)
+    editor_widget(at, at.number_input, "liability", "original_years").set_value(30.0)
+    editor_widget(at, at.number_input, "liability", "first_year").set_value(2016)
+    editor_widget(at, at.checkbox, "liability", "use_original").check()
+    at = next(b for b in at.button if b.label == "💾 Save").click().run()
+    no_crash(at)
+    loan = stored(at).liabilities[0]
+    assert loan.balance == pytest.approx(251_057.17, abs=0.01)
+    assert (loan.term_months, loan.original_amount, loan.origination_year) == (240, 300_000, 2016)
+    assert table(at, "Payments left").iloc[0]["Payments left"] == "240 (20.0 yrs; last Dec 2045)"

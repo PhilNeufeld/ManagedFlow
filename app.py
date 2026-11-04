@@ -22,6 +22,7 @@ import actuals as actuals_engine
 import exports
 import montecarlo
 import quick_add
+import rentals
 import scenarios as scenario_engine
 import simulation
 import storage
@@ -362,6 +363,100 @@ def render_assets_tab(portfolio: Portfolio) -> None:
     editor = _editor_get(kind)
     if editor is not None:
         _render_asset_editor(portfolio, editor)
+
+    render_add_rental(portfolio)
+
+
+def render_add_rental(portfolio: Portfolio) -> None:
+    """Template: a rental from gross rent, expenses by type and its mortgage, in one go."""
+    with st.expander("🏠 Add a rental property (rent, expenses and mortgage)"):
+        st.caption(
+            "Creates the property, a cashflow for gross rent, vacancy and each expense, and the mortgage "
+            "(secured by the property). Enter amounts for the WHOLE property, per year. Mortgage payment = "
+            "principal and interest only -- put escrowed property tax and insurance in the expense lines. "
+            "Edit any piece afterwards on the Assets, Cashflows and Liabilities tabs."
+        )
+        entity_options = [None] + [e.entity_id for e in portfolio.entities]
+        entity_names = {e.entity_id: e.name for e in portfolio.entities}
+        start = int(portfolio.assumptions.start_year)
+        with st.form("add_rental_form", clear_on_submit=False):
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                name = st.text_input("Property name", key="rental_name")
+                entity_id = st.selectbox("Held by entity", entity_options, key="rental_entity",
+                                         format_func=lambda e: "(none)" if e is None else entity_names.get(e, e))
+                value = st.number_input("Market value", min_value=0.0, step=10_000.0, key="rental_value")
+                value_growth = st.number_input("Value growth (%/yr)", value=3.0, step=0.5, key="rental_vgrowth")
+            with c2:
+                gross_rent = st.number_input("Gross scheduled rent ($/yr, fully leased)", min_value=0.0,
+                                             step=1_200.0, key="rental_rent")
+                vacancy = st.number_input("Vacancy & credit loss (% of rent)", min_value=0.0, max_value=99.0,
+                                          value=5.0, step=1.0, key="rental_vacancy")
+                rent_growth = st.number_input("Rent growth (%/yr)", value=3.0, step=0.5, key="rental_rgrowth")
+                expense_growth = st.number_input("Expense growth (%/yr)", value=3.0, step=0.5,
+                                                 key="rental_egrowth")
+            with c3:
+                basis = st.number_input("Depreciable basis (building, not land)", min_value=0.0, step=10_000.0,
+                                        key="rental_basis")
+                in_service = st.number_input("Placed in service (year)", min_value=1950, max_value=2100,
+                                             value=start, step=1, key="rental_inservice")
+                first_year = st.number_input("Plan starts (year)", value=start, step=1, key="rental_start")
+            st.markdown("**Operating expenses ($/yr)**")
+            exp_cols = st.columns(len(rentals.EXPENSE_TYPES))
+            expenses = {}
+            for col, (key, (label, _)) in zip(exp_cols, rentals.EXPENSE_TYPES.items()):
+                with col:
+                    expenses[key] = st.number_input(label, min_value=0.0, step=100.0, key=f"rental_exp_{key}")
+            st.markdown("**Mortgage** -- enter the original terms (A) *or* the current balance (B); "
+                        "leave both blank for no mortgage.")
+            m1, m2, m3, m4 = st.columns(4)
+            with m1:
+                lender = st.text_input("Lender", key="rental_lender")
+                rate = st.number_input("Interest rate (%)", min_value=0.0, max_value=30.0, value=6.0, step=0.125,
+                                       format="%.3f", key="rental_rate")
+            with m2:
+                orig_amount = st.number_input("A. Original amount", min_value=0.0, step=10_000.0,
+                                              key="rental_orig")
+                orig_years = st.number_input("A. Term (years)", min_value=0.0, value=30.0, step=5.0,
+                                             key="rental_term")
+            with m3:
+                first_pay_month = st.selectbox("A. First payment month", list(range(1, 13)),
+                                               format_func=lambda m: MONTH_NAMES[m - 1], key="rental_fpm")
+                first_pay_year = st.number_input("A. First payment year", min_value=0, value=0, step=1,
+                                                 key="rental_fpy")
+            with m4:
+                balance = st.number_input(f"B. Balance (Jan {start})", min_value=0.0, step=1_000.0,
+                                          key="rental_balance")
+                years_left = st.number_input("B. Years left", min_value=0.0, step=1.0, key="rental_left")
+            payment = st.number_input("Monthly P&I payment from statement (0 = calculate)", min_value=0.0,
+                                      step=10.0, key="rental_payment")
+            submitted = st.form_submit_button("Add rental", type="primary")
+        if not submitted:
+            return
+        mortgage = None
+        if orig_amount or balance:
+            mortgage = rentals.MortgageSpec(
+                annual_interest_rate=rate / 100, lender=lender,
+                original_amount=orig_amount or None, term_years=orig_years or None,
+                first_payment_year=int(first_pay_year) or None, first_payment_month=int(first_pay_month),
+                balance=balance or None, years_left=years_left or None, monthly_payment=payment or None)
+        spec = rentals.RentalSpec(
+            name=name, value=value, start_year=int(first_year), entity_id=entity_id,
+            owner=entity_names.get(entity_id, ""), gross_rent=gross_rent, vacancy_rate=vacancy / 100,
+            rent_growth=rent_growth / 100, expenses=expenses, expense_growth=expense_growth / 100,
+            value_growth=value_growth / 100, depreciable_basis=basis,
+            placed_in_service_year=int(in_service) if basis else None, mortgage=mortgage)
+        try:
+            asset, flows, loan = rentals.add_rental(portfolio, spec)
+        except ValidationError as exc:
+            st.error(str(exc))
+            return
+        _clear_simulation_cache()
+        msg = f"Added '{asset.name}' with {len(flows)} cashflow(s)"
+        if loan is not None:
+            msg += (f" and a mortgage: balance {format_currency(loan.balance)}, "
+                    f"{format_currency(loan.scheduled_monthly_payment())}/month, {_payments_left_label(loan)} left")
+        st.success(msg + ". Click Save portfolio in the sidebar to keep it.")
 
 
 def _render_asset_editor(portfolio: Portfolio, editor: dict) -> None:
@@ -1437,6 +1532,15 @@ def _monthly_payment_label(li) -> str:
     return format_currency(li.balance * li.annual_interest_rate / 12) + " (interest)"
 
 
+def _payments_left_label(li) -> str:
+    if not isinstance(li, Loan):
+        return ""
+    left, done = li.months_left(), li.payoff_date()
+    if left is None or done is None:
+        return "never (payment too small)"
+    return f"{left} ({left / 12:.1f} yrs; last {MONTH_NAMES[done[1] - 1]} {done[0]})"
+
+
 def render_liabilities_tab(portfolio: Portfolio) -> None:
     st.header("Liabilities")
     st.caption(
@@ -1460,6 +1564,7 @@ def render_liabilities_tab(portfolio: Portfolio) -> None:
                     "Rate": f"{li.annual_interest_rate:.3%}",
                     "As of": li.start_year,
                     "Monthly Payment": _monthly_payment_label(li),
+                    "Payments left": _payments_left_label(li),
                     "Secured By": asset_name_by_id.get(li.secured_by_asset_id, ""),
                     "Entity": entity_name_by_id.get(li.entity_id, ""),
                     "Active": li.active,
@@ -1587,6 +1692,33 @@ def _render_liability_editor(portfolio: Portfolio, editor: dict) -> None:
                 format_func=lambda eid: "(none)" if eid is None else entity_names.get(eid, eid),
                 key=field("entity_id"),
             )
+        use_original = False
+        if liability_kind == "loan":
+            st.markdown("**Original terms** (optional -- from the note). Tick the box to work out the balance "
+                        "and payments left as of January of the 'Balance as of' year.")
+            o1, o2, o3, o4 = st.columns(4)
+            with o1:
+                original_amount = st.number_input(
+                    "Original amount", min_value=0.0, step=1000.0,
+                    value=float(getattr(existing, "original_amount", None) or 0.0) if existing else 0.0,
+                    key=field("original_amount"))
+            with o2:
+                original_years = st.number_input(
+                    "Original term (years)", min_value=0.0, step=5.0,
+                    value=float((getattr(existing, "original_term_months", None) or 0) / 12) if existing else 30.0,
+                    key=field("original_years"))
+            with o3:
+                first_month = st.selectbox(
+                    "First payment month", list(range(1, 13)), format_func=lambda m: MONTH_NAMES[m - 1],
+                    index=(getattr(existing, "origination_month", 1) or 1) - 1 if existing else 0,
+                    key=field("first_month"))
+            with o4:
+                first_year = st.number_input(
+                    "First payment year (0 = unknown)", min_value=0, step=1,
+                    value=int(getattr(existing, "origination_year", None) or 0) if existing else 0,
+                    key=field("first_year"))
+            use_original = st.checkbox("Work out balance and months left from the original terms",
+                                       value=False, key=field("use_original"))
         ev_col1, ev_col2 = st.columns(2)
         with ev_col1:
             li_start_event = _event_picker("Starts at event (sets start year)", portfolio,
@@ -1623,11 +1755,29 @@ def _render_liability_editor(portfolio: Portfolio, editor: dict) -> None:
                 payoff_year=existing.payoff_year if existing and not li_end_event else None,
             )
             if liability_kind == "loan":
-                liability = Loan(
-                    **common,
-                    term_months=int(term_months) or None,
-                    monthly_payment=monthly_payment or None,
-                )
+                originals = dict(original_amount=original_amount or None,
+                                 original_term_months=round(original_years * 12) or None,
+                                 origination_year=int(first_year) or None, origination_month=int(first_month))
+                if use_original:
+                    if not (original_amount and original_years and first_year):
+                        st.error("To work it out, enter the original amount, term and first payment year.")
+                        return
+                    for unused in ("balance", "start_year", "annual_interest_rate"):
+                        common.pop(unused)   # worked out from the original terms instead
+                    liability = Loan.from_original_terms(
+                        **common,
+                        original_amount=original_amount, annual_interest_rate=rate_pct / 100,
+                        original_term_months=round(original_years * 12), origination_year=int(first_year),
+                        origination_month=int(first_month), as_of_year=int(start_year),
+                        monthly_payment=monthly_payment or None,
+                    )
+                else:
+                    liability = Loan(
+                        **common,
+                        term_months=int(term_months) or None,
+                        monthly_payment=monthly_payment or None,
+                        **originals,
+                    )
             else:
                 liability = CreditLine(**common, credit_limit=credit_limit or None)
 
@@ -2504,11 +2654,45 @@ def render_simulation_tab(portfolio: Portfolio) -> None:
         shown["Effective rate"] = shown["Effective rate"].apply(lambda v: f"{v:.1%}")
         st.dataframe(shown, hide_index=True, use_container_width=True)
 
+    render_rental_pro_forma(portfolio, chosen_id)
+
     all_warnings = [(r.year, w) for r in chosen.annual_results for w in r.warnings]
     if all_warnings:
         st.subheader("Warnings")
         for year, w in all_warnings:
             st.warning(f"Year {year}: {w}")
+
+
+def render_rental_pro_forma(portfolio: Portfolio, scenario_id: str) -> None:
+    """Year-by-year pro forma for one rental: GOI, expenses, NOI, debt service, cash flow."""
+    rental_list = rentals.rental_assets(portfolio)
+    scenario = portfolio.get_scenario(scenario_id)
+    if not rental_list or scenario is None:
+        return
+    st.subheader("Rental pro forma")
+    names = {a.asset_id: a.name for a in rental_list}
+    asset_id = st.selectbox("Property", list(names), format_func=names.get, key="rental_proforma_pick")
+    rows = rentals.rental_pro_forma(portfolio, scenario, asset_id)
+    if not rows:
+        st.info("No years to show for this property.")
+        return
+    lines = [k for k in rows[0] if k != "Year"]
+    for r in rows[1:]:
+        lines += [k for k in r if k not in lines and k != "Year"]
+    table = {}
+    for line in lines:
+        cells = {}
+        for r in rows:
+            v = r.get(line)
+            if line.startswith("Debt coverage"):
+                cells[str(r["Year"])] = "" if v is None else f"{v:.2f}x"
+            else:
+                cells[str(r["Year"])] = format_currency(v or 0.0)
+        table[line] = cells
+    df = pd.DataFrame.from_dict(table, orient="index")
+    view = "your share" if scenario.ownership_view != "full" else "100% of the property"
+    st.caption(f"{names[asset_id]} -- {view}. Debt coverage under 1.0x means rent doesn't cover the mortgage.")
+    st.dataframe(df, use_container_width=True)
 
 
 def render_monte_carlo_section(portfolio: Portfolio) -> None:

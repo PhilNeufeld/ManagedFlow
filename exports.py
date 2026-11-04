@@ -28,6 +28,7 @@ Workbook tabs:
 from __future__ import annotations
 
 import actuals as actuals_engine
+import rentals
 
 from pathlib import Path
 from typing import Dict, List
@@ -145,6 +146,7 @@ def export_to_excel(
     _write_drawdowns_sheet(wb, simulation_results)
     _write_charts_sheet(wb, simulation_results)
     _write_actuals_sheets(wb, portfolio)
+    _write_rental_pro_forma_sheet(wb, portfolio)
     _write_notes_warnings_sheet(wb, simulation_results)
 
     wb.save(output_path)
@@ -443,6 +445,46 @@ def _write_asset_detail_sheet(wb: Workbook, simulation_results: List[SimulationR
     _write_table(ws, 3, ASSET_DETAIL_HEADERS, rows, currency_cols=list(range(3, 9)) + [10])
 
 
+def _write_rental_pro_forma_sheet(wb: Workbook, portfolio: Portfolio) -> None:
+    """One block per rental (base scenario): lines down the side, years across."""
+    rental_list = rentals.rental_assets(portfolio)
+    scenario = next((s for s in portfolio.scenarios if s.is_base_case), portfolio.scenarios[0] if portfolio.scenarios else None)
+    if not rental_list or scenario is None:
+        return
+    ws = wb.create_sheet("Rental Pro Forma")
+    ws["A1"] = f"Rental pro forma -- scenario '{scenario.name}' (your share)"
+    ws["A1"].font = TITLE_FONT
+    ws["A2"] = "GOI = gross rent - vacancy. NOI = GOI - operating expenses. Cash flow = NOI - interest - principal."
+    ws["A2"].font = SUBTITLE_FONT
+    row = 4
+    for asset in rental_list:
+        data = rentals.rental_pro_forma(portfolio, scenario, asset.asset_id)
+        if not data:
+            continue
+        lines = []
+        for r in data:
+            lines += [k for k in r if k != "Year" and k not in lines]
+        ws.cell(row=row, column=1, value=asset.name).font = Font(name=FONT_NAME, bold=True, size=12)
+        row += 1
+        headers = ["Line"] + [str(r["Year"]) for r in data]
+        body = [[line] + [r.get(line) for r in data] for line in lines]
+        for c, h in enumerate(headers, start=1):
+            ws.cell(row=row, column=c, value=h)
+        _style_header_row(ws, row, len(headers))
+        for i, values in enumerate(body, start=1):
+            for c, v in enumerate(values, start=1):
+                cell = ws.cell(row=row + i, column=c, value=v)
+                cell.font = Font(name=FONT_NAME, bold=values[0] in (
+                    "Gross operating income (GOI)", "Net operating income (NOI)", "Cash flow before tax"))
+                if c > 1:
+                    cell.number_format = '0.00"x"' if values[0].startswith("Debt coverage") else CURRENCY_FORMAT
+        row += len(body) + 2
+    ws.column_dimensions["A"].width = 44
+    for c in range(2, 60):
+        ws.column_dimensions[get_column_letter(c)].width = 13
+    ws.freeze_panes = "B4"
+
+
 def _write_actuals_sheets(wb: Workbook, portfolio: Portfolio) -> None:
     """Actuals (raw records), Plan vs Actual and Trend Breaks, one block per year."""
     if not portfolio.actuals:
@@ -451,10 +493,11 @@ def _write_actuals_sheets(wb: Workbook, portfolio: Portfolio) -> None:
     ws = wb.create_sheet("Actuals")
     ws["A1"] = "Recorded actuals and forecasts (your share)"
     ws["A1"].font = TITLE_FONT
-    rows = [[a.year, a.month or "", a.kind, a.name, a.direction.value, a.amount,
+    rows = [[a.year, a.month or "", a.kind, a.name, a.direction.value, a.amount, a.status, a.record_class,
              names.get(a.flow_id, "(not in plan)"), a.notes]
             for a in sorted(portfolio.actuals, key=lambda a: (a.year, a.month or 0, a.name))]
-    _write_table(ws, 3, ["Year", "Month", "Kind", "Item", "Direction", "Amount", "Planned Cashflow", "Notes"],
+    _write_table(ws, 3, ["Year", "Month", "Kind", "Item", "Direction", "Amount", "Status", "Class",
+                         "Planned Cashflow", "Notes"],
                  rows, currency_cols=[5])
 
     ws = wb.create_sheet("Plan vs Actual")
