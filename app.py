@@ -35,6 +35,7 @@ from models import (
     Event,
     Membership,
     MembershipRole,
+    Ownership,
     Person,
     Entity,
     EntityType,
@@ -317,6 +318,7 @@ def render_assets_tab(portfolio: Portfolio) -> None:
                     "Liquidity": a.liquidity_category.value,
                     "Active": a.active,
                     "Do Not Sell": a.do_not_sell,
+                    "Your share": f"{portfolio.asset_share(a.asset_id):.2%}",
                 }
                 for a in portfolio.assets
             ]
@@ -845,6 +847,98 @@ def _personal_person(portfolio: Portfolio, entity) -> "Person | None":
     return owners[0] if owners else None
 
 
+def render_ownership_section(portfolio: Portfolio) -> None:
+    st.subheader("Ownership %")
+    st.caption(
+        "Which entity owns what share of another entity or of an asset. Your share of anything is "
+        "the percents multiplied along each path from an entity nobody owns (your household), added "
+        "up across paths. Assets, their cashflows and their loans are scaled to your share in "
+        "simulations, unless a scenario uses the 100% view. Only list the owners you're part of."
+    )
+    kind = "ownership"
+    entity_names = {e.entity_id: e.name for e in portfolio.entities}
+    asset_names = {a.asset_id: a.name for a in portfolio.assets}
+
+    def owned_name(o):
+        return (entity_names if o.owned_type == "entity" else asset_names).get(o.owned_id, o.owned_id)
+
+    if portfolio.ownerships:
+        df = pd.DataFrame([
+            {"Owner": entity_names.get(o.owner_entity_id, o.owner_entity_id), "Owns": owned_name(o),
+             "Kind": o.owned_type, "Percent": f"{o.percent * 100:g}%",
+             "Your share of it": f"{(portfolio.entity_share(o.owned_id) if o.owned_type == 'entity' else portfolio.asset_share(o.owned_id)):.2%}",
+             "Notes": o.notes}
+            for o in portfolio.ownerships
+        ])
+
+        def _delete_link(key: str) -> bool:
+            portfolio.remove_ownership(key)
+            _clear_simulation_cache()
+            st.success("Ownership link removed.")
+            return True
+
+        _render_selectable_table(kind, df, [o.key for o in portfolio.ownerships], _delete_link,
+                                 delete_label="this ownership link")
+        editor = _editor_get(kind)
+        if editor and editor["mode"] == "edit":
+            o = next((x for x in portfolio.ownerships if x.key == editor["record_id"]), None)
+            if o is None:
+                _editor_close(kind)
+            else:
+                new_pct = st.number_input(
+                    f"Percent of {owned_name(o)} owned by {entity_names.get(o.owner_entity_id)}",
+                    min_value=0.0001, max_value=100.0, value=o.percent * 100, step=0.05, format="%.4f",
+                    key=_editor_widget_key(kind, "percent"))
+                if st.button("💾 Save percent", key=_editor_widget_key(kind, "save")):
+                    others = [x for x in portfolio.ownerships if x.key != o.key]
+                    try:
+                        updated = Ownership(owner_entity_id=o.owner_entity_id, owned_type=o.owned_type,
+                                            owned_id=o.owned_id, percent=new_pct / 100, notes=o.notes)
+                        portfolio._check_ownerships(others + [updated])
+                        portfolio.ownerships = others + [updated]
+                        _clear_simulation_cache()
+                        _editor_close(kind)
+                        st.rerun()
+                    except ValidationError as exc:
+                        st.error(str(exc))
+
+    if len(portfolio.entities) < 1 or (len(portfolio.entities) < 2 and not portfolio.assets):
+        st.info("Add the entities involved (and any partly-owned assets) first.")
+        return
+    col1, col2, col3, col4, col5 = st.columns([2, 1, 2, 1, 1])
+    with col1:
+        owner = st.selectbox("Owner", list(entity_names), format_func=entity_names.get, key="own_owner")
+    with col2:
+        owned_type = st.selectbox("Owns a", ["entity", "asset"], key="own_type")
+    with col3:
+        choices = entity_names if owned_type == "entity" else asset_names
+        owned = st.selectbox("What", [k for k in choices if not (owned_type == "entity" and k == owner)],
+                             format_func=choices.get, key="own_owned")
+    with col4:
+        pct = st.number_input("Percent", min_value=0.0001, max_value=100.0, value=100.0, step=0.05,
+                              format="%.4f", key="own_pct")
+    with col5:
+        st.write("")
+        if st.button("➕ Add", key="own_add"):
+            try:
+                portfolio.add_ownership(Ownership(owner_entity_id=owner, owned_type=owned_type,
+                                                  owned_id=owned, percent=pct / 100))
+                _clear_simulation_cache()
+                st.rerun()
+            except ValidationError as exc:
+                st.error(str(exc))
+
+    with st.expander("Explain a share"):
+        options = [("entity", e) for e in entity_names] + [("asset", a) for a in asset_names]
+        pick = st.selectbox("Entity or asset", options, key="own_explain",
+                            format_func=lambda t: (entity_names if t[0] == "entity" else asset_names)[t[1]])
+        paths = portfolio.share_paths(*pick)
+        for path, share in paths:
+            st.write(f"{' → '.join(path)}: **{share:.4%}**")
+        if len(paths) > 1:
+            st.write(f"Total: **{sum(s for _, s in paths):.4%}**")
+
+
 def render_memberships_section(portfolio: Portfolio) -> None:
     st.subheader("Who's in each entity")
     st.caption(
@@ -1192,6 +1286,7 @@ def render_liabilities_tab(portfolio: Portfolio) -> None:
                     "Secured By": asset_name_by_id.get(li.secured_by_asset_id, ""),
                     "Entity": entity_name_by_id.get(li.entity_id, ""),
                     "Active": li.active,
+                    "Your share": f"{portfolio.liability_share(li):.2%}",
                 }
                 for li in portfolio.liabilities
             ]
@@ -1392,6 +1487,7 @@ def render_entities_tab(portfolio: Portfolio) -> None:
                     "Born": (f"{MONTH_NAMES[p.birth_month - 1]} {p.birth_year}"
                              if (p := _personal_person(portfolio, e)) else ""),
                     f"Age in {portfolio.assumptions.start_year}": (p.age_in(portfolio.assumptions.start_year) if p else None),
+                    "Your share": f"{portfolio.entity_share(e.entity_id):.2%}",
                     "Notes": e.notes,
                 }
                 for e in portfolio.entities
@@ -1428,6 +1524,8 @@ def render_entities_tab(portfolio: Portfolio) -> None:
     if editor is not None:
         _render_entity_editor(portfolio, editor)
 
+    st.divider()
+    render_ownership_section(portfolio)
     st.divider()
     render_people_section(portfolio)
     st.divider()
@@ -1837,6 +1935,7 @@ def render_scenarios_tab(portfolio: Portfolio) -> None:
                     "Asset overrides": len(s.asset_overrides),
                     "Cashflow overrides": len(s.cashflow_overrides),
                     "Event moves": len(s.event_overrides),
+                    "View": "100%" if s.ownership_view == "full" else "your share",
                 }
                 for s in portfolio.scenarios
             ]
@@ -1983,6 +2082,10 @@ def _render_scenario_editor(portfolio: Portfolio, editor: dict) -> None:
             value=defaults["allow_illiquid"], key=field("allow_illiquid"),
         )
         reinvest = st.checkbox("Reinvest surplus", value=defaults["reinvest"], key=field("reinvest"))
+        full_view = st.checkbox(
+            "100% view: ignore ownership % (show every asset, loan and cashflow at full size)",
+            value=(existing.ownership_view == "full") if existing else False, key=field("full_view"),
+        )
 
         st.caption(
             "Optionally scope this scenario to just specific Entities and/or "
@@ -2057,6 +2160,12 @@ def _render_scenario_editor(portfolio: Portfolio, editor: dict) -> None:
                     asset_overrides=asset_overrides,
                     cashflow_overrides=cashflow_overrides,
                     is_base_case=existing.is_base_case if existing else False,
+                    ownership_view="full" if full_view else "share",
+                    # keep settings this form doesn't show (previously lost when editing)
+                    event_overrides=dict(existing.event_overrides) if existing else {},
+                    expense_growth_rate_override=existing.expense_growth_rate_override if existing else None,
+                    withdrawal_order_override=existing.withdrawal_order_override if existing else None,
+                    notes=existing.notes if existing else "",
                 )
 
                 if mode == "new":

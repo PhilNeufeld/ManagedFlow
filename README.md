@@ -329,7 +329,7 @@ the **Bundles** and **Scenario Settings** tabs respectively.
 Every saved portfolio records a `file_version` in its metadata. When the
 data model changes, `migrations.py` upgrades older files automatically on
 load; your original is kept as a timestamped backup the first time you
-save. Current version: **0.6**.
+save. Current version: **0.7**.
 
 | Version | Change |
 |---|---|
@@ -338,6 +338,7 @@ save. Current version: **0.6**.
 | 0.4 | Events, start/end months on cashflows, `event_overrides` on scenarios |
 | 0.5 | People (birth year/month, planning age); age-based events |
 | 0.6 | Memberships: people <-> entities, many-to-many, with a role (owner, trustee, beneficiary...) |
+| 0.7 | Ownership %: entities owning entities/assets by percent; your-share vs. 100% view per scenario |
 
 ## Liabilities
 
@@ -357,6 +358,17 @@ an event: things that start at it begin that month; things that end at it
 stop the month before, and partial years are prorated by month. Move the
 event (or move it in a scenario, e.g. "retire in 2028") and everything
 linked moves with it.
+
+## Ownership %
+
+On the **Entities** tab, "Ownership %" records which entity owns what share
+of another entity or of an asset (Family LP owns 6.45% of LVM; Branfeld owns
+33.3% of 2049 Broadway). Your share of anything = the percents multiplied
+along each path from an entity nobody owns (your household), added across
+paths -- "Explain a share" shows the paths. Simulations scale each asset,
+its cashflows and its loans to your share; tick "100% view" on a scenario
+to see everything at full size. Enter a property's full value, loan and
+cashflows once, on the entity that holds it.
 
 ## People and memberships
 

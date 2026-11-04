@@ -510,6 +510,50 @@ class Membership:
         return cls(**data)
 
 
+@dataclass
+class Ownership:
+    """An entity owning a PERCENTAGE of another entity or of an asset.
+
+        owner                    owned                       percent
+        Philip & Debbie (joint)  Neufeld Family LP (entity)  1.00
+        Neufeld Family LP        LVM (entity)                0.0645
+        Neufeld Ventures         LVM (entity)                0.01
+        Branfeld Investments     2049 Broadway (asset)       0.333
+
+    Your share of anything = multiply the percents along each path from an
+    entity nobody owns (your household), then add up the paths. LVM above:
+    1.00 x 0.0645 + 1.00 x 0.01 = 7.45%.
+
+    percent is a fraction (6.45% = 0.0645). Only the owners you list count:
+    LVM's other investors don't need to be entered.
+    """
+
+    owner_entity_id: str
+    owned_type: str          # "entity" or "asset"
+    owned_id: str
+    percent: float
+    notes: str = ""
+
+    def __post_init__(self) -> None:
+        _require(self.owned_type in ("entity", "asset"), "Ownership.owned_type must be 'entity' or 'asset'")
+        _require(bool(self.owner_entity_id) and bool(self.owned_id), "Ownership needs an owner and something owned")
+        _require(0 < self.percent <= 1,
+                 f"Ownership percent is a fraction between 0 and 1 (6.45% = 0.0645), got {self.percent}")
+        _require(not (self.owned_type == "entity" and self.owned_id == self.owner_entity_id),
+                 "An entity can't own itself")
+
+    @property
+    def key(self) -> str:
+        return f"{self.owner_entity_id}|{self.owned_type}|{self.owned_id}"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Ownership":
+        return cls(**data)
+
+
 # ---------------------------------------------------------------------------
 # Asset
 # ---------------------------------------------------------------------------
@@ -920,6 +964,10 @@ class Scenario:
     # to the event moves with it.
     event_overrides: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
+    # "share": scale everything by your ownership % (the default).
+    # "full":  the 100% view -- every asset, loan and cashflow at full size.
+    ownership_view: str = "share"
+
     # Withdrawal / reinvestment behavior
     withdrawal_order_override: Optional[List[str]] = None
     allow_illiquid_withdrawals: bool = False
@@ -1135,6 +1183,7 @@ class Portfolio:
     events: List[Event] = field(default_factory=list)
     people: List[Person] = field(default_factory=list)
     memberships: List[Membership] = field(default_factory=list)
+    ownerships: List[Ownership] = field(default_factory=list)
     bundles: List[Bundle] = field(default_factory=list)
     scenarios: List[Scenario] = field(default_factory=list)
     file_version: str = CURRENT_SCHEMA_VERSION
@@ -1169,6 +1218,7 @@ class Portfolio:
             _require(m.person_id in person_ids, f"Membership points to unknown person '{m.person_id}'")
             _require(m.key not in seen_links, f"Duplicate membership: {m.key}")
             seen_links.add(m.key)
+        self._check_ownerships()
         for ev in self.events:
             _require(ev.person_id is None or ev.person_id in person_ids,
                      f"Event '{ev.name}' is tied to person '{ev.person_id}' who doesn't exist")
@@ -1500,6 +1550,7 @@ class Portfolio:
         for li in self.liabilities_secured_by(asset_id):
             li.secured_by_asset_id = None
         removed = self.cashflows_for_asset(asset_id)
+        self.ownerships = [o for o in self.ownerships if not (o.owned_type == "asset" and o.owned_id == asset_id)]
         self.assets = [a for a in self.assets if a.asset_id != asset_id]
         self.cashflows = [cf for cf in self.cashflows if cf.asset_id != asset_id]
         return removed
@@ -1576,6 +1627,123 @@ class Portfolio:
         _require(self.get_entity(entity_id) is not None, f"No entity with id '{entity_id}' found to remove")
         self.entities = [e for e in self.entities if e.entity_id != entity_id]
         self.memberships = [m for m in self.memberships if m.entity_id != entity_id]
+        self.ownerships = [o for o in self.ownerships
+                           if o.owner_entity_id != entity_id and not (o.owned_type == "entity" and o.owned_id == entity_id)]
+
+    # -- ownership % ----------------------------------------------------------------
+
+    def _owners_of(self, owned_type: str, owned_id: str) -> List[Ownership]:
+        return [o for o in self.ownerships if o.owned_type == owned_type and o.owned_id == owned_id]
+
+    def _check_ownerships(self, ownerships: Optional[List[Ownership]] = None) -> None:
+        """Every link points at real things, nothing is owned more than 100%,
+        and there are no loops (A owns B owns A)."""
+        ownerships = self.ownerships if ownerships is None else ownerships
+        entity_ids = {e.entity_id for e in self.entities}
+        asset_ids = {a.asset_id for a in self.assets}
+        label = {e.entity_id: e.name for e in self.entities}
+        label.update({a.asset_id: a.name for a in self.assets})
+        keys, totals, owners_of = set(), {}, {}
+        for o in ownerships:
+            _require(o.owner_entity_id in entity_ids, f"Ownership owner '{o.owner_entity_id}' isn't an entity")
+            _require(o.owned_id in (entity_ids if o.owned_type == "entity" else asset_ids),
+                     f"Ownership points at unknown {o.owned_type} '{o.owned_id}'")
+            _require(o.key not in keys, f"Duplicate ownership link: {o.key}")
+            keys.add(o.key)
+            target = (o.owned_type, o.owned_id)
+            totals[target] = totals.get(target, 0.0) + o.percent
+            _require(totals[target] <= 1.0 + 1e-9,
+                     f"'{label.get(o.owned_id, o.owned_id)}' would be owned more than 100% in total "
+                     f"({totals[target]:.2%})")
+            if o.owned_type == "entity":
+                owners_of.setdefault(o.owned_id, []).append(o.owner_entity_id)
+
+        def visit(entity_id, path):
+            _require(entity_id not in path,
+                     "Ownership loop: " + " -> ".join(label.get(x, x) for x in list(path) + [entity_id])
+                     + " (an entity would end up owning itself)")
+            for owner in owners_of.get(entity_id, []):
+                visit(owner, path + [entity_id])
+
+        for entity_id in owners_of:
+            visit(entity_id, [])
+
+    def entity_share(self, entity_id: str) -> float:
+        """Your effective share of an entity: 1.0 if nobody owns it (it's yours),
+        otherwise the sum over its owners of (owner's share x percent).
+        Recursive: each owner's share is worked out the same way."""
+        owners = self._owners_of("entity", entity_id)
+        if not owners:
+            return 1.0
+        return sum(self.entity_share(o.owner_entity_id) * o.percent for o in owners)
+
+    def asset_share(self, asset_id: str) -> float:
+        """Your share of an asset: through explicit ownership links if it has
+        any, otherwise through the entity that holds it (100% of that entity's
+        share), otherwise 100%."""
+        owners = self._owners_of("asset", asset_id)
+        if owners:
+            return sum(self.entity_share(o.owner_entity_id) * o.percent for o in owners)
+        asset = self.get_asset(asset_id)
+        if asset is not None and asset.entity_id:
+            return self.entity_share(asset.entity_id)
+        return 1.0
+
+    def liability_share(self, liability: "Liability") -> float:
+        """A loan follows the asset that secures it, else the entity that owes it."""
+        if liability.secured_by_asset_id:
+            return self.asset_share(liability.secured_by_asset_id)
+        if liability.entity_id:
+            return self.entity_share(liability.entity_id)
+        return 1.0
+
+    def share_paths(self, owned_type: str, owned_id: str) -> List[Tuple[List[str], float]]:
+        """Explain a share: every ownership path (as entity names) and its share.
+        e.g. [(['Philip & Debbie', 'Family LP', 'LVM'], 0.0645), ...]"""
+        names = {e.entity_id: e.name for e in self.entities}
+        if owned_type == "asset" and not self._owners_of("asset", owned_id):
+            asset = self.get_asset(owned_id)
+            if asset is None or not asset.entity_id:
+                return [([asset.name if asset else owned_id], 1.0)]
+            return [(path + [asset.name], share) for path, share in self.share_paths("entity", asset.entity_id)]
+        label = names.get(owned_id, owned_id) if owned_type == "entity" else self.get_asset(owned_id).name
+        owners = self._owners_of(owned_type, owned_id)
+        if not owners:
+            return [([label], 1.0)]
+        paths = []
+        for o in owners:
+            for path, share in self.share_paths("entity", o.owner_entity_id):
+                paths.append((path + [label], share * o.percent))
+        return paths
+
+    def apply_ownership_shares(self) -> None:
+        """Scale every asset, its cashflows and its loans by your share, IN
+        PLACE. Only ever called on a scenario's working copy, never on the
+        stored portfolio. Household-level cashflows (salary, living
+        expenses) aren't owned by an entity and stay at 100%."""
+        asset_shares = {a.asset_id: self.asset_share(a.asset_id) for a in self.assets}
+        liability_shares = {li.liability_id: self.liability_share(li) for li in self.liabilities}
+        for a in self.assets:
+            s = asset_shares[a.asset_id]
+            a.initial_value *= s
+            a.current_value *= s
+        for cf in self.cashflows:
+            if cf.asset_id is not None:
+                cf.amount *= asset_shares.get(cf.asset_id, 1.0)
+        for li in self.liabilities:
+            s = liability_shares[li.liability_id]
+            li.balance *= s
+            for attr in ("monthly_payment", "credit_limit"):
+                if getattr(li, attr, None) is not None:
+                    setattr(li, attr, getattr(li, attr) * s)
+
+    def add_ownership(self, ownership: Ownership) -> None:
+        self._check_ownerships(self.ownerships + [ownership])  # checks loops and totals first
+        self.ownerships.append(ownership)
+
+    def remove_ownership(self, key: str) -> None:
+        _require(any(o.key == key for o in self.ownerships), f"No ownership link '{key}' found to remove")
+        self.ownerships = [o for o in self.ownerships if o.key != key]
 
     # -- memberships (people <-> entities, many-to-many) -----------------------------
 
@@ -1642,6 +1810,7 @@ class Portfolio:
             "events": [ev.to_dict() for ev in self.events],
             "people": [p.to_dict() for p in self.people],
             "memberships": [m.to_dict() for m in self.memberships],
+            "ownerships": [o.to_dict() for o in self.ownerships],
             "bundles": [b.to_dict() for b in self.bundles],
             "scenarios": [s.to_dict() for s in self.scenarios],
         }
@@ -1660,6 +1829,7 @@ class Portfolio:
             events=[Event.from_dict(ev) for ev in data.get("events", [])],
             people=[Person.from_dict(p) for p in data.get("people", [])],
             memberships=[Membership.from_dict(m) for m in data.get("memberships", [])],
+            ownerships=[Ownership.from_dict(o) for o in data.get("ownerships", [])],
             bundles=[Bundle.from_dict(b) for b in data.get("bundles", [])],
             scenarios=[Scenario.from_dict(s) for s in data.get("scenarios", [])],
             file_version=metadata.get("file_version", CURRENT_SCHEMA_VERSION),

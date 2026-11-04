@@ -72,6 +72,10 @@ def apply_scenario(portfolio: Portfolio, scenario: Scenario) -> Tuple[Portfolio,
     _apply_asset_overrides(working, scenario, warnings)
     _apply_cashflow_overrides(working, scenario, warnings)
 
+    # Last: scale to your ownership % unless this scenario asks for the 100% view.
+    if getattr(scenario, "ownership_view", "share") != "full":
+        working.apply_ownership_shares()
+
     return working, warnings
 
 

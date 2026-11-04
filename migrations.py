@@ -10,7 +10,7 @@ Every saved file records its schema in metadata.file_version. migrate()
 looks at that version and applies each upgrade step in order until the
 data is current -- like climbing a ladder one rung at a time:
 
-    "0.1" --(_v0_1_to_v0_2)--> "0.2" --(_v0_2_to_v0_3)--> "0.3" --(_v0_3_to_v0_4)--> "0.4" --(_v0_4_to_v0_5)--> "0.5" --(_v0_5_to_v0_6)--> "0.6"
+    "0.1" --(_v0_1_to_v0_2)--> "0.2" --(_v0_2_to_v0_3)--> "0.3" --(_v0_3_to_v0_4)--> "0.4" --(_v0_4_to_v0_5)--> "0.5" --(_v0_5_to_v0_6)--> "0.6" --(_v0_6_to_v0_7)--> "0.7"
 
 To change the model in the future:
   1. Bump CURRENT_SCHEMA_VERSION.
@@ -27,7 +27,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Callable, Dict
 
-CURRENT_SCHEMA_VERSION = "0.6"
+CURRENT_SCHEMA_VERSION = "0.7"
 
 
 class MigrationError(ValueError):
@@ -104,6 +104,16 @@ def _v0_5_to_v0_6(data: Dict[str, Any]) -> Dict[str, Any]:
     return data
 
 
+def _v0_6_to_v0_7(data: Dict[str, Any]) -> Dict[str, Any]:
+    """v0.7 adds ownership % (Ownership links) and a per-scenario 100% view.
+    No links yet means every share is 100%, so results are unchanged."""
+    data.setdefault("ownerships", [])
+    for scenario in data.get("scenarios", []) or []:
+        scenario.setdefault("ownership_view", "share")
+    data.setdefault("metadata", {})["file_version"] = "0.7"
+    return data
+
+
 # version found in the file -> function that upgrades it one step
 _STEPS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "0.1": _v0_1_to_v0_2,
@@ -111,6 +121,7 @@ _STEPS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "0.3": _v0_3_to_v0_4,
     "0.4": _v0_4_to_v0_5,
     "0.5": _v0_5_to_v0_6,
+    "0.6": _v0_6_to_v0_7,
 }
 
 

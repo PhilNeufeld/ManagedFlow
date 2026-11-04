@@ -128,6 +128,7 @@ def export_to_excel(
     _write_inputs_sheet(wb, portfolio)
     _write_assumptions_sheet(wb, portfolio)
     _write_entities_sheet(wb, portfolio)
+    _write_ownership_sheet(wb, portfolio)
     _write_assets_sheet(wb, portfolio)
     _write_cashflows_sheet(wb, portfolio)
     _write_liabilities_sheet(wb, portfolio)
@@ -436,6 +437,19 @@ def _write_asset_detail_sheet(wb: Workbook, simulation_results: List[SimulationR
                     ar.gross_expense, ar.sold_this_year, ar.sale_proceeds,
                 ])
     _write_table(ws, 3, ASSET_DETAIL_HEADERS, rows, currency_cols=list(range(3, 9)) + [10])
+
+
+def _write_ownership_sheet(wb: Workbook, portfolio: Portfolio) -> None:
+    ws = wb.create_sheet("Ownership")
+    ws["A1"] = "Ownership % (your share = percents multiplied along each path, added across paths)"
+    ws["A1"].font = TITLE_FONT
+    names = {e.entity_id: e.name for e in portfolio.entities}
+    names.update({a.asset_id: a.name for a in portfolio.assets})
+    rows = [[names.get(o.owner_entity_id, o.owner_entity_id), names.get(o.owned_id, o.owned_id), o.owned_type,
+             o.percent, portfolio.entity_share(o.owned_id) if o.owned_type == "entity" else portfolio.asset_share(o.owned_id),
+             o.notes] for o in portfolio.ownerships]
+    _write_table(ws, 3, ["Owner", "Owns", "Kind", "Percent", "Your Share of It", "Notes"], rows,
+                 percent_cols=[3, 4])
 
 
 # ---------------------------------------------------------------------------
