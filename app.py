@@ -2733,6 +2733,9 @@ def render_rental_pro_forma(portfolio: Portfolio, scenario_id: str) -> None:
 def _explore_set_focus(node_id: str) -> None:
     st.session_state["explore_focus"] = node_id
     st.session_state.pop("explore_goto", None)
+    # A new chart widget for every view: otherwise the chart remembers the box clicked
+    # earlier, and that old click would pull you straight back down after going up.
+    st.session_state["explore_gen"] = st.session_state.get("explore_gen", 0) + 1
 
 
 def _class_chip(kind: str) -> str:
@@ -2807,13 +2810,13 @@ def render_explore_tab(portfolio: Portfolio) -> None:
         y=alt.Y("ym:Q", scale=alt.Scale(domain=[0, 1], reverse=True)), text="show:N",
         color=alt.Color("ink:N", scale=None)).transform_calculate(ym="(datum.y0 + datum.y1) / 2")
     event = st.altair_chart((boxes + text).properties(height=460), use_container_width=True,
-                            on_select="rerun", key="explore_chart", theme=None)
+                            on_select="rerun", key=f"explore_chart_{st.session_state.get('explore_gen', 0)}",
+                            theme=None)
     picked = (event or {}).get("selection", {}).get("pick") if isinstance(event, dict) or hasattr(event, "get") else None
     if picked:
         clicked = picked[0].get("node_id")
         if clicked and clicked != focus and clicked in nodes:
             _explore_set_focus(clicked)
-            st.session_state.pop("explore_chart", None)
             st.rerun()
 
     # keyboard-friendly drill-down
