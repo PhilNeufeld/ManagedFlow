@@ -562,6 +562,9 @@ def _render_asset_editor(portfolio: Portfolio, editor: dict) -> None:
         with dep4:
             subject_to_se = st.checkbox("Self-employment tax on its net income", key=field("subject_to_se"),
                                         value=existing.subject_to_se_tax if existing else False)
+            earner = _person_picker("Whose self-employment income", portfolio,
+                                    existing.earner_person_id if existing else None, field("earner"),
+                                    "Each spouse's payroll and self-employment tax is worked out separately.")
         do_not_sell = st.checkbox("Do not sell", value=defaults["do_not_sell"], key=field("do_not_sell"))
         active = st.checkbox("Active", value=defaults["active"], key=field("active"))
         notes = st.text_area("Notes", value=defaults["notes"], key=field("notes"))
@@ -611,6 +614,7 @@ def _render_asset_editor(portfolio: Portfolio, editor: dict) -> None:
                     placed_in_service_year=int(placed_year) or None,
                     recovery_years=recovery_years,
                     subject_to_se_tax=subject_to_se,
+                    earner_person_id=earner,
                 )
 
                 if mode == "new":
@@ -839,6 +843,10 @@ def _render_cashflow_editor(portfolio: Portfolio, editor: dict) -> None:
         inflation_adjusted = st.checkbox(
             "Inflation adjusted", value=defaults["inflation_adjusted"], key=field("inflation_adjusted"),
         )
+        flow_person = _person_picker(
+            "Whose earnings or benefit", portfolio, existing.person_id if existing else None, field("person"),
+            "For wages, self-employment income and Social Security: payroll/self-employment tax and the "
+            "Social Security earnings test are per person.")
         notes = st.text_area("Notes", value=defaults["notes"], key=field("notes"))
 
         col_save, col_cancel = st.columns([1, 1])
@@ -892,6 +900,7 @@ def _render_cashflow_editor(portfolio: Portfolio, editor: dict) -> None:
                     end_month=int(end_month),
                     start_event_id=start_event_id,
                     end_event_id=end_event_id,
+                    person_id=flow_person,
                 )
 
                 if mode == "new":
@@ -1351,7 +1360,18 @@ def render_people_section(portfolio: Portfolio) -> None:
         life_expectancy = st.number_input("Plan to age", min_value=50, max_value=120, step=1,
                                           value=existing.life_expectancy if existing else 92,
                                           key=field("life_expectancy"))
+    substantial = st.checkbox(
+        "Works substantially in their own business (Social Security earnings test)",
+        value=existing.substantial_self_employment if existing else True, key=field("substantial"),
+        help="In the first year of Social Security, a month you're self-employed only counts as 'retired' "
+             "(benefit paid in full) if you DON'T perform substantial services -- generally over 45 hours "
+             "a month. Untick if you don't.")
     plan_start = portfolio.assumptions.start_year
+    _fra = Person(person_id="x", name="x", birth_year=int(birth_year), birth_month=int(birth_month))
+    _fra_y, _fra_m = _fra.full_retirement_date()
+    st.caption(f"Social Security full retirement age: {_fra.full_retirement_age()[0]}"
+               f"{' and ' + str(_fra.full_retirement_age()[1]) + ' months' if _fra.full_retirement_age()[1] else ''}"
+               f" ({MONTH_NAMES[_fra_m - 1]} {_fra_y}).")
     st.info(
         f"Age in {plan_start}: **{plan_start - int(birth_year)}** "
         f"(birthday in {MONTH_NAMES[int(birth_month) - 1]}). "
@@ -1374,7 +1394,7 @@ def render_people_section(portfolio: Portfolio) -> None:
                 "person", name, [p.person_id for p in portfolio.people])
             person = Person(person_id=person_id, name=name, birth_year=int(birth_year),
                             birth_month=int(birth_month), life_expectancy=int(life_expectancy),
-                            notes=existing.notes if existing else "")
+                            notes=existing.notes if existing else "", substantial_self_employment=substantial)
             if existing:
                 portfolio.replace_person(person_id, person)  # moves their age-based events
             else:
@@ -1384,6 +1404,16 @@ def render_people_section(portfolio: Portfolio) -> None:
             st.rerun()
         except ValidationError as exc:
             st.error(str(exc))
+
+
+def _person_picker(label: str, portfolio: Portfolio, current, key: str, help: str = ""):
+    """Pick a Person (or none). Returns a person_id or None."""
+    options = [None] + [p.person_id for p in portfolio.people]
+    names = {p.person_id: p.name for p in portfolio.people}
+    first = portfolio.people[0].name if portfolio.people else "household"
+    return st.selectbox(label, options, index=options.index(current) if current in options else 0,
+                        format_func=lambda pid: f"(not set -- counts as {first})" if pid is None else names.get(pid, pid),
+                        key=key, help=help or None)
 
 
 def _event_picker(label: str, portfolio: Portfolio, current, key: str):
@@ -1991,7 +2021,10 @@ def _render_entity_editor(portfolio: Portfolio, editor: dict) -> None:
                     person_id = person.person_id if person else _generate_id(
                         "person", name, [p.person_id for p in portfolio.people])
                     new_person = Person(person_id=person_id, name=name, birth_year=int(birth_year),
-                                        birth_month=int(birth_month), life_expectancy=int(life_expectancy))
+                                        birth_month=int(birth_month), life_expectancy=int(life_expectancy),
+                                        notes=person.notes if person else "",
+                                        substantial_self_employment=person.substantial_self_employment
+                                        if person else True)
                     if person:
                         portfolio.replace_person(person_id, new_person)
                     else:

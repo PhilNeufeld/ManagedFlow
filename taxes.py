@@ -80,6 +80,66 @@ def estimate_taxes_for_year(
     return estimate_flat(year, cashflows_this_year, assumptions)
 
 
+def _default_person(ctx: TaxContext) -> str:
+    return ctx.people[0].person_id if ctx.people else "household"
+
+
+def earned_income_by_person(year: int, inflation: float, ctx: TaxContext) -> Dict[str, Dict[str, float]]:
+    """Each person's {"wages": ..., "se": net self-employment income} for the year.
+
+    Payroll tax, self-employment tax and the Social Security earnings test are
+    all PER PERSON (each spouse has their own wage base). A flow's person_id
+    (or a business asset's earner_person_id) says whose it is; unassigned
+    earnings go to the first person. Self-employment from a business/farm asset
+    is its net: taxable receipts - deductible expenses - loan interest - depreciation.
+    """
+    known = {p.person_id for p in ctx.people}
+    default = _default_person(ctx)
+    out: Dict[str, Dict[str, float]] = {}
+
+    def add(pid, key, value):
+        pid = pid if pid in known else default
+        out.setdefault(pid, {"wages": 0.0, "se": 0.0})[key] += value
+
+    def earned(cf):
+        value = cf.annual_amount_in_year(year, inflation)
+        if value <= 0 or cf.direction != CashflowDirection.INFLOW or not cf.taxable:
+            return
+        if cf.flow_type == FlowType.SALARY_INCOME:
+            add(cf.person_id, "wages", value)
+        elif cf.tax_category == TaxCategory.SELF_EMPLOYMENT_INCOME:
+            add(cf.person_id, "se", value)
+
+    for cf in ctx.household_flows:
+        earned(cf)
+    interest_by_asset: Dict[Optional[str], float] = {}
+    for lr in ctx.liability_results:
+        li = ctx.liabilities.get(lr.liability_id)
+        if li is not None and lr.interest_paid > 0:
+            interest_by_asset[li.secured_by_asset_id] = interest_by_asset.get(li.secured_by_asset_id, 0.0) + lr.interest_paid
+    for asset in ctx.assets:
+        flows = ctx.flows_by_asset.get(asset.asset_id, [])
+        if asset.tax_category not in (TaxCategory.RENTAL_INCOME, TaxCategory.BUSINESS_INCOME):
+            for cf in flows:
+                earned(cf)
+            continue
+        if asset.tax_category != TaxCategory.BUSINESS_INCOME or not asset.subject_to_se_tax:
+            continue
+        net = -interest_by_asset.get(asset.asset_id, 0.0) - asset.depreciation_in_year(year)
+        for cf in flows:
+            value = cf.annual_amount_in_year(year, inflation)
+            if value <= 0:
+                continue
+            if (cf.direction == CashflowDirection.INFLOW and cf.taxable
+                    and cf.flow_type != FlowType.SOCIAL_SECURITY_INCOME
+                    and cf.tax_category not in (TaxCategory.CAPITAL_GAINS, TaxCategory.QUALIFIED_DIVIDENDS)):
+                net += value
+            elif cf.direction == CashflowDirection.OUTFLOW and cf.flow_type in DEDUCTIBLE_EXPENSE_TYPES:
+                net -= value
+        add(asset.earner_person_id, "se", net)
+    return out
+
+
 def estimate_detailed(year: int, assumptions: Assumptions, ctx: TaxContext) -> TaxEstimate:
     fs = assumptions.filing_status
     infl = assumptions.inflation_rate
@@ -196,14 +256,25 @@ def estimate_detailed(year: int, assumptions: Assumptions, ctx: TaxContext) -> T
         rental = allowed
     ctx.carryforward["passive_loss"] = suspended
 
-    # --- payroll and self-employment taxes -------------------------------------------------
-    wage_base = fed_idx(T.SOCIAL_SECURITY_WAGE_BASE)
-    fica = min(wages, wage_base) * T.SOCIAL_SECURITY_RATE + wages * T.MEDICARE_RATE
-    se_earnings = max(0.0, se_household + se_business) * T.SE_EARNINGS_FACTOR
-    se_tax = (min(se_earnings, max(0.0, wage_base - wages)) * T.SOCIAL_SECURITY_RATE * 2
-              + se_earnings * T.MEDICARE_RATE * 2)
+    # --- payroll and self-employment taxes, PER PERSON ------------------------------------------
+    # Each person has their own Social Security wage base; their wages use it
+    # first, and their self-employment earnings fill what's left.
+    wage_base = T.ss_wage_base(year, infl)
+    names = {p.person_id: p.name for p in ctx.people}
+    fica = se_tax = se_earnings = 0.0
+    payroll_by_person: Dict[str, float] = {}
+    for pid, e in earned_income_by_person(year, infl, ctx).items():
+        w = e["wages"]
+        nese = max(0.0, e["se"]) * T.SE_EARNINGS_FACTOR
+        fica_p = min(w, wage_base) * T.SOCIAL_SECURITY_RATE + w * T.MEDICARE_RATE
+        se_p = (min(nese, max(0.0, wage_base - w)) * T.SOCIAL_SECURITY_RATE * 2
+                + nese * T.MEDICARE_RATE * 2)
+        fica, se_tax, se_earnings = fica + fica_p, se_tax + se_p, se_earnings + nese
+        who = names.get(pid, "Household")
+        payroll_by_person[f"FICA - {who}"] = fica_p
+        payroll_by_person[f"Self-employment tax - {who}"] = se_p
     half_se = se_tax / 2
-    additional_medicare = T.ADDITIONAL_MEDICARE_RATE * max(
+    additional_medicare = T.ADDITIONAL_MEDICARE_RATE * max(   # joint threshold on combined earnings
         0.0, wages + se_earnings - T.ADDITIONAL_MEDICARE_THRESHOLD[fs])
 
     # --- AGI, with the taxable part of Social Security ------------------------------------
@@ -283,7 +354,8 @@ def estimate_detailed(year: int, assumptions: Assumptions, ctx: TaxContext) -> T
         "Itemized deductions": itemized, "Deduction used": deduction, "Senior deduction": senior_deduction,
         "Taxable income": taxable, "Federal tax on ordinary income": fed_ordinary,
         "Federal tax on capital gains": fed_capital, "NIIT": niit, "FICA": fica,
-        "Self-employment tax": se_tax, "Additional Medicare tax": additional_medicare,
+        "Self-employment tax": se_tax, **payroll_by_person, "Social Security wage base (per person)": wage_base,
+        "Additional Medicare tax": additional_medicare,
         "CA taxable income": ca_taxable, "CA tax": ca_tax, "Total tax": total,
         "Effective rate on AGI": (total / agi) if agi > 0 else 0.0,
     }

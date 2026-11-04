@@ -44,6 +44,7 @@ from models import (
 )
 import cashflows as withdrawal_engine
 import scenarios as scenario_engine
+import social_security
 import taxes as tax_engine
 
 
@@ -121,13 +122,16 @@ def run_simulation(
             )
 
     tax_state: dict = {}  # carried from year to year (e.g. suspended rental losses)
+    # Benefits recorded as ACTUALS are what was really paid: the earnings test leaves them alone.
+    actual_slots = ({(a.flow_id, a.year) for a in working_portfolio.actuals if a.kind == "actual" and a.flow_id}
+                    if scenario.use_actuals else set())
 
     for year in range(assumptions.start_year, assumptions.end_year + 1):
         year_warnings = list(scenario_warnings) if year == assumptions.start_year else []
         result = _simulate_year(
             year, scope_assets, scope_household_cashflows, flows_by_asset,
             scope_liabilities, balances, scenario, assumptions, year_warnings,
-            growth_rate_fn, tax_state, working_portfolio.people,
+            growth_rate_fn, tax_state, working_portfolio.people, actual_slots,
         )
         result.ages = {p.name: p.age_in(year) for p in working_portfolio.people}
         annual_results.append(result)
@@ -148,6 +152,7 @@ def _simulate_year(
     growth_rate_fn: Optional[GrowthRateFn] = None,
     tax_state: Optional[dict] = None,
     people: Optional[list] = None,
+    actual_slots: Optional[set] = None,
 ) -> AnnualHouseholdResult:
     asset_results: List[AnnualAssetResult] = []
     total_asset_income = 0.0
@@ -173,6 +178,18 @@ def _simulate_year(
     total_interest_paid = sum(r.interest_paid for r in liability_results)
     total_liabilities = sum(r.ending_balance for r in liability_results)
 
+    tax_context = tax_engine.TaxContext(
+        assets=assets, flows_by_asset=flows_by_asset, household_flows=household_cashflows,
+        liability_results=liability_results, liabilities={li.liability_id: li for li in liabilities},
+        people=people or [], sold_asset_ids=sold_asset_ids,
+        carryforward=tax_state if tax_state is not None else {},
+    )
+    # Social Security earnings test (per person) -- before income is totalled and taxed.
+    if people:
+        earned = tax_engine.earned_income_by_person(year, inflation_rate, tax_context)
+        warnings.extend(social_security.apply_earnings_test(
+            year, inflation_rate, household_cashflows, people, earned, actual_slots or set()))
+
     household_income = 0.0
     household_expense = 0.0
     for cf in household_cashflows:
@@ -192,12 +209,6 @@ def _simulate_year(
         )
         if _flow_active_in_year(cf, year)
     ]
-    tax_context = tax_engine.TaxContext(
-        assets=assets, flows_by_asset=flows_by_asset, household_flows=household_cashflows,
-        liability_results=liability_results, liabilities={li.liability_id: li for li in liabilities},
-        people=people or [], sold_asset_ids=sold_asset_ids,
-        carryforward=tax_state if tax_state is not None else {},
-    )
     tax_estimate = tax_engine.estimate_taxes_for_year(year, this_year_cashflows, assumptions, tax_context)
 
     net_cashflow = total_gross_income - total_expenses - tax_estimate.total_estimated_tax

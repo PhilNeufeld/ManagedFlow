@@ -55,6 +55,11 @@ changes, a schema migration so existing files keep loading.
   existing Loan liability (term, rate, payment, secured by an asset; interest
   already flows to the tax engine) -- adds "years left"/origination date and a
   GOI-based rental template in the app.
+- [x] **Per-person payroll tax and the Social Security earnings test** (built 2026-11-04).
+  Wages, self-employment income and benefits carry a person; each spouse has their own
+  wage base; claiming before full retirement age applies the earnings test (incl. the
+  first-year monthly rule). Not yet: the benefit increase at FRA that credits withheld
+  months back -- part of the Social Security class below.
 - **Relative events** -- an event defined as an offset from another (e.g.
   each LVM distribution step relative to the start of distributions), so
   moving one event moves the whole schedule.

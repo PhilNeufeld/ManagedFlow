@@ -68,7 +68,13 @@ ADDITIONAL_MEDICARE_THRESHOLD = {"married_joint": 250_000, "single": 200_000}  #
 # Social Security benefit taxation (provisional income), not indexed
 SS_BASE = {"married_joint": (32_000, 44_000, 6_000), "single": (25_000, 34_000, 4_500)}
 
-SOCIAL_SECURITY_WAGE_BASE = 184_500
+SOCIAL_SECURITY_WAGE_BASE = 184_500   # 2026 (kept for callers that index from FEDERAL_YEAR)
+# Per PERSON, by year (SSA). Later years are indexed by inflation from the latest.
+# 2027: $192,300 (SSA, Oct 2026: journalofaccountancy.com/news/2026/oct/...-announced-for-2027)
+SOCIAL_SECURITY_WAGE_BASE_BY_YEAR = {2025: 176_100, 2026: 184_500, 2027: 192_300}
+# Retirement earnings test exempt amounts (SSA): (under full retirement age -- $1 withheld
+# per $2 over; year you reach it -- $1 per $3 over, counting months before FRA).
+EARNINGS_TEST_LIMITS = {2025: (23_400, 62_160), 2026: (24_480, 65_160), 2027: (25_560, 67_920)}
 SOCIAL_SECURITY_RATE = 0.062     # employee share; self-employed pay 2x
 MEDICARE_RATE = 0.0145
 SE_EARNINGS_FACTOR = 0.9235
@@ -90,6 +96,27 @@ CA_PERSONAL_CREDIT = 153          # per filer
 CA_SENIOR_CREDIT = 153            # per filer 65+ (same amount as the personal credit)
 CA_MENTAL_HEALTH_RATE = 0.01      # extra 1% on taxable income over $1M, not indexed
 CA_MENTAL_HEALTH_THRESHOLD = 1_000_000
+
+
+def _by_year(table: dict, year: int, inflation: float):
+    """Value for `year` from a {year: value} table; after the last year, indexed by inflation."""
+    if year in table:
+        return table[year]
+    last = max(table)
+    if year < min(table):
+        return table[min(table)]
+    value = table[last]
+    if isinstance(value, tuple):
+        return tuple(index_amount(v, last, year, inflation) for v in value)
+    return index_amount(value, last, year, inflation)
+
+
+def ss_wage_base(year: int, inflation: float) -> float:
+    return _by_year(SOCIAL_SECURITY_WAGE_BASE_BY_YEAR, year, inflation)
+
+
+def earnings_test_limits(year: int, inflation: float):
+    return _by_year(EARNINGS_TEST_LIMITS, year, inflation)
 
 
 def index_amount(amount: float, table_year: int, year: int, inflation: float) -> float:

@@ -223,6 +223,11 @@ class Cashflow:
     # Optional links to Events; when set, they decide the dates above.
     start_event_id: Optional[str] = None
     end_event_id: Optional[str] = None
+    # Whose earnings or benefit this is (a Person): wages and self-employment
+    # income are taxed per person (each has their own Social Security wage
+    # base), and a Social Security benefit is subject to its owner's earnings
+    # test. None = the first person in the household.
+    person_id: Optional[str] = None
     # {year: annual amount} that replaces the planned amount in that year.
     # Filled in on a scenario's working copy from recorded Actuals; never saved.
     year_overrides: Dict[int, float] = field(default_factory=dict, repr=False, compare=False)
@@ -373,6 +378,11 @@ class Person:
     birth_month: int = 1
     life_expectancy: int = 92
     notes: str = ""
+    # Social Security earnings test, first year of benefits: a month counts as
+    # "retired" (benefit paid in full) only if you DON'T perform substantial
+    # services in your own business that month (SSA: generally over 45 hours).
+    # True = assume you do, so self-employment months aren't treated as retired.
+    substantial_self_employment: bool = True
 
     def __post_init__(self) -> None:
         _require(bool(self.person_id), "Person.person_id is required")
@@ -384,6 +394,25 @@ class Person:
     def age_in(self, year: int) -> int:
         """Age reached during `year` (on the birthday)."""
         return year - self.birth_year
+
+    def full_retirement_age(self) -> Tuple[int, int]:
+        """Social Security full retirement age as (years, months), by birth year."""
+        y = self.birth_year
+        if y <= 1937:
+            return (65, 0)
+        if y <= 1942:
+            return (65, 2 * (y - 1937))
+        if y <= 1954:
+            return (66, 0)
+        if y <= 1959:
+            return (66, 2 * (y - 1954))
+        return (67, 0)
+
+    def full_retirement_date(self) -> Tuple[int, int]:
+        """(year, month) this person reaches full retirement age."""
+        years, months = self.full_retirement_age()
+        total = (self.birth_year + years) * 12 + (self.birth_month - 1) + months
+        return total // 12, total % 12 + 1
 
     def date_at_age(self, age: int) -> Tuple[int, int]:
         """(year, month) of the birthday when this person turns `age`."""
@@ -622,6 +651,9 @@ class Asset:
     recovery_years: float = 0.0
     # Business/farm income from this asset is subject to self-employment tax.
     subject_to_se_tax: bool = False
+    # Whose self-employment income it is (a Person). Each spouse's payroll and
+    # self-employment taxes are worked out separately. None = the first person.
+    earner_person_id: Optional[str] = None
     # Cashflows are NOT stored on the asset (schema v0.2). They live in
     # Portfolio.cashflows and point here via Cashflow.asset_id. Use
     # Portfolio.cashflows_for_asset(asset_id) to get them.
@@ -686,6 +718,7 @@ class Asset:
             "placed_in_service_year": self.placed_in_service_year,
             "recovery_years": self.recovery_years,
             "subject_to_se_tax": self.subject_to_se_tax,
+            "earner_person_id": self.earner_person_id,
         }
 
     @classmethod
