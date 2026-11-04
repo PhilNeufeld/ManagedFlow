@@ -327,3 +327,21 @@ def test_loan_editor_works_out_balance_from_original_terms(tmp_path):
     assert loan.balance == pytest.approx(251_057.17, abs=0.01)
     assert (loan.term_months, loan.original_amount, loan.origination_year) == (240, 300_000, 2016)
     assert table(at, "Payments left").iloc[0]["Payments left"] == "240 (20.0 yrs; last Dec 2045)"
+
+
+# --- explore ------------------------------------------------------------------------------------------
+
+def test_explore_drills_down_and_back_up(tmp_path):
+    from tests.test_explorer import plan as explore_plan
+    at = start(explore_plan(), tmp_path)
+    no_crash(at)
+    at.selectbox(key="explore_goto").set_value("root/e:us").run()
+    at.selectbox(key="explore_goto").set_value("root/e:us/e:trust").run()
+    at.selectbox(key="explore_goto").set_value("root/e:us/e:trust/e:fund").run()
+    no_crash(at)
+    assert any("Fund" in m.value for m in at.markdown)
+    yearly = table(at, "Net worth")
+    assert yearly.iloc[0]["Assets"] == "$200,000"        # 20% of the $1M building, on the trust's path
+    at = next(b for b in at.button if b.key == "explore_crumb_root").click().run()
+    no_crash(at)
+    assert at.session_state["explore_focus"] == "root"

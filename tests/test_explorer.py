@@ -1,0 +1,96 @@
+"""Drill-down explorer. The household owns 100% of an LLC and of a trust; the
+trust owns 20% of a fund and the LLC 10% of it, so the fund's building
+($1,000,000, rent $100,000/yr) shows up on TWO paths: 20% and 10% (= 30% in total)."""
+import pytest
+
+import explorer
+from models import (
+    Asset, Assumptions, Bundle, Cashflow, CashflowDirection, Entity, FlowType, Loan, Ownership, Person,
+    Portfolio, Scenario,
+)
+
+
+def plan(view="share"):
+    return Portfolio(
+        assumptions=Assumptions(start_year=2026, end_year=2027, inflation_rate=0.0, tax_method="flat",
+                                default_tax_rates={}),
+        people=[Person(person_id="phil", name="Phil", birth_year=1965)],
+        entities=[Entity(entity_id="us", name="Us", entity_type="joint"),
+                  Entity(entity_id="llc", name="LLC", entity_type="llc"),
+                  Entity(entity_id="trust", name="Trust", entity_type="trust"),
+                  Entity(entity_id="fund", name="Fund", entity_type="partnership")],
+        ownerships=[Ownership(owner_entity_id="us", owned_type="entity", owned_id="llc", percent=1.0),
+                    Ownership(owner_entity_id="us", owned_type="entity", owned_id="trust", percent=1.0),
+                    Ownership(owner_entity_id="trust", owned_type="entity", owned_id="fund", percent=0.2),
+                    Ownership(owner_entity_id="llc", owned_type="entity", owned_id="fund", percent=0.1)],
+        assets=[Asset(asset_id="bldg", name="Building", asset_type="real_estate", owner="Fund",
+                      initial_value=1_000_000, start_year=2026, entity_id="fund"),
+                Asset(asset_id="house", name="House", asset_type="real_estate", owner="LLC",
+                      initial_value=300_000, start_year=2026, entity_id="llc")],
+        liabilities=[Loan(liability_id="mtg", name="House loan", balance=100_000, annual_interest_rate=0.0,
+                          start_year=2026, monthly_payment=1_000, secured_by_asset_id="house")],
+        cashflows=[Cashflow(flow_id="rent", name="Building rent", flow_type=FlowType.RENT_INCOME,
+                            direction=CashflowDirection.INFLOW, amount=100_000, start_year=2026, asset_id="bldg"),
+                   Cashflow(flow_id="salary", name="Salary", flow_type=FlowType.SALARY_INCOME,
+                            direction=CashflowDirection.INFLOW, amount=50_000, start_year=2026, person_id="phil"),
+                   Cashflow(flow_id="living", name="Living", flow_type=FlowType.LIVING_EXPENSE,
+                            direction=CashflowDirection.OUTFLOW, amount=40_000, start_year=2026)],
+        bundles=[Bundle(bundle_id="b", name="House bundle", entity_id="llc", asset_ids=["house"])],
+        scenarios=[Scenario(scenario_id="base", name="Base", is_base_case=True, ownership_view=view,
+                            reinvest_surplus=False)],
+    )
+
+
+def test_tree_follows_ownership_and_collections():
+    nodes = explorer.build_tree(plan())
+    kinds = {n.label: n.kind for n in nodes.values()}
+    assert kinds["Us"] == "Entity" and kinds["House bundle"] == "Collection" and kinds["House loan"] == "Liability"
+    fund_paths = sorted(n.factor for n in nodes.values() if n.ref_id == "fund")
+    assert fund_paths == pytest.approx([0.1, 0.2])            # one node per ownership path
+    house = next(n for n in nodes.values() if n.ref_id == "house")
+    assert nodes[house.parent_id].kind == "Collection"         # bundled asset sits in its collection
+    assert [nodes[c].label for c in house.children] == ["House loan"]
+    phil = next(n for n in nodes.values() if n.label == "Phil")
+    assert [nodes[c].label for c in phil.children] == ["Salary"]
+
+
+@pytest.mark.parametrize("view", ["share", "full"])
+def test_each_path_gets_its_portion_and_the_whole_matches_the_simulation(view):
+    p = plan(view)
+    nodes = explorer.build_tree(p)
+    res = explorer.run(p, p.get_scenario("base"))
+    share_view = True   # the explorer always works in your share
+    bldg = sorted((n for n in nodes.values() if n.ref_id == "bldg"), key=lambda n: n.factor)
+    rows = [explorer.node_series(nodes, n.node_id, res, share_view)[0] for n in bldg]
+    assert [r["Assets"] for r in rows] == pytest.approx([100_000, 200_000])     # 10% and 20% of $1M
+    assert [r["Cash in"] for r in rows] == pytest.approx([10_000, 20_000])
+    whole = explorer.node_series(nodes, explorer.ROOT, res, share_view)[0]
+    sim = res.annual_results[0]
+    assert whole["Net worth"] == pytest.approx(sim.total_net_worth)
+    assert whole["Net cash flow"] == pytest.approx(sim.net_cashflow)
+
+
+def test_liability_node_shows_balance_and_payments():
+    p = plan()
+    nodes = explorer.build_tree(p)
+    loan = next(n for n in nodes.values() if n.ref_id == "mtg")
+    row = explorer.node_series(nodes, loan.node_id, explorer.run(p, p.get_scenario("base")))[0]
+    assert row["Liabilities"] == pytest.approx(88_000) and row["Principal"] == pytest.approx(12_000)
+
+
+def test_icicle_children_fill_their_parent():
+    p = plan()
+    nodes = explorer.build_tree(p)
+    res = explorer.run(p, p.get_scenario("base"))
+    for measure in ("count", "dollars"):
+        rects = explorer.icicle_layout(nodes, explorer.ROOT, res, 2026, measure)
+        by_id = {r["node_id"]: r for r in rects}
+        for r in rects:
+            kids = [by_id[c] for c in nodes[r["node_id"]].children if c in by_id]
+            if kids:
+                assert kids[0]["y0"] == pytest.approx(r["y0"]) and kids[-1]["y1"] == pytest.approx(r["y1"])
+
+
+def test_class_colors_are_fixed_per_class():
+    assert dict(zip(explorer.CLASSES, explorer.CLASS_COLORS))["Asset"] == "#1baf7a"
+    assert len(set(explorer.CLASS_COLORS)) == len(explorer.CLASSES)

@@ -60,6 +60,9 @@ changes, a schema migration so existing files keep loading.
   wage base; claiming before full retirement age applies the earnings test (incl. the
   first-year monthly rule). Not yet: the benefit increase at FRA that credits withheld
   months back -- part of the Social Security class below.
+- [x] **Explore tab** (built 2026-11-04): click-to-drill icicle chart -- entity > sub-entity >
+  collection > asset / liability / cashflow, one color per class -- with each level's table and
+  value / cash-flow charts over time (your share along each ownership path).
 - **Relative events** -- an event defined as an offset from another (e.g.
   each LVM distribution step relative to the start of distributions), so
   moving one event moves the whole schedule.

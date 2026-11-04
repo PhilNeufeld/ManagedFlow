@@ -136,7 +136,8 @@ def run_simulation(
         result.ages = {p.name: p.age_in(year) for p in working_portfolio.people}
         annual_results.append(result)
 
-    return SimulationResult(scenario_id=scenario.scenario_id, annual_results=annual_results)
+    return SimulationResult(scenario_id=scenario.scenario_id, annual_results=annual_results,
+                            working_portfolio=working_portfolio)
 
 
 def _simulate_year(

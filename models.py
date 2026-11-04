@@ -1409,6 +1409,9 @@ class AnnualHouseholdResult:
 class SimulationResult:
     scenario_id: str
     annual_results: List[AnnualHouseholdResult] = field(default_factory=list)
+    # The scenario's working copy after the run (e.g. Social Security after the
+    # earnings test), for drill-down views. Not saved.
+    working_portfolio: Any = field(default=None, repr=False, compare=False)
 
     def to_dict(self) -> Dict[str, Any]:
         return {

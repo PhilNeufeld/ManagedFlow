@@ -19,6 +19,7 @@ import pandas as pd
 import streamlit as st
 
 import actuals as actuals_engine
+import explorer
 import exports
 import montecarlo
 import quick_add
@@ -108,6 +109,7 @@ def _generate_id(prefix: str, name: str, existing_ids: list[str]) -> str:
 
 def _clear_simulation_cache() -> None:
     st.session_state.pop("simulation_results", None)
+    st.session_state.pop("explore_result", None)
 
 
 # ---------------------------------------------------------------------------
@@ -2728,6 +2730,170 @@ def render_rental_pro_forma(portfolio: Portfolio, scenario_id: str) -> None:
     st.dataframe(df, use_container_width=True)
 
 
+def _explore_set_focus(node_id: str) -> None:
+    st.session_state["explore_focus"] = node_id
+    st.session_state.pop("explore_goto", None)
+
+
+def _class_chip(kind: str) -> str:
+    return (f"<span style='background:{explorer.COLOR[kind]};color:{explorer.INK[kind]};"
+            f"padding:1px 8px;border-radius:4px;font-size:0.8em'>{kind}</span>")
+
+
+def render_explore_tab(portfolio: Portfolio) -> None:
+    """Drill down: entity > sub-entities > collections > assets, liabilities, cashflows."""
+    import altair as alt
+
+    st.header("Explore")
+    st.caption("Click a box to drill in; use the path buttons to go back up. Amounts are always YOUR share "
+               "along that ownership path (an entity you own through two paths shows up twice, once per path).")
+    if not portfolio.scenarios:
+        st.info("Add a scenario first (Scenarios tab).")
+        return
+    c1, c2, c3 = st.columns([2, 2, 3])
+    with c1:
+        scen_ids = [s.scenario_id for s in portfolio.scenarios]
+        base = next((s.scenario_id for s in portfolio.scenarios if s.is_base_case), scen_ids[0])
+        scenario_id = st.selectbox("Scenario", scen_ids, index=scen_ids.index(base), key="explore_scenario",
+                                   format_func=lambda sid: portfolio.get_scenario(sid).name)
+    a = portfolio.assumptions
+    with c2:
+        year = st.number_input("Year", min_value=a.start_year, max_value=a.end_year, value=a.start_year,
+                               step=1, key="explore_year")
+    with c3:
+        measure = st.radio("Box size", ["count", "dollars"], horizontal=True, key="explore_measure",
+                           format_func=lambda m: "Number of items" if m == "count"
+                           else "Dollars (value + balance + cash in/out)")
+    scenario = portfolio.get_scenario(scenario_id)
+    share_view = True   # explorer.run() always simulates your share
+    cached = st.session_state.get("explore_result")
+    if not cached or cached[0] != scenario_id:
+        cached = (scenario_id, explorer.run(portfolio, scenario))
+        st.session_state["explore_result"] = cached
+    result = cached[1]
+    nodes = explorer.build_tree(portfolio)
+    focus = st.session_state.get("explore_focus", explorer.ROOT)
+    if focus not in nodes:
+        focus = explorer.ROOT
+    node = nodes[focus]
+
+    # breadcrumb
+    trail = explorer.path(nodes, focus)
+    cols = st.columns(len(trail))
+    for col, n in zip(cols, trail):
+        with col:
+            st.button(n.label, key=f"explore_crumb_{n.node_id}", disabled=n.node_id == focus,
+                      on_click=_explore_set_focus, args=(n.node_id,), use_container_width=True)
+
+    # the clickable icicle chart
+    rects = explorer.icicle_layout(nodes, focus, result, int(year), measure, depth=3, share_view=share_view)
+    for r in rects:
+        r["Class"] = r["kind"]
+        r["Share on this path"] = f"{r['share']:.4%}"
+        r["ink"] = explorer.INK[r["kind"]]
+        r["show"] = r["label"] if (r["y1"] - r["y0"]) > 0.035 else ""
+    df = pd.DataFrame(rects)
+    pick = alt.selection_point(name="pick", fields=["node_id"], on="click")
+    base_chart = alt.Chart(df).encode(
+        x=alt.X("x0:Q", axis=None, scale=alt.Scale(domain=[0, max(df.x1)], nice=False, zero=True)), x2="x1:Q",
+        y=alt.Y("y0:Q", axis=None, scale=alt.Scale(domain=[0, 1], reverse=True)), y2="y1:Q")
+    boxes = base_chart.mark_rect(stroke="white", strokeWidth=2, cornerRadius=3).encode(
+        color=alt.Color("Class:N", scale=alt.Scale(domain=explorer.CLASSES, range=explorer.CLASS_COLORS),
+                        legend=alt.Legend(orient="top", title=None)),
+        tooltip=["label:N", "Class:N", "Share on this path:N", "children:Q"],
+    ).add_params(pick)
+    text = alt.Chart(df).mark_text(align="left", dx=6, fontSize=12, limit=200).encode(
+        x=alt.X("x0:Q", scale=alt.Scale(domain=[0, max(df.x1)], nice=False, zero=True)),
+        y=alt.Y("ym:Q", scale=alt.Scale(domain=[0, 1], reverse=True)), text="show:N",
+        color=alt.Color("ink:N", scale=None)).transform_calculate(ym="(datum.y0 + datum.y1) / 2")
+    event = st.altair_chart((boxes + text).properties(height=460), use_container_width=True,
+                            on_select="rerun", key="explore_chart", theme=None)
+    picked = (event or {}).get("selection", {}).get("pick") if isinstance(event, dict) or hasattr(event, "get") else None
+    if picked:
+        clicked = picked[0].get("node_id")
+        if clicked and clicked != focus and clicked in nodes:
+            _explore_set_focus(clicked)
+            st.session_state.pop("explore_chart", None)
+            st.rerun()
+
+    # keyboard-friendly drill-down
+    if node.children:
+        labels = {c: f"{nodes[c].label}  ({nodes[c].kind})" for c in node.children}
+        goto = st.selectbox("Or go to", [None] + node.children, key="explore_goto",
+                            format_func=lambda c: "-- pick an item inside --" if c is None else labels[c])
+        if goto:
+            _explore_set_focus(goto)
+            st.rerun()
+
+    # details for the focus node
+    st.markdown(f"### {node.label} &nbsp; {_class_chip(node.kind)}", unsafe_allow_html=True)
+    if node.factor != 1.0:
+        st.caption(f"Your share on this path: {node.factor:.4%}")
+    series = explorer.node_series(nodes, focus, result, share_view)
+    if node.children:
+        this_year = {c: next((r for r in explorer.node_series(nodes, c, result, share_view)
+                              if r["Year"] == int(year)), None) for c in node.children}
+        kids = pd.DataFrame([{
+            "Name": nodes[c].label, "Class": nodes[c].kind, "Share on path": f"{nodes[c].factor:.2%}",
+            f"Assets {int(year)}": this_year[c]["Assets"] if this_year[c] else 0.0,
+            f"Liabilities {int(year)}": this_year[c]["Liabilities"] if this_year[c] else 0.0,
+            f"Cash in {int(year)}": this_year[c]["Cash in"] if this_year[c] else 0.0,
+            f"Cash out {int(year)}": this_year[c]["Cash out"] if this_year[c] else 0.0,
+        } for c in node.children])
+        money = [c for c in kids.columns if c.endswith(str(int(year)))]
+        head = "".join(f"<th style='text-align:{'right' if c in money else 'left'};padding:4px 8px'>{c}</th>"
+                       for c in kids.columns)
+        body = ""
+        for _, r in kids.iterrows():
+            cells = []
+            for c in kids.columns:
+                if c == "Class":
+                    cells.append(f"<td style='padding:4px 8px'>{_class_chip(r[c])}</td>")
+                elif c in money:
+                    cells.append(f"<td style='text-align:right;padding:4px 8px'>{format_currency(r[c])}</td>")
+                else:
+                    cells.append(f"<td style='padding:4px 8px'>{r[c]}</td>")
+            body += "<tr>" + "".join(cells) + "</tr>"
+        st.markdown(f"<table style='width:100%;border-collapse:collapse;font-size:0.9em'><thead><tr>{head}"
+                    f"</tr></thead><tbody>{body}</tbody></table>", unsafe_allow_html=True)
+
+    sdf = pd.DataFrame(series)
+    if sdf.empty:
+        return
+    has_balance = (sdf["Assets"].abs().sum() + sdf["Liabilities"].abs().sum()) > 0
+    left, right = st.columns(2)
+    if has_balance:
+        with left:
+            st.markdown("**Value over time**")
+            long = sdf.melt(id_vars="Year", value_vars=["Assets", "Liabilities", "Net worth"],
+                            var_name="Series", value_name="Amount")
+            st.altair_chart(alt.Chart(long).mark_line(strokeWidth=2).encode(
+                x=alt.X("Year:O", axis=alt.Axis(labelAngle=0, values=[y for y in sdf.Year if y % 5 == 0 or y == sdf.Year.min()])),
+                y=alt.Y("Amount:Q", axis=alt.Axis(format="$,.0s"), title=None),
+                color=alt.Color("Series:N", scale=alt.Scale(
+                    domain=["Assets", "Liabilities", "Net worth"],
+                    range=[explorer.COLOR["Asset"], explorer.COLOR["Liability"], "#52514e"]),
+                    legend=alt.Legend(orient="top", title=None)),
+                strokeDash=alt.StrokeDash("Series:N", scale=alt.Scale(
+                    domain=["Assets", "Liabilities", "Net worth"], range=[[1, 0], [1, 0], [6, 4]]), legend=None),
+                tooltip=["Year:O", "Series:N", alt.Tooltip("Amount:Q", format="$,.0f")],
+            ).properties(height=280), use_container_width=True, theme=None)
+    with (right if has_balance else left):
+        st.markdown("**Net cash flow by year**")
+        st.altair_chart(alt.Chart(sdf).mark_bar(cornerRadiusEnd=3).encode(
+            x=alt.X("Year:O", axis=alt.Axis(labelAngle=0, values=[y for y in sdf.Year if y % 5 == 0 or y == sdf.Year.min()])),
+            y=alt.Y("Net cash flow:Q", axis=alt.Axis(format="$,.0s"), title=None),
+            color=alt.value(explorer.COLOR["Cashflow"]),
+            tooltip=["Year:O", alt.Tooltip("Cash in:Q", format="$,.0f"), alt.Tooltip("Cash out:Q", format="$,.0f"),
+                     alt.Tooltip("Net cash flow:Q", format="$,.0f")],
+        ).properties(height=280), use_container_width=True, theme=None)
+    shown = sdf.copy()
+    for col in shown.columns:
+        if col != "Year":
+            shown[col] = shown[col].apply(format_currency)
+    st.dataframe(shown, hide_index=True, use_container_width=True)
+
+
 def render_monte_carlo_section(portfolio: Portfolio) -> None:
     st.divider()
     st.header("Monte Carlo")
@@ -2911,6 +3077,7 @@ def main() -> None:
         ("Assumptions", render_assumptions_tab),
         ("Scenarios", render_scenarios_tab),
         ("Simulation", lambda p: (render_simulation_tab(p), render_monte_carlo_section(p))),
+        ("Explore", render_explore_tab),
         ("Export", render_export_tab),
     ]
     for tab, (_label, render) in zip(st.tabs([label for label, _ in tab_layout]), tab_layout):
