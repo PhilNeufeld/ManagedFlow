@@ -28,6 +28,7 @@ Workbook tabs:
 from __future__ import annotations
 
 import actuals as actuals_engine
+import explorer
 import rentals
 
 from pathlib import Path
@@ -147,6 +148,7 @@ def export_to_excel(
     _write_charts_sheet(wb, simulation_results)
     _write_actuals_sheets(wb, portfolio)
     _write_rental_pro_forma_sheet(wb, portfolio)
+    _write_period_view_sheet(wb, portfolio)
     _write_notes_warnings_sheet(wb, simulation_results)
 
     wb.save(output_path)
@@ -443,6 +445,70 @@ def _write_asset_detail_sheet(wb: Workbook, simulation_results: List[SimulationR
                     ar.gross_expense, ar.sold_this_year, ar.sale_proceeds,
                 ])
     _write_table(ws, 3, ASSET_DETAIL_HEADERS, rows, currency_cols=list(range(3, 9)) + [10])
+
+
+def _write_period_view_sheet(wb: Workbook, portfolio: Portfolio, years: int = 5) -> None:
+    """Whole plan, base scenario, first `years` years: one row per asset / liability /
+    cashflow, grouped, with events and substantial-change flags."""
+    scenario = next((s for s in portfolio.scenarios if s.is_base_case), portfolio.scenarios[0] if portfolio.scenarios else None)
+    if scenario is None:
+        return
+    nodes = explorer.build_tree(portfolio)
+    result = explorer.run(portfolio, scenario)
+    pv = explorer.period_view(portfolio, nodes, explorer.ROOT, result, portfolio.assumptions.start_year, years)
+    yrs = pv["years"]
+    ws = wb.create_sheet("Period View")
+    ws["A1"] = f"Period view {yrs[0]}-{yrs[-1]} -- scenario '{scenario.name}' (your share)"
+    ws["A1"].font = TITLE_FONT
+    ws["A2"] = ("Assets = year-end value; liabilities = balance; cashflows = the year's amount (outflows negative). "
+                "▲/▼ = changed from the year before by at least 10% and $5,000.")
+    ws["A2"].font = SUBTITLE_FONT
+    headers = ["Item", "Class"] + [str(y) for y in yrs] + ["", "Change", "Events / notes"]
+    hr = 4
+    for c, h in enumerate(headers, start=1):
+        ws.cell(row=hr, column=c, value=h)
+    _style_header_row(ws, hr, len(headers))
+    row = hr + 1
+    ws.cell(row=row, column=1, value="Events").font = Font(name=FONT_NAME, bold=True)
+    for i, y in enumerate(yrs):
+        cell = ws.cell(row=row, column=3 + i, value="\n".join(pv["events"][y]) or "-")
+        cell.alignment = Alignment(wrap_text=True, vertical="top")
+        cell.font = Font(name=FONT_NAME, size=9)
+    row += 1
+    flag_col = 3 + len(yrs)
+    for r in pv["rows"]:
+        if r["type"] == "group":
+            row += 1
+            ws.cell(row=row, column=1, value=r["label"]).font = Font(name=FONT_NAME, bold=True, size=11)
+            row += 1
+            continue
+        bold = r["type"] in ("subtotal", "total")
+        ws.cell(row=row, column=1, value=("    " * r.get("indent", 0)) + r["label"]).font = Font(name=FONT_NAME, bold=bold)
+        if r["type"] == "item":
+            ws.cell(row=row, column=2, value=r["kind"]).font = Font(name=FONT_NAME)
+        flags = []
+        for i, y in enumerate(yrs):
+            cell = ws.cell(row=row, column=3 + i, value=round(r["values"][y], 2))
+            cell.number_format = CURRENCY_FORMAT
+            cell.font = Font(name=FONT_NAME, bold=bold)
+            f = r.get("flags", {}).get(y, "")
+            if f:
+                flags.append(f"{y}{f}")
+        ws.cell(row=row, column=flag_col, value=" ".join(flags)).font = Font(name=FONT_NAME)
+        c = ws.cell(row=row, column=flag_col + 1, value=round(r["change"], 2))
+        c.number_format = CURRENCY_FORMAT
+        c.font = Font(name=FONT_NAME, bold=bold)
+        ws.cell(row=row, column=flag_col + 2, value=r.get("note", "")).font = Font(name=FONT_NAME, size=9)
+        row += 1
+    ws.column_dimensions["A"].width = 46
+    ws.column_dimensions["B"].width = 11
+    for i in range(len(yrs)):
+        ws.column_dimensions[get_column_letter(3 + i)].width = 15
+    ws.column_dimensions[get_column_letter(flag_col)].width = 14
+    ws.column_dimensions[get_column_letter(flag_col + 1)].width = 15
+    ws.column_dimensions[get_column_letter(flag_col + 2)].width = 70
+    ws.row_dimensions[hr + 1].height = 60
+    ws.freeze_panes = ws.cell(row=hr + 1, column=3)
 
 
 def _write_rental_pro_forma_sheet(wb: Workbook, portfolio: Portfolio) -> None:

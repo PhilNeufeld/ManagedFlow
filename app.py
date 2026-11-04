@@ -2743,6 +2743,77 @@ def _class_chip(kind: str) -> str:
             f"padding:1px 8px;border-radius:4px;font-size:0.8em'>{kind}</span>")
 
 
+def _render_period_table(portfolio: Portfolio, nodes, focus: str, result) -> None:
+    """Period view: one row per asset / liability / cashflow under the current level, 1-5 years."""
+    a = portfolio.assumptions
+    c1, c2, c3, c4, c5 = st.columns([2, 2, 1.4, 1.4, 2.2])
+    with c1:
+        start = st.number_input("From year", min_value=a.start_year, max_value=a.end_year,
+                                value=a.start_year, step=1, key="period_start")
+    with c2:
+        years = st.slider("Years", 1, 5, 3, key="period_years")
+    with c3:
+        pct = st.number_input("Change % ≥", min_value=0.0, max_value=100.0, value=10.0, step=1.0, key="period_pct")
+    with c4:
+        dollars = st.number_input("and $ ≥", min_value=0.0, value=5_000.0, step=1_000.0, key="period_dollars")
+    with c5:
+        only = st.checkbox("Only rows with a substantial change or event", key="period_only")
+    pv = explorer.period_view(portfolio, nodes, focus, result, int(start), int(years),
+                              pct / 100, dollars, only)
+    yrs = pv["years"]
+    st.caption("Your share. Assets = year-end value, liabilities = year-end balance, cashflows = the year's "
+               f"amount (outflows negative). ▲/▼ = changed from the year before by at least {pct:.0f}% and "
+               f"{format_currency(dollars)}.")
+
+    def cell(v, flag=""):
+        return f"{format_currency(v)}{(' ' + flag) if flag else ''}"
+
+    th = "padding:4px 8px;text-align:right;border-bottom:1px solid #ccc"
+    head = (f"<th style='padding:4px 8px;text-align:left;border-bottom:1px solid #ccc;min-width:300px'>Item</th>"
+            f"<th style='padding:4px 8px;text-align:left;border-bottom:1px solid #ccc'>Class</th>"
+            + "".join(f"<th style='{th}'>{y}</th>" for y in yrs)
+            + f"<th style='{th}'>Change</th><th style='padding:4px 8px;text-align:left;border-bottom:1px solid #ccc'>"
+              "Events / notes</th>")
+    ev_row = ("<tr><td style='padding:4px 8px'><b>Events</b></td><td></td>"
+              + "".join(f"<td style='padding:4px 8px;font-size:0.85em;vertical-align:top'>"
+                        f"{'<br>'.join(pv['events'][y]) or '–'}</td>" for y in yrs)
+              + "<td></td><td></td></tr>")
+    body = [ev_row]
+    for r in pv["rows"]:
+        if r["type"] == "group":
+            body.append(f"<tr><td colspan='{len(yrs) + 4}' style='padding:10px 8px 4px;font-weight:600;"
+                        f"border-bottom:2px solid {explorer.COLOR[r['kind']]}'>{r['label']}</td></tr>")
+            continue
+        weight = "600" if r["type"] in ("subtotal", "total") else "400"
+        style = f"padding:3px 8px;font-weight:{weight}"
+        indent = 12 + 18 * r.get("indent", 0)
+        label_style = f"padding:3px 8px 3px {indent}px;font-weight:{weight}"
+        if r["type"] == "subtotal":
+            label_style += ";font-style:italic"
+        cls = _class_chip(r["kind"]) if r["type"] == "item" else ""
+        vals = "".join(f"<td style='{style};text-align:right;white-space:nowrap'>"
+                       f"{cell(r['values'][y], r.get('flags', {}).get(y, ''))}</td>" for y in yrs)
+        border = ";border-top:1px solid #ccc" if r["type"] == "total" and r["label"] == "Assets" else ""
+        body.append(f"<tr style='{border}'><td style='{label_style}'>{r['label']}</td><td style='{style}'>{cls}</td>"
+                    f"{vals}<td style='{style};text-align:right;white-space:nowrap'>{format_currency(r['change'])}</td>"
+                    f"<td style='{style};font-size:0.85em'>{r.get('note', '')}</td></tr>")
+    st.markdown(f"<div style='overflow-x:auto'><table style='width:100%;border-collapse:collapse;"
+                f"font-size:0.88em'><thead><tr>{head}</tr></thead><tbody>{''.join(body)}</tbody></table></div>",
+                unsafe_allow_html=True)
+
+    items = [r for r in pv["rows"] if r["type"] == "item"]
+    if items:
+        def _open():   # callback: runs before the widgets are drawn, so it may switch the view
+            nid = st.session_state.get("period_open")
+            if nid:
+                _explore_set_focus(nid)
+                st.session_state["period_open"] = None
+                st.session_state["explore_view"] = "Chart"
+
+        st.selectbox("Open an item in the chart", [None] + [r["node_id"] for r in items], key="period_open",
+                     on_change=_open, format_func=lambda nid: "--" if nid is None else nodes[nid].label)
+
+
 def render_explore_tab(portfolio: Portfolio) -> None:
     """Drill down: entity > sub-entities > collections > assets, liabilities, cashflows."""
     import altair as alt
@@ -2787,6 +2858,12 @@ def render_explore_tab(portfolio: Portfolio) -> None:
         with col:
             st.button(n.label, key=f"explore_crumb_{n.node_id}", disabled=n.node_id == focus,
                       on_click=_explore_set_focus, args=(n.node_id,), use_container_width=True)
+
+    view = st.radio("View", ["Chart", "Table"], horizontal=True, key="explore_view",
+                    help="Table: one row per asset, liability and cashflow over 1-5 years, with events.")
+    if view == "Table":
+        _render_period_table(portfolio, nodes, focus, result)
+        return
 
     # the clickable icicle chart
     rects = explorer.icicle_layout(nodes, focus, result, int(year), measure, depth=3, share_view=share_view)

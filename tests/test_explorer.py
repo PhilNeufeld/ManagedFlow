@@ -94,3 +94,69 @@ def test_icicle_children_fill_their_parent():
 def test_class_colors_are_fixed_per_class():
     assert dict(zip(explorer.CLASSES, explorer.CLASS_COLORS))["Asset"] == "#1baf7a"
     assert len(set(explorer.CLASS_COLORS)) == len(explorer.CLASSES)
+
+
+# --- period view ---------------------------------------------------------------------------------
+
+def period_plan():
+    from models import Event
+    p = plan()
+    p.assumptions.end_year = 2029
+    p.events.append(Event(event_id="bonus", name="Bonus starts", year=2027, month=7))
+    p.cashflows.append(Cashflow(flow_id="bonus", name="Bonus", flow_type=FlowType.SALARY_INCOME,
+                                direction=CashflowDirection.INFLOW, amount=2_000, frequency="monthly",
+                                start_year=2027, start_month=7, start_event_id="bonus", person_id="phil"))
+    p.apply_event_dates()
+    return p
+
+
+def test_period_view_rows_groups_flags_and_events():
+    p = period_plan()
+    nodes = explorer.build_tree(p)
+    res = explorer.run(p, p.get_scenario("base"))
+    pv = explorer.period_view(p, nodes, explorer.ROOT, res, 2026, 3)
+    assert pv["years"] == [2026, 2027, 2028]
+    assert pv["events"][2027] == ["Jul: Bonus starts"]
+    items = {r["label"]: r for r in pv["rows"] if r["type"] == "item"}
+    bonus = items["Bonus"]
+    assert [bonus["values"][y] for y in (2026, 2027, 2028)] == pytest.approx([0, 12_000, 24_000])
+    assert bonus["flags"] == {2027: "▲", 2028: "▲"}           # +12,000 each year: >= 10% and >= $5,000
+    assert "starts Jul 2027 (Bonus starts)" in bonus["note"]
+    assert items["Living"]["values"][2026] == -40_000          # outflows negative
+    assert items["House loan"]["values"][2026] == pytest.approx(88_000)
+    groups = [r["label"] for r in pv["rows"] if r["type"] == "group"]
+    assert "House bundle" in groups and "Household: Phil" in groups
+    totals = {r["label"]: r for r in pv["rows"] if r["type"] == "total"}
+    sim = {r.year: r for r in res.annual_results}
+    assert totals["Net worth"]["values"][2027] == pytest.approx(sim[2027].total_net_worth)
+    assert totals["Net cash flow"]["values"][2027] == pytest.approx(sim[2027].net_cashflow)
+
+
+def test_period_view_only_changes_and_scope():
+    p = period_plan()
+    nodes = explorer.build_tree(p)
+    res = explorer.run(p, p.get_scenario("base"))
+    only = explorer.period_view(p, nodes, explorer.ROOT, res, 2026, 3, only_changes=True)
+    labels = [r["label"] for r in only["rows"] if r["type"] == "item"]
+    assert "Bonus" in labels and "Salary" not in labels       # flat salary has no flag and no event
+    llc = next(n.node_id for n in nodes.values() if n.ref_id == "llc")
+    scoped = explorer.period_view(p, nodes, llc, res, 2026, 2)
+    assert {r["label"] for r in scoped["rows"] if r["type"] == "item"} >= {"House", "House loan"}
+    assert "Salary" not in {r["label"] for r in scoped["rows"]}
+
+
+def test_period_view_is_capped_at_five_years_and_the_plan_end():
+    p = period_plan()
+    nodes = explorer.build_tree(p)
+    res = explorer.run(p, p.get_scenario("base"))
+    assert explorer.period_view(p, nodes, explorer.ROOT, res, 2026, 9)["years"] == [2026, 2027, 2028, 2029]
+
+
+def test_export_has_period_view_sheet(tmp_path):
+    from openpyxl import load_workbook
+    import exports, simulation
+    p = period_plan()
+    wb = load_workbook(exports.export_to_excel(p, simulation.run_all_scenarios(p), tmp_path / "x.xlsx"))
+    ws = wb["Period View"]
+    assert ws["A4"].value == "Item" and ws["A5"].value == "Events"
+    assert any(ws.cell(row=r, column=1).value == "Household: Phil" for r in range(1, ws.max_row + 1))

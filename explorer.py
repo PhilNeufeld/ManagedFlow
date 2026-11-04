@@ -305,3 +305,192 @@ def icicle_layout(nodes, focus_id: str, result, year: int, measure: str = "count
 
     place(focus_id, 0, 0.0, 1.0)
     return rects
+
+
+# --- period view: one row per asset, liability and cashflow over 1-5 years -------------------------
+
+MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+STRUCTURE = ("Entity", "Collection", "Household")
+
+
+def _group_of(nodes, node_id, focus_id) -> Optional[str]:
+    """Nearest collection above an item; else nearest entity; else household person group."""
+    n = nodes[node_id]
+    chain = []
+    cur = n.parent_id
+    while cur:
+        chain.append(nodes[cur])
+        if cur == focus_id:
+            break
+        cur = nodes[cur].parent_id
+    for want in ("Collection", "Entity", "Household"):
+        for a in chain:
+            if a.kind == want and not (want == "Household" and a.node_id == ROOT):
+                return a.node_id
+    return focus_id
+
+
+def _substantial(prev: float, cur: float, pct: float, dollars: float) -> str:
+    diff = cur - prev
+    if abs(diff) < dollars or (prev and abs(diff) / abs(prev) < pct):
+        return ""
+    return "▲" if diff > 0 else "▼"
+
+
+def _ym(year, month) -> str:
+    return f"{MONTHS[(month or 1) - 1]} {year}"
+
+
+def period_view(p: Portfolio, nodes: Dict[str, Node], focus_id: str, result, start: int, years: int = 3,
+                pct: float = 0.10, dollars: float = 5_000, only_changes: bool = False) -> dict:
+    """Everything under focus_id, one row per asset / liability / cashflow, grouped.
+
+    Values (your share): assets = year-end value; liabilities = year-end balance;
+    cashflows = the year's amount (outflows negative). Flags: ▲/▼ when a year
+    differs from the year before by at least `pct` AND `dollars`.
+    Returns {"years", "events": {year: [text]}, "rows": [...]} where each row is
+    {"type": group|item|subtotal|total, "label", "kind", "values": {year: v},
+     "flags": {year: ▲/▼}, "change", "note", "indent", "node_id"}.
+    """
+    wp = result.working_portfolio
+    first, last = result.annual_results[0].year, result.annual_results[-1].year
+    start = max(first, min(start, last))
+    span = [y for y in range(start, start + max(1, min(5, years))) if y <= last]
+    lookback = [start - 1] + span if start > first else span
+
+    events: Dict[int, List[str]] = {y: [] for y in span}
+    for ev in sorted(wp.events, key=lambda e: (e.year, e.month)):
+        if ev.year in events:
+            events[ev.year].append(f"{MONTHS[ev.month - 1]}: {ev.name}")
+    ev_names = {ev.event_id: ev.name for ev in wp.events}
+
+    # earnings-test withholding, from the simulation's warnings
+    withheld: Dict[tuple, float] = {}
+    import re
+    for r in result.annual_results:
+        for w in r.warnings:
+            m = re.search(r"\$([\d,]+) of (.+?)'s \$", w)
+            if m and "earnings test" in w:
+                withheld[(m.group(2), r.year)] = float(m.group(1).replace(",", ""))
+    person_names = {x.person_id: x.name for x in wp.people}
+    default_person = wp.people[0].person_id if wp.people else None
+
+    def series_of(nid) -> Dict[int, float]:
+        n = nodes[nid]
+        out = {}
+        for row in node_series(nodes, nid, result):
+            if n.kind == "Asset":
+                out[row["Year"]] = row["Assets"]
+            elif n.kind == "Liability":
+                out[row["Year"]] = row["Liabilities"]
+            else:
+                out[row["Year"]] = row["Cash in"] - row["Cash out"]
+        return out
+
+    def note_for(n: Node, vals: Dict[int, float]) -> str:
+        notes = []
+        in_span = lambda y: y is not None and span[0] <= y <= span[-1]  # noqa: E731
+        if n.kind == "Cashflow":
+            cf = wp.get_cashflow(n.ref_id)
+            if cf is not None:
+                why = lambda eid: f" ({ev_names[eid]})" if eid in ev_names else ""  # noqa: E731
+                if cf.frequency.value == "one_time":
+                    if in_span(cf.start_year):
+                        notes.append(f"one-time, {_ym(cf.start_year, cf.start_month)}{why(cf.start_event_id)}")
+                else:
+                    if in_span(cf.start_year) and not vals.get(cf.start_year - 1) and (
+                            cf.start_year > first or cf.start_month > 1):
+                        notes.append(f"starts {_ym(cf.start_year, cf.start_month)}{why(cf.start_event_id)}")
+                    if in_span(cf.end_year) and (cf.end_month < 12 or cf.end_year < last):
+                        notes.append(f"ends {_ym(cf.end_year, cf.end_month)}{why(cf.end_event_id)}")
+                if cf.flow_type.value == "social_security_income":
+                    who = person_names.get(cf.person_id or default_person, "")
+                    for y in span:
+                        if (who, y) in withheld:
+                            notes.append(f"earnings test withholds ${withheld[(who, y)]:,.0f} in {y}")
+        elif n.kind == "Asset":
+            a = wp.get_asset(n.ref_id)
+            if a is not None and in_span(a.sale_year):
+                notes.append(f"sold / repaid {_ym(a.sale_year, a.sale_month)}")
+        elif n.kind == "Liability":
+            for y in span:
+                if vals.get(y - 1, 0) > 0.5 and vals.get(y, 0) <= 0.5:
+                    notes.append(f"paid off {y}")
+        return "; ".join(notes)
+
+    # items under the focus, depth-first; asset children indented under their asset
+    items: List[tuple] = []
+
+    def walk(nid, indent):
+        n = nodes[nid]
+        if n.kind not in STRUCTURE:
+            items.append((nid, indent))
+        child_indent = indent + 1 if n.kind == "Asset" else indent
+        for c in n.children:
+            walk(c, child_indent)
+    walk(focus_id, 0)
+
+    groups: Dict[str, List[tuple]] = {}
+    for nid, indent in items:
+        groups.setdefault(_group_of(nodes, nid, focus_id), []).append((nid, indent))
+    labels = {}
+    for gid in groups:
+        g = nodes[gid]
+        label = g.label if g.kind != "Household" or gid == ROOT else (
+            g.label if g.parent_id == ROOT else f"Household: {g.label}")
+        labels[gid] = label
+    dupes = {lbl for lbl in labels.values() if list(labels.values()).count(lbl) > 1}
+    for gid, lbl in labels.items():
+        if lbl in dupes and nodes[gid].parent_id:
+            labels[gid] = f"{lbl} (via {nodes[nodes[gid].parent_id].label})"
+
+    rows = []
+    for gid, members in groups.items():
+        built = []
+        for nid, indent in members:
+            n = nodes[nid]
+            vals = series_of(nid)
+            flags = {y: _substantial(vals.get(y - 1, 0.0), vals.get(y, 0.0), pct, dollars)
+                     for y in span if (y - 1) in vals}
+            note = note_for(n, vals)
+            row = {"type": "item", "label": n.label, "kind": n.kind, "node_id": nid, "indent": indent,
+                   "values": {y: vals.get(y, 0.0) for y in span}, "flags": flags,
+                   "change": vals.get(span[-1], 0.0) - vals.get(span[0], 0.0), "note": note}
+            if only_changes and not any(flags.values()) and not note:
+                continue
+            if all(abs(v) < 0.5 for v in row["values"].values()) and not note:
+                continue                       # nothing in this period
+            built.append(row)
+        if not built:
+            continue
+        rows.append({"type": "group", "label": labels[gid], "kind": nodes[gid].kind, "node_id": gid})
+        rows.extend(built)
+        # subtotals from ALL members (not just the rows shown)
+        sub = {k: {y: 0.0 for y in span} for k in ("Net worth", "Net cash flow")}
+        for nid, _ in members:
+            n = nodes[nid]
+            ser = {r["Year"]: r for r in node_series(nodes, nid, result)}
+            for y in span:
+                r = ser.get(y)
+                if r is None:
+                    continue
+                if n.kind == "Asset":
+                    sub["Net worth"][y] += r["Assets"]
+                elif n.kind == "Liability":
+                    sub["Net worth"][y] -= r["Liabilities"]
+                    sub["Net cash flow"][y] -= r["Cash out"]          # debt service
+                else:
+                    sub["Net cash flow"][y] += r["Cash in"] - r["Cash out"]
+        for k in ("Net worth", "Net cash flow"):
+            if any(abs(v) > 0.5 for v in sub[k].values()):
+                rows.append({"type": "subtotal", "label": f"{k}{' (after debt service)' if k == 'Net cash flow' else ''}",
+                             "values": sub[k], "change": sub[k][span[-1]] - sub[k][span[0]]})
+
+    totals = {r["Year"]: r for r in node_series(nodes, focus_id, result)}
+    for k in ("Assets", "Liabilities", "Net worth", "Cash in", "Cash out", "Income tax", "Net cash flow"):
+        if k == "Income tax" and focus_id != ROOT:
+            continue
+        vals = {y: totals[y].get(k, 0.0) for y in span}
+        label = {"Cash out": "Cash out (incl. debt service" + (" and tax)" if focus_id == ROOT else ")")}.get(k, k)
+        rows.append({"type": "total", "label": label, "values": vals, "change": vals[span[-1]] - vals[span[0]]})
+    return {"years": span, "events": events, "rows": rows}

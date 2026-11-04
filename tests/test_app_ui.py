@@ -345,3 +345,16 @@ def test_explore_drills_down_and_back_up(tmp_path):
     at = next(b for b in at.button if b.key == "explore_crumb_root").click().run()
     no_crash(at)
     assert at.session_state["explore_focus"] == "root"
+
+
+def test_explore_table_view_shows_rows_and_events(tmp_path):
+    from tests.test_explorer import period_plan
+    at = start(period_plan(), tmp_path)
+    at.radio(key="explore_view").set_value("Table").run()
+    no_crash(at)
+    html = " ".join(m.value for m in at.markdown)
+    assert "Events" in html and "Jul: Bonus starts" in html and "House loan" in html
+    bonus = next(n for n in __import__("explorer").build_tree(stored(at)).values() if n.label == "Bonus")
+    at.selectbox(key="period_open").set_value(bonus.node_id).run()
+    no_crash(at)
+    assert at.session_state["explore_focus"] == bonus.node_id and at.session_state["explore_view"] == "Chart"

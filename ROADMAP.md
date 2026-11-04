@@ -63,6 +63,9 @@ changes, a schema migration so existing files keep loading.
 - [x] **Explore tab** (built 2026-11-04): click-to-drill icicle chart -- entity > sub-entity >
   collection > asset / liability / cashflow, one color per class -- with each level's table and
   value / cash-flow charts over time (your share along each ownership path).
+- [x] **Explore > Table (period view)** (built 2026-11-04): one row per asset, liability and
+  cashflow, grouped by collection (else entity / household person), 1-5 years, events band,
+  ▲/▼ substantial changes, start/end/payoff notes; "Period View" sheet in the export.
 - **Relative events** -- an event defined as an offset from another (e.g.
   each LVM distribution step relative to the start of distributions), so
   moving one event moves the whole schedule.
