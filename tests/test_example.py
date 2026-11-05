@@ -36,8 +36,10 @@ def test_first_year_debt_service(example):
 
 def test_selling_the_rental_pays_off_its_mortgage_and_stops_the_rent(example):
     years = run(example, "base")
-    assert years[2033].total_liabilities > 20_000           # mortgage + HELOC
-    assert years[2034].total_liabilities == pytest.approx(20_000)  # HELOC only
+    elm = {y: next(lr for lr in years[y].liability_results if lr.liability_id == "liability_elm_mortgage")
+           for y in (2033, 2034)}
+    assert elm[2033].ending_balance > 0
+    assert elm[2034].ending_balance == 0 and elm[2034].paid_off_this_year      # paid off with the sale
     rent = example.get_cashflow("flow_elm_rent")
     assert rent.annual_amount_in_year(2033) > 0 and rent.annual_amount_in_year(2034) == 0
 
@@ -63,3 +65,13 @@ def test_monte_carlo_on_the_example_is_reproducible(example):
     b = montecarlo.run_monte_carlo(example, example.get_scenario("base"), n_runs=100, seed=42)
     assert a.success_rate == b.success_rate
     assert 0 <= a.success_rate <= 1
+
+
+def test_harbor_is_owned_on_two_paths(example):
+    assert example.asset_share("asset_harbor") == pytest.approx(0.15 + 0.05)
+
+
+def test_sam_claiming_at_62_while_working_hits_the_earnings_test(example):
+    years = run(example, "base")
+    assert any("earnings test" in w and "Sam" in w for w in years[2029].warnings)
+    assert not any("earnings test" in w for w in run(example, "sam_claims_67")[2029].warnings)

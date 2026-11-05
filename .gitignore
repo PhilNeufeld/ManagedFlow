@@ -19,3 +19,5 @@ data/*.csv
 Thumbs.db
 # Builder scripts for real household data
 data/build_*.py
+# Private data tasks next to each portfolio
+data/*_tasks.md

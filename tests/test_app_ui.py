@@ -358,3 +358,18 @@ def test_explore_table_view_shows_rows_and_events(tmp_path):
     at.selectbox(key="period_open").set_value(bonus.node_id).run()
     no_crash(at)
     assert at.session_state["explore_focus"] == bonus.node_id and at.session_state["explore_view"] == "Chart"
+
+
+# --- help -----------------------------------------------------------------------------------------------
+
+def test_help_tab_shows_the_manual_and_searches(tmp_path):
+    from tests.test_explorer import period_plan
+    at = start(period_plan(), tmp_path)
+    no_crash(at)
+    assert any(e.label.startswith("1. What ManagedFlow does") for e in at.expander)
+    at.text_input(key="help_query").set_value("annuity").run()
+    no_crash(at)
+    labels = [e.label for e in at.expander if "ManagedFlow does" in e.label or "FAQ" in e.label]
+    assert any("FAQ" in l for l in labels)
+    at.radio(key="help_source").set_value("mine").run()
+    no_crash(at)

@@ -1,8 +1,8 @@
 {
   "metadata": {
     "file_version": "0.9",
-    "created_at": "2026-11-04T16:26:20+00:00",
-    "updated_at": "2026-11-04T16:26:20+00:00",
+    "created_at": "2026-11-04T23:52:07+00:00",
+    "updated_at": "2026-11-04T23:52:07+00:00",
     "notes": "Fictional example household for learning and testing. Not real data."
   },
   "household": {
@@ -36,6 +36,24 @@
       "name": "Alex & Sam (joint)",
       "entity_type": "joint",
       "notes": ""
+    },
+    {
+      "entity_id": "entity_trust",
+      "name": "Alex & Sam Family Trust",
+      "entity_type": "trust",
+      "notes": ""
+    },
+    {
+      "entity_id": "entity_llc",
+      "name": "Elm Street LLC",
+      "entity_type": "llc",
+      "notes": ""
+    },
+    {
+      "entity_id": "entity_harbor",
+      "name": "Harbor Partners LP",
+      "entity_type": "partnership",
+      "notes": ""
     }
   ],
   "assets": [
@@ -59,10 +77,12 @@
       "sale_assumptions": {},
       "start_event_id": null,
       "end_event_id": null,
+      "sale_month": null,
       "depreciable_basis": 0.0,
       "placed_in_service_year": null,
       "recovery_years": 0.0,
-      "subject_to_se_tax": false
+      "subject_to_se_tax": false,
+      "earner_person_id": null
     },
     {
       "asset_id": "asset_savings",
@@ -84,17 +104,19 @@
       "sale_assumptions": {},
       "start_event_id": null,
       "end_event_id": null,
+      "sale_month": null,
       "depreciable_basis": 0.0,
       "placed_in_service_year": null,
       "recovery_years": 0.0,
-      "subject_to_se_tax": false
+      "subject_to_se_tax": false,
+      "earner_person_id": null
     },
     {
       "asset_id": "asset_elm_rental",
       "name": "Elm St rental",
       "asset_type": "real_estate",
       "owner": "Joint",
-      "entity_id": "entity_joint",
+      "entity_id": "entity_llc",
       "initial_value": 350000,
       "current_value": 350000,
       "start_year": 2026,
@@ -109,10 +131,93 @@
       "sale_assumptions": {},
       "start_event_id": null,
       "end_event_id": "event_sell_elm",
+      "sale_month": 1,
       "depreciable_basis": 250000,
       "placed_in_service_year": 2015,
       "recovery_years": 27.5,
-      "subject_to_se_tax": false
+      "subject_to_se_tax": false,
+      "earner_person_id": null
+    },
+    {
+      "asset_id": "asset_oak",
+      "name": "Oak Ave duplex",
+      "asset_type": "real_estate",
+      "owner": "Elm Street LLC",
+      "entity_id": "entity_llc",
+      "initial_value": 520000,
+      "current_value": 520000,
+      "start_year": 2027,
+      "annual_growth_rate": 0.03,
+      "annual_expense_rate": 0.0,
+      "liquidity_category": "illiquid",
+      "tax_category": "rental_income",
+      "notes": "",
+      "active": true,
+      "do_not_sell": false,
+      "sale_year": null,
+      "sale_assumptions": {},
+      "start_event_id": "event_buy_oak",
+      "end_event_id": null,
+      "sale_month": null,
+      "depreciable_basis": 400000,
+      "placed_in_service_year": 2027,
+      "recovery_years": 27.5,
+      "subject_to_se_tax": false,
+      "earner_person_id": null
+    },
+    {
+      "asset_id": "asset_harbor",
+      "name": "Harbor Plaza",
+      "asset_type": "real_estate",
+      "owner": "Harbor Partners LP",
+      "entity_id": "entity_harbor",
+      "initial_value": 4000000,
+      "current_value": 4000000,
+      "start_year": 2026,
+      "annual_growth_rate": 0.02,
+      "annual_expense_rate": 0.0,
+      "liquidity_category": "illiquid",
+      "tax_category": "business_income",
+      "notes": "Commercial; value at 100%",
+      "active": true,
+      "do_not_sell": false,
+      "sale_year": null,
+      "sale_assumptions": {},
+      "start_event_id": null,
+      "end_event_id": null,
+      "sale_month": null,
+      "depreciable_basis": 0.0,
+      "placed_in_service_year": null,
+      "recovery_years": 0.0,
+      "subject_to_se_tax": false,
+      "earner_person_id": null
+    },
+    {
+      "asset_id": "asset_annuity",
+      "name": "Sam annuity",
+      "asset_type": "annuity",
+      "owner": "Sam",
+      "entity_id": "entity_joint",
+      "initial_value": 150000,
+      "current_value": 150000,
+      "start_year": 2026,
+      "annual_growth_rate": 0.0,
+      "annual_expense_rate": 0.0,
+      "liquidity_category": "income_only",
+      "tax_category": "annuity_income",
+      "notes": "",
+      "active": true,
+      "do_not_sell": false,
+      "sale_year": null,
+      "sale_assumptions": {},
+      "start_event_id": null,
+      "end_event_id": null,
+      "sale_month": null,
+      "depreciable_basis": 0.0,
+      "placed_in_service_year": null,
+      "recovery_years": 0.0,
+      "subject_to_se_tax": false,
+      "earner_person_id": null
     }
   ],
   "cashflows": [
@@ -137,7 +242,8 @@
       "start_month": 1,
       "end_month": 6,
       "start_event_id": null,
-      "end_event_id": "event_alex_retires"
+      "end_event_id": "event_alex_retires",
+      "person_id": "person_alex"
     },
     {
       "flow_id": "flow_alex_pension",
@@ -160,7 +266,8 @@
       "start_month": 7,
       "end_month": 12,
       "start_event_id": "event_alex_retires",
-      "end_event_id": null
+      "end_event_id": null,
+      "person_id": "person_alex"
     },
     {
       "flow_id": "flow_sam_salary",
@@ -183,7 +290,8 @@
       "start_month": 1,
       "end_month": 6,
       "start_event_id": null,
-      "end_event_id": "event_sam_retires"
+      "end_event_id": "event_sam_retires",
+      "person_id": "person_sam"
     },
     {
       "flow_id": "flow_sam_pension",
@@ -206,7 +314,8 @@
       "start_month": 7,
       "end_month": 12,
       "start_event_id": "event_sam_retires",
-      "end_event_id": null
+      "end_event_id": null,
+      "person_id": "person_sam"
     },
     {
       "flow_id": "flow_elm_rent",
@@ -229,7 +338,8 @@
       "start_month": 1,
       "end_month": 12,
       "start_event_id": null,
-      "end_event_id": "event_sell_elm"
+      "end_event_id": "event_sell_elm",
+      "person_id": null
     },
     {
       "flow_id": "flow_elm_expenses",
@@ -252,7 +362,8 @@
       "start_month": 1,
       "end_month": 12,
       "start_event_id": null,
-      "end_event_id": "event_sell_elm"
+      "end_event_id": "event_sell_elm",
+      "person_id": null
     },
     {
       "flow_id": "flow_elm_sale",
@@ -275,7 +386,8 @@
       "start_month": 1,
       "end_month": 12,
       "start_event_id": "event_sell_elm",
-      "end_event_id": null
+      "end_event_id": null,
+      "person_id": null
     },
     {
       "flow_id": "flow_living",
@@ -298,7 +410,272 @@
       "start_month": 1,
       "end_month": 12,
       "start_event_id": null,
-      "end_event_id": null
+      "end_event_id": null,
+      "person_id": null
+    },
+    {
+      "flow_id": "flow_oak_rent",
+      "name": "Oak Ave - Gross scheduled rent",
+      "flow_type": "rent_income",
+      "direction": "inflow",
+      "amount": 43200,
+      "start_year": 2027,
+      "asset_id": "asset_oak",
+      "end_year": null,
+      "frequency": "annual",
+      "annual_growth_rate": 0.03,
+      "inflation_adjusted": false,
+      "taxable": true,
+      "tax_category": "rental_income",
+      "cashflow_timing": "end_of_year",
+      "affects_asset_value": false,
+      "affects_debt_balance": false,
+      "notes": "",
+      "start_month": 1,
+      "end_month": 12,
+      "start_event_id": null,
+      "end_event_id": null,
+      "person_id": null
+    },
+    {
+      "flow_id": "flow_oak_vacancy",
+      "name": "Oak Ave - Vacancy & credit loss",
+      "flow_type": "operating_expense",
+      "direction": "outflow",
+      "amount": 2160,
+      "start_year": 2027,
+      "asset_id": "asset_oak",
+      "end_year": null,
+      "frequency": "annual",
+      "annual_growth_rate": 0.03,
+      "inflation_adjusted": false,
+      "taxable": false,
+      "tax_category": "none",
+      "cashflow_timing": "end_of_year",
+      "affects_asset_value": false,
+      "affects_debt_balance": false,
+      "notes": "",
+      "start_month": 1,
+      "end_month": 12,
+      "start_event_id": null,
+      "end_event_id": null,
+      "person_id": null
+    },
+    {
+      "flow_id": "flow_oak_tax",
+      "name": "Oak Ave - Property tax",
+      "flow_type": "property_tax",
+      "direction": "outflow",
+      "amount": 6500,
+      "start_year": 2027,
+      "asset_id": "asset_oak",
+      "end_year": null,
+      "frequency": "annual",
+      "annual_growth_rate": 0.02,
+      "inflation_adjusted": false,
+      "taxable": false,
+      "tax_category": "none",
+      "cashflow_timing": "end_of_year",
+      "affects_asset_value": false,
+      "affects_debt_balance": false,
+      "notes": "",
+      "start_month": 1,
+      "end_month": 12,
+      "start_event_id": null,
+      "end_event_id": null,
+      "person_id": null
+    },
+    {
+      "flow_id": "flow_oak_insurance",
+      "name": "Oak Ave - Insurance",
+      "flow_type": "insurance",
+      "direction": "outflow",
+      "amount": 2400,
+      "start_year": 2027,
+      "asset_id": "asset_oak",
+      "end_year": null,
+      "frequency": "annual",
+      "annual_growth_rate": 0.04,
+      "inflation_adjusted": false,
+      "taxable": false,
+      "tax_category": "none",
+      "cashflow_timing": "end_of_year",
+      "affects_asset_value": false,
+      "affects_debt_balance": false,
+      "notes": "",
+      "start_month": 1,
+      "end_month": 12,
+      "start_event_id": null,
+      "end_event_id": null,
+      "person_id": null
+    },
+    {
+      "flow_id": "flow_oak_repairs",
+      "name": "Oak Ave - Repairs & maintenance",
+      "flow_type": "repairs",
+      "direction": "outflow",
+      "amount": 3000,
+      "start_year": 2027,
+      "asset_id": "asset_oak",
+      "end_year": null,
+      "frequency": "annual",
+      "annual_growth_rate": 0.03,
+      "inflation_adjusted": false,
+      "taxable": false,
+      "tax_category": "none",
+      "cashflow_timing": "end_of_year",
+      "affects_asset_value": false,
+      "affects_debt_balance": false,
+      "notes": "",
+      "start_month": 1,
+      "end_month": 12,
+      "start_event_id": null,
+      "end_event_id": null,
+      "person_id": null
+    },
+    {
+      "flow_id": "flow_oak_mgmt",
+      "name": "Oak Ave - Property management",
+      "flow_type": "management_fee",
+      "direction": "outflow",
+      "amount": 3456,
+      "start_year": 2027,
+      "asset_id": "asset_oak",
+      "end_year": null,
+      "frequency": "annual",
+      "annual_growth_rate": 0.03,
+      "inflation_adjusted": false,
+      "taxable": false,
+      "tax_category": "none",
+      "cashflow_timing": "end_of_year",
+      "affects_asset_value": false,
+      "affects_debt_balance": false,
+      "notes": "",
+      "start_month": 1,
+      "end_month": 12,
+      "start_event_id": null,
+      "end_event_id": null,
+      "person_id": null
+    },
+    {
+      "flow_id": "flow_harbor",
+      "name": "Harbor Plaza distributions",
+      "flow_type": "business_distribution",
+      "direction": "inflow",
+      "amount": 200000,
+      "start_year": 2028,
+      "asset_id": "asset_harbor",
+      "end_year": null,
+      "frequency": "annual",
+      "annual_growth_rate": 0.02,
+      "inflation_adjusted": false,
+      "taxable": true,
+      "tax_category": "business_income",
+      "cashflow_timing": "end_of_year",
+      "affects_asset_value": false,
+      "affects_debt_balance": false,
+      "notes": "",
+      "start_month": 1,
+      "end_month": 12,
+      "start_event_id": "event_harbor_dist",
+      "end_event_id": null,
+      "person_id": null
+    },
+    {
+      "flow_id": "flow_annuity_taxable",
+      "name": "Sam annuity - taxable part",
+      "flow_type": "annuity_income",
+      "direction": "inflow",
+      "amount": 375,
+      "start_year": 2031,
+      "asset_id": "asset_annuity",
+      "end_year": null,
+      "frequency": "monthly",
+      "annual_growth_rate": 0.0,
+      "inflation_adjusted": false,
+      "taxable": true,
+      "tax_category": "annuity_income",
+      "cashflow_timing": "end_of_year",
+      "affects_asset_value": false,
+      "affects_debt_balance": false,
+      "notes": "",
+      "start_month": 7,
+      "end_month": 12,
+      "start_event_id": "event_annuity",
+      "end_event_id": null,
+      "person_id": "person_sam"
+    },
+    {
+      "flow_id": "flow_annuity_principal",
+      "name": "Sam annuity - return of principal",
+      "flow_type": "annuity_income",
+      "direction": "inflow",
+      "amount": 375,
+      "start_year": 2031,
+      "asset_id": "asset_annuity",
+      "end_year": null,
+      "frequency": "monthly",
+      "annual_growth_rate": 0.0,
+      "inflation_adjusted": false,
+      "taxable": false,
+      "tax_category": "none",
+      "cashflow_timing": "end_of_year",
+      "affects_asset_value": false,
+      "affects_debt_balance": false,
+      "notes": "",
+      "start_month": 7,
+      "end_month": 12,
+      "start_event_id": "event_annuity",
+      "end_event_id": null,
+      "person_id": "person_sam"
+    },
+    {
+      "flow_id": "flow_alex_ss",
+      "name": "Alex Social Security",
+      "flow_type": "social_security_income",
+      "direction": "inflow",
+      "amount": 3000,
+      "start_year": 2032,
+      "asset_id": null,
+      "end_year": null,
+      "frequency": "monthly",
+      "annual_growth_rate": 0.025,
+      "inflation_adjusted": false,
+      "taxable": false,
+      "tax_category": "none",
+      "cashflow_timing": "end_of_year",
+      "affects_asset_value": false,
+      "affects_debt_balance": false,
+      "notes": "",
+      "start_month": 7,
+      "end_month": 12,
+      "start_event_id": "event_alex_ss",
+      "end_event_id": null,
+      "person_id": "person_alex"
+    },
+    {
+      "flow_id": "flow_sam_ss",
+      "name": "Sam Social Security",
+      "flow_type": "social_security_income",
+      "direction": "inflow",
+      "amount": 1500,
+      "start_year": 2029,
+      "asset_id": null,
+      "end_year": null,
+      "frequency": "monthly",
+      "annual_growth_rate": 0.025,
+      "inflation_adjusted": false,
+      "taxable": false,
+      "tax_category": "none",
+      "cashflow_timing": "end_of_year",
+      "affects_asset_value": false,
+      "affects_debt_balance": false,
+      "notes": "",
+      "start_month": 7,
+      "end_month": 12,
+      "start_event_id": "event_sam_ss",
+      "end_event_id": null,
+      "person_id": "person_sam"
     }
   ],
   "liabilities": [
@@ -316,10 +693,39 @@
       "notes": "",
       "active": true,
       "payoff_year": null,
+      "payoff_month": null,
       "start_event_id": null,
       "end_event_id": null,
       "term_months": 240,
-      "monthly_payment": null
+      "monthly_payment": null,
+      "original_amount": null,
+      "original_term_months": null,
+      "origination_year": null,
+      "origination_month": 1
+    },
+    {
+      "kind": "loan",
+      "liability_id": "liability_oak_mortgage",
+      "name": "Oak Ave mortgage",
+      "liability_type": "mortgage",
+      "balance": 400000,
+      "annual_interest_rate": 0.0625,
+      "start_year": 2027,
+      "entity_id": "entity_llc",
+      "secured_by_asset_id": "asset_oak",
+      "lender": "Example Credit Union",
+      "notes": "",
+      "active": true,
+      "payoff_year": null,
+      "payoff_month": null,
+      "start_event_id": null,
+      "end_event_id": null,
+      "term_months": 360,
+      "monthly_payment": null,
+      "original_amount": 400000,
+      "original_term_months": 360,
+      "origination_year": 2027,
+      "origination_month": 2
     },
     {
       "kind": "credit_line",
@@ -335,6 +741,7 @@
       "notes": "",
       "active": true,
       "payoff_year": null,
+      "payoff_month": null,
       "start_event_id": null,
       "end_event_id": null,
       "credit_limit": 100000
@@ -367,6 +774,51 @@
       "notes": "",
       "person_id": null,
       "age": null
+    },
+    {
+      "event_id": "event_buy_oak",
+      "name": "Buy Oak Ave duplex",
+      "year": 2027,
+      "month": 1,
+      "notes": "",
+      "person_id": null,
+      "age": null
+    },
+    {
+      "event_id": "event_harbor_dist",
+      "name": "Harbor Plaza distributions start",
+      "year": 2028,
+      "month": 1,
+      "notes": "",
+      "person_id": null,
+      "age": null
+    },
+    {
+      "event_id": "event_sam_ss",
+      "name": "Sam claims Social Security",
+      "year": 2029,
+      "month": 7,
+      "notes": "",
+      "person_id": "person_sam",
+      "age": 62
+    },
+    {
+      "event_id": "event_alex_ss",
+      "name": "Alex claims Social Security",
+      "year": 2032,
+      "month": 7,
+      "notes": "",
+      "person_id": "person_alex",
+      "age": 67
+    },
+    {
+      "event_id": "event_annuity",
+      "name": "Annuity payments start",
+      "year": 2031,
+      "month": 7,
+      "notes": "",
+      "person_id": null,
+      "age": null
     }
   ],
   "people": [
@@ -376,7 +828,8 @@
       "birth_year": 1965,
       "birth_month": 7,
       "life_expectancy": 92,
-      "notes": ""
+      "notes": "",
+      "substantial_self_employment": true
     },
     {
       "person_id": "person_sam",
@@ -384,13 +837,120 @@
       "birth_year": 1967,
       "birth_month": 7,
       "life_expectancy": 92,
+      "notes": "",
+      "substantial_self_employment": true
+    }
+  ],
+  "memberships": [
+    {
+      "entity_id": "entity_joint",
+      "person_id": "person_alex",
+      "role": "owner",
+      "notes": ""
+    },
+    {
+      "entity_id": "entity_joint",
+      "person_id": "person_sam",
+      "role": "owner",
+      "notes": ""
+    },
+    {
+      "entity_id": "entity_trust",
+      "person_id": "person_alex",
+      "role": "trustee",
+      "notes": ""
+    },
+    {
+      "entity_id": "entity_trust",
+      "person_id": "person_sam",
+      "role": "trustee",
+      "notes": ""
+    },
+    {
+      "entity_id": "entity_llc",
+      "person_id": "person_alex",
+      "role": "manager",
       "notes": ""
     }
   ],
-  "memberships": [],
-  "ownerships": [],
-  "actuals": [],
-  "bundles": [],
+  "ownerships": [
+    {
+      "owner_entity_id": "entity_joint",
+      "owned_type": "entity",
+      "owned_id": "entity_trust",
+      "percent": 1.0,
+      "notes": ""
+    },
+    {
+      "owner_entity_id": "entity_joint",
+      "owned_type": "entity",
+      "owned_id": "entity_llc",
+      "percent": 1.0,
+      "notes": ""
+    },
+    {
+      "owner_entity_id": "entity_trust",
+      "owned_type": "entity",
+      "owned_id": "entity_harbor",
+      "percent": 0.15,
+      "notes": ""
+    },
+    {
+      "owner_entity_id": "entity_llc",
+      "owned_type": "entity",
+      "owned_id": "entity_harbor",
+      "percent": 0.05,
+      "notes": ""
+    }
+  ],
+  "actuals": [
+    {
+      "actual_id": "actual_elm_exp_2026",
+      "year": 2026,
+      "amount": 7250,
+      "name": "Elm St expenses",
+      "kind": "actual",
+      "direction": "outflow",
+      "category": "operating_expense",
+      "month": null,
+      "flow_id": "flow_elm_expenses",
+      "asset_id": "asset_elm_rental",
+      "entity_id": null,
+      "notes": "Includes a $1,250 roof repair",
+      "status": "confirmed",
+      "record_class": "Elm 2026"
+    },
+    {
+      "actual_id": "actual_elm_rent_2027",
+      "year": 2027,
+      "amount": 27500,
+      "name": "Elm St rent",
+      "kind": "forecast",
+      "direction": "inflow",
+      "category": "rent_income",
+      "month": null,
+      "flow_id": "flow_elm_rent",
+      "asset_id": "asset_elm_rental",
+      "entity_id": null,
+      "notes": "New lease from March",
+      "status": "estimated",
+      "record_class": ""
+    }
+  ],
+  "bundles": [
+    {
+      "bundle_id": "bundle_rentals",
+      "name": "Rentals",
+      "entity_id": "entity_llc",
+      "asset_ids": [
+        "asset_elm_rental",
+        "asset_oak"
+      ],
+      "cashflow_ids": [],
+      "liability_ids": [],
+      "notes": ""
+    }
+  ],
   "scenarios": [
     {
       "scenario_id": "base",
@@ -466,6 +1026,29 @@
       "event_overrides": {
         "event_sam_retires": {
           "age": 65
+        }
+      },
+      "ownership_view": "share",
+      "use_actuals": true,
+      "withdrawal_order_override": null,
+      "allow_illiquid_withdrawals": false,
+      "reinvest_surplus": true,
+      "entity_ids": [],
+      "bundle_ids": [],
+      "notes": ""
+    },
+    {
+      "scenario_id": "sam_claims_67",
+      "name": "Sam claims Social Security at 67",
+      "description": "",
+      "is_base_case": false,
+      "inflation_rate_override": null,
+      "expense_growth_rate_override": null,
+      "asset_overrides": {},
+      "cashflow_overrides": {},
+      "event_overrides": {
+        "event_sam_ss": {
+          "age": 67
         }
       },
       "ownership_view": "share",

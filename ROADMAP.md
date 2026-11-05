@@ -3,6 +3,9 @@
 Agreed order of work. Each item ships with tests and, if the data model
 changes, a schema migration so existing files keep loading.
 
+Household-specific to-dos live next to each portfolio in `data/<file>_tasks.md`
+(kept off GitHub), not here.
+
 ## Done
 
 | Version | Feature |
@@ -13,78 +16,49 @@ changes, a schema migration so existing files keep loading.
 | 0.5 | `Person` class; age-based events; ages in results; survivor scenarios via events |
 | 0.6 | `Membership` link class: people <-> entities many-to-many with roles |
 | 0.7 | Ownership %: `Ownership` link class, share math with paths, your-share vs. 100% view |
-| 0.8 | Actuals & forecasts: CSV import with matching, plan-vs-actual, trend breaks, used in simulations |
+| 0.8 | Actuals & forecasts: CSV import with matching, plan-vs-actual, trend breaks, used in simulations; status and class on each record |
 | 0.9 | Detailed tax engine (federal 2026 + CA 2025 tables) with depreciation, passive losses; taxes-by-year view |
+| 0.9+ | Rentals from gross operating income with mortgages ("Add a rental property"); loans from their original terms; rental pro forma |
+| 0.9+ | Per-person payroll and self-employment tax (each spouse's own wage base); Social Security earnings test |
+| 0.9+ | Explore tab: drill-down chart (entity > collection > asset > cashflow/loan) and 1-5 year period table with events; Period View export |
+| 0.9+ | Help tab and the user manual, built from one source: a generic edition (example household) and a private edition (your portfolio) |
 
 ## Next (in this order)
 
 1. **How each account is taxed** -- taxable / tax-deferred / Roth on assets;
    withdrawal order by tax treatment; required minimum distributions.
 2. **Social Security class** -- benefit at full retirement age + claiming age
-   -> adjusted benefit; spousal and survivor rules.
+   -> adjusted benefit; spousal and survivor rules; withheld months credited
+   back at full retirement age.
 3. **Spending policy** (lower priority) -- spending that adjusts to markets
    (guardrails), used by Monte Carlo.
 
-## Open data tasks
+## Next after a portfolio is populated
 
-- [ ] Confirm NFLP ownership: Philip's NFLP interest should be held by the
-  Neufeld Family Trust of 2000 (TTEES Philip & Debbie Neufeld), so Debbie
-  owns it jointly through the trust. ManagedFlow models it that way; confirm
-  against the NFLP partnership records.
-
-## Next after the portfolio is populated
-
-- **Receivables** -- a note or fee you're OWED (the $50K LVM note; the LVM
-  developer fee, $1,361,665 at 7.75% over 180 months): a balance paid down
-  over time, like a loan in reverse, counted in net worth.
-- **Allocated income vs. cash** -- LVM's tax distributions: taxable income
-  allocated to you (K-1) can differ from the cash distributed.
+- **Receivables** -- a note or fee you're OWED (a note receivable, a fee paid
+  over time): a balance paid down over time, like a loan in reverse, counted in net worth.
+- **Allocated income vs. cash** -- partnership income allocated to you (K-1)
+  can differ from the cash distributed; tax the allocation, count the cash.
 - **Notes and tasks** -- dated notes and tasks (status, due date) attached to
   any record or to the portfolio.
-- **Classes on actuals** (like QuickBooks classes) -- e.g. "Crop 2025" vs.
-  "Crop 2026", since crop payments span calendar years; with notes per class.
-- [x] **Mortgages on rentals, from gross operating income** (built 2026-11-04: "Add a rental
-  property" on the Assets tab, original-terms fields on loans, Rental pro forma on the
-  Simulation tab and in the export). Still to do: enter each property's figures and split
-  the five Fresno rentals 4+1. Originally: per rental (and the
-  4+1 split of the five Fresno rentals): gross operating income (GOI), operating
-  expenses by type, and a mortgage with its terms (original amount, years,
-  years left / origination date, interest rate, payment). The model then
-  forecasts interest (deductible), principal, operating expenses and net cash
-  flow over time, instead of today's single net-cash-flow line. Builds on the
-  existing Loan liability (term, rate, payment, secured by an asset; interest
-  already flows to the tax engine) -- adds "years left"/origination date and a
-  GOI-based rental template in the app.
-- [x] **Per-person payroll tax and the Social Security earnings test** (built 2026-11-04).
-  Wages, self-employment income and benefits carry a person; each spouse has their own
-  wage base; claiming before full retirement age applies the earnings test (incl. the
-  first-year monthly rule). Not yet: the benefit increase at FRA that credits withheld
-  months back -- part of the Social Security class below.
-- [x] **Explore tab** (built 2026-11-04): click-to-drill icicle chart -- entity > sub-entity >
-  collection > asset / liability / cashflow, one color per class -- with each level's table and
-  value / cash-flow charts over time (your share along each ownership path).
-- [x] **Explore > Table (period view)** (built 2026-11-04): one row per asset, liability and
-  cashflow, grouped by collection (else entity / household person), 1-5 years, events band,
-  ▲/▼ substantial changes, start/end/payoff notes; "Period View" sheet in the export.
+- **Notes on classes** -- a note per actuals class (e.g. "Crop 2026: crop failure").
 - **Relative events** -- an event defined as an offset from another (e.g.
-  each LVM distribution step relative to the start of distributions), so
-  moving one event moves the whole schedule.
+  each step of a distribution schedule relative to its start), so moving one
+  event moves the whole schedule.
 
 ## Longer term
 
 - **Social Security claiming analysis** -- compare claiming ages (62-70) for
   each spouse, including spousal/survivor effects, on lifetime income and net worth.
-- **Tax impact analysis** -- started in v0.9 (Taxes by year table and chart).
-  Still to do: per-property breakdown and "what if" comparisons (e.g. sell
-  before vs. after depreciation runs out), depreciation recapture on sale.
+- **Tax impact analysis** -- per-property breakdown and "what if" comparisons
+  (e.g. sell before vs. after depreciation runs out), depreciation recapture on sale.
 - Tax engine extras: AMT, QBI deduction, IRMAA, CA exemption-credit phase-out,
   filing status change after a spouse's death.
 - **Highest steady spending** -- solve for the largest inflation-adjusted
   spending level the plan can sustain for life.
 - Monte Carlo upgrades: correlated asset swings; historical-sequence mode.
 - Unitrust and pension valuation (present value of payments).
-- Survivor rules built into pension and Social Security classes (benefit
-  continues at a % with its accumulated COLA, instead of a separate cashflow).
-- Actual account BALANCES (snapshots) vs. projected values -- today actuals
-  cover cashflows only.
+- Survivor rules built into pension and Social Security classes.
+- **Actual account balances** (snapshots) vs. projected values -- today
+  actuals cover cashflows only.
 - In-app dictation (Win+H voice typing works today).

@@ -50,8 +50,11 @@ def test_changing_a_birthday_moves_their_events_and_linked_records(example):
 
 
 def test_scenario_can_change_the_age(example):
-    base = by_year(example, example.get_scenario("base"))
-    later = by_year(example, example.get_scenario("sam_retires_65"))
+    # (Sam's Social Security claim moved to 67 in both, so the earnings test doesn't enter into it)
+    claims_67 = {"event_sam_ss": {"age": 67}}
+    base = by_year(example, Scenario(scenario_id="b", name="b", event_overrides=claims_67))
+    later = by_year(example, Scenario(scenario_id="l", name="l",
+                                      event_overrides={**claims_67, "event_sam_retires": {"age": 65}}))
     # 2031: base has Sam's pension in its 2nd year (20,000 x 1.02 = 20,400);
     # retiring at 65 (Jul 2032) means a full 70,000 salary instead.
     assert later[2031].total_gross_income - base[2031].total_gross_income == pytest.approx(70_000 - 20_400)

@@ -20,6 +20,7 @@ import streamlit as st
 
 import actuals as actuals_engine
 import explorer
+import manual
 import exports
 import montecarlo
 import quick_add
@@ -110,6 +111,7 @@ def _generate_id(prefix: str, name: str, existing_ids: list[str]) -> str:
 def _clear_simulation_cache() -> None:
     st.session_state.pop("simulation_results", None)
     st.session_state.pop("explore_result", None)
+    st.session_state.pop("help_blocks", None)
 
 
 # ---------------------------------------------------------------------------
@@ -2974,6 +2976,71 @@ def render_explore_tab(portfolio: Portfolio) -> None:
     st.dataframe(shown, hide_index=True, use_container_width=True)
 
 
+def _help_blocks(portfolio: Portfolio, mine: bool):
+    """Manual blocks, cached per edition (examples need a simulation run)."""
+    cache = st.session_state.setdefault("help_blocks", {})
+    if mine not in cache:
+        if mine:
+            path = _get_portfolio_path()
+            tasks = path.with_name(f"{path.stem}_tasks.md") if path else None
+            cache[mine] = manual.build_blocks(portfolio, private=True, tasks_path=tasks)
+        else:
+            import example_data
+            example = example_data.build_example_portfolio()
+            example.apply_event_dates()
+            cache[mine] = manual.build_blocks(example)
+    return cache[mine]
+
+
+def render_help_tab(portfolio: Portfolio) -> None:
+    """The user manual on screen, from the same source as the Word manual (docs/manual.md)."""
+    st.header("Help")
+    c1, c2 = st.columns([2, 3])
+    with c1:
+        source = st.radio("Examples from", ["example", "mine"], horizontal=True, key="help_source",
+                          format_func=lambda s: "the example household" if s == "example" else "my portfolio")
+    with c2:
+        query = st.text_input("Search the manual", key="help_query", placeholder="e.g. annuity, earnings test, backup")
+    mine = source == "mine"
+    blocks = _help_blocks(portfolio, mine)
+    secs = manual.sections(blocks)
+    q = (query or "").strip().lower()
+    shown = 0
+    for i, (title, body) in enumerate(secs):
+        text = manual.to_markdown(body)
+        if q and q not in (title + text).lower():
+            continue
+        shown += 1
+        with st.expander(title, expanded=bool(q) or i == 0):
+            st.markdown(text)
+    if q and not shown:
+        st.info(f"Nothing in the manual mentions '{query}'.")
+
+    st.divider()
+    st.markdown("**Printable manual (Word)** -- File > Save As > PDF in Word for a PDF.")
+    d1, d2 = st.columns(2)
+    with d1:
+        if st.button("Build the generic manual", key="help_build_generic"):
+            st.session_state["help_docx_generic"] = manual.docx_bytes(
+                _help_blocks(portfolio, False), edition="Generic (fictional example household)",
+                subtitle="Examples use the fictional Alex & Sam household.")
+        if st.session_state.get("help_docx_generic"):
+            st.download_button("Download ManagedFlow_Manual.docx", st.session_state["help_docx_generic"],
+                               file_name="ManagedFlow_Manual.docx", key="help_dl_generic",
+                               mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    with d2:
+        if st.button("Build my manual (with my data)", key="help_build_mine"):
+            path = _get_portfolio_path()
+            st.session_state["help_docx_mine"] = manual.docx_bytes(
+                _help_blocks(portfolio, True), edition=f"Private -- {portfolio.household.name or 'my portfolio'}",
+                subtitle=f"Examples use {path.name if path else 'your portfolio'}. Contains your data: keep it private.")
+        if st.session_state.get("help_docx_mine"):
+            stem = (_get_portfolio_path() or Path("portfolio")).stem
+            st.download_button(f"Download ManagedFlow_Manual_{stem}.docx", st.session_state["help_docx_mine"],
+                               file_name=f"ManagedFlow_Manual_{stem}.docx", key="help_dl_mine",
+                               mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+
+
 def render_monte_carlo_section(portfolio: Portfolio) -> None:
     st.divider()
     st.header("Monte Carlo")
@@ -3158,6 +3225,7 @@ def main() -> None:
         ("Scenarios", render_scenarios_tab),
         ("Simulation", lambda p: (render_simulation_tab(p), render_monte_carlo_section(p))),
         ("Explore", render_explore_tab),
+        ("Help", render_help_tab),
         ("Export", render_export_tab),
     ]
     for tab, (_label, render) in zip(st.tabs([label for label, _ in tab_layout]), tab_layout):
