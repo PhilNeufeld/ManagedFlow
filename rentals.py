@@ -115,7 +115,8 @@ def build_rental(spec: RentalSpec, portfolio: Portfolio) -> Tuple[Asset, List[Ca
     if unknown:
         raise ValidationError(f"'{spec.name}': unknown expense type(s) {', '.join(sorted(unknown))}")
 
-    asset_id = _unique(_slug(spec.name), {a.asset_id for a in portfolio.assets})
+    asset_id = portfolio.next_id("asset")
+    flow_ids = iter(range(portfolio.next_id("cashflow"), 10**9))
     asset = Asset(
         asset_id=asset_id, name=spec.name, asset_type=AssetType.REAL_ESTATE, owner=spec.owner or spec.name,
         initial_value=spec.value, start_year=spec.start_year, entity_id=spec.entity_id,
@@ -125,10 +126,11 @@ def build_rental(spec: RentalSpec, portfolio: Portfolio) -> Tuple[Asset, List[Ca
         recovery_years=spec.recovery_years if spec.depreciable_basis else 0.0,
     )
 
-    def flow(suffix, name, ftype, direction, amount, growth, taxable, tax, notes=""):
-        return Cashflow(flow_id=f"{asset_id}_{suffix}", name=f"{spec.name} - {name}", flow_type=ftype,
+    def flow(line, name, ftype, direction, amount, growth, taxable, tax, notes=""):
+        return Cashflow(flow_id=next(flow_ids), name=f"{spec.name} - {name}", flow_type=ftype,
                         direction=direction, amount=amount, start_year=spec.start_year, asset_id=asset_id,
-                        annual_growth_rate=growth, taxable=taxable, tax_category=tax, notes=notes)
+                        annual_growth_rate=growth, taxable=taxable, tax_category=tax, notes=notes,
+                        line_item=line)
 
     flows = []
     if spec.gross_rent:
@@ -148,7 +150,7 @@ def build_rental(spec: RentalSpec, portfolio: Portfolio) -> Tuple[Asset, List[Ca
     loan = None
     m = spec.mortgage
     if m is not None:
-        common = dict(liability_id=_unique(f"{asset_id}_mortgage", {li.liability_id for li in portfolio.liabilities}),
+        common = dict(liability_id=portfolio.next_id("liability"),
                       name=f"{spec.name} mortgage", annual_interest_rate=m.annual_interest_rate,
                       liability_type=LiabilityType.MORTGAGE, lender=m.lender, secured_by_asset_id=asset_id,
                       entity_id=spec.entity_id, notes=m.notes)
@@ -189,9 +191,8 @@ def rental_assets(portfolio: Portfolio) -> List[Asset]:
 
 
 def _expense_label(cf: Cashflow) -> str:
-    for key, (label, ftype) in EXPENSE_TYPES.items():
-        if cf.flow_id.endswith("_" + key):
-            return label
+    if cf.line_item in EXPENSE_TYPES:
+        return EXPENSE_TYPES[cf.line_item][0]
     return cf.name.split(" - ", 1)[-1] if " - " in cf.name else cf.name
 
 
@@ -225,7 +226,7 @@ def rental_pro_forma(portfolio: Portfolio, scenario: Scenario, asset_id: str,
                 else:
                     other_income += amt
             elif cf.direction == CashflowDirection.OUTFLOW:
-                if cf.flow_id.endswith("_vacancy"):
+                if cf.line_item == "vacancy":
                     row["Vacancy & credit loss"] += amt
                 else:
                     label = _expense_label(cf)

@@ -39,6 +39,7 @@ from datetime import date
 from typing import Any, Dict, List, Optional
 
 from models import (
+    _key,
     Asset, AssetType, Cashflow, CashflowDirection, CreditLine, Event, FlowType, Frequency,
     LiabilityType, LiquidityCategory, Loan, Portfolio, TaxCategory, ValidationError,
 )
@@ -203,18 +204,21 @@ _FIELDS_BY_TYPE = {
 def build_drafts(tool_input: Dict[str, Any], portfolio: Portfolio) -> DraftResult:
     """Turn Claude's tool input into validated Draft records (nothing is added)."""
     raws = [r for r in tool_input.get("records", []) if isinstance(r, dict)]
-    taken = _existing_ids(portfolio)
     start = portfolio.assumptions.start_year
 
-    # 1. Give every drafted record a real, unique id, and map refs -> ids.
-    ref_to_id: Dict[str, str] = {}
-    ids: List[Optional[str]] = []
+    # 1. Give every drafted record the next integer key of its table, and map refs -> keys.
+    table_of = {"event": "event", "asset": "asset", "loan": "liability", "credit_line": "liability",
+                "cashflow": "cashflow"}
+    counters = {t: portfolio.next_id(t) for t in set(table_of.values())}
+    ref_to_id: Dict[str, Any] = {}
+    ids: List[Optional[int]] = []
     for raw in raws:
         rtype = raw.get("record_type")
-        if rtype not in _ID_PREFIX:
+        if rtype not in table_of:
             ids.append(None)
             continue
-        new_id = _slug_id(_ID_PREFIX[rtype], str(raw.get("name", "")), taken)
+        new_id = counters[table_of[rtype]]
+        counters[table_of[rtype]] += 1
         ids.append(new_id)
         if raw.get("ref"):
             ref_to_id[str(raw["ref"])] = new_id
@@ -241,7 +245,7 @@ def build_drafts(tool_input: Dict[str, Any], portfolio: Portfolio) -> DraftResul
         # Links: resolve refs; drop (and report) anything that points nowhere.
         for f in LINK_FIELDS:
             if f in fields:
-                target = ref_to_id.get(fields[f], fields[f])
+                target = ref_to_id.get(str(fields[f]), _key(fields[f]))
                 if target in known[link_kind[f]]:
                     fields[f] = target
                 else:

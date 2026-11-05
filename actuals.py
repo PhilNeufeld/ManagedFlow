@@ -4,10 +4,13 @@ actuals.py
 Bring in what really happened (actuals) and near-term forecasts, and compare
 them with the plan.
 
-1. parse_csv()   reads the agreed CSV layout:
-       year,kind,name,category,direction,amount,month,entity,asset,notes[,status,class]
-2. match_rows()  finds the planned Cashflow each row measures (by asset and
-                 name, then by asset and category) -- you review the matches
+1. parse_csv()   reads the CSV layout:
+       year,kind,cashflow_id,name,category,direction,amount,month,asset_id,status,class,notes
+2. link_rows()   links each row to its planned Cashflow BY KEY: the row's
+                 cashflow_id is that cashflow's primary key. Names are never
+                 used to link. A row without a cashflow_id is "not in the plan"
+                 (it still counts once, in its own year). template_for() writes a
+                 CSV listing every planned cashflow with its key, ready to fill in.
 3. commit_rows() saves them as Actual records (re-importing replaces)
 4. plan_vs_actual() and trend_breaks() build the reports
 
@@ -22,10 +25,14 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from models import ACTUAL_STATUSES, Actual, CashflowDirection, FlowType, Portfolio, ValidationError
+from models import ACTUAL_STATUSES, Actual, CashflowDirection, _key, FlowType, Portfolio, ValidationError
 
-CSV_COLUMNS = ["year", "kind", "name", "category", "direction", "amount", "month", "entity", "asset", "notes",
-               "status", "class"]   # status and class are optional
+CSV_COLUMNS = ["year", "kind", "cashflow_id", "name", "category", "direction", "amount", "month", "asset_id",
+               "status", "class", "notes"]
+# Required: year, kind, name, amount. cashflow_id links a row to its planned cashflow (its key);
+# category and direction may then be left blank (they come from the cashflow). Without a
+# cashflow_id a row is "not in the plan": give its category and direction, and asset_id if
+# it belongs to an asset. Extra columns (e.g. "asset", "entity" labels) are ignored.
 
 # Friendly category names used in the CSV -> FlowType
 CATEGORY_ALIASES: Dict[str, str] = {
@@ -40,10 +47,26 @@ CATEGORY_ALIASES: Dict[str, str] = {
 
 TEMPLATE_CSV = (
     ",".join(CSV_COLUMNS) + "\n"
-    "2026,actual,Pistachio crop sales,crop_sales,inflow,118500,,Branfeld Investments,Pistachios,Lower yield than planned,confirmed,Crop 2026\n"
-    "2027,forecast,Pistachio crop sales,crop_sales,inflow,132000,,Branfeld Investments,Pistachios,,estimated,Crop 2027\n"
-    "2026,actual,Brix rent,rent,inflow,1150,3,Branfeld Investments,4392 Brix,,provisional,\n"
+    "2026,actual,12,Crop sales,,,118500,,,confirmed,Crop 2026,Lower yield than planned\n"
+    "2027,forecast,12,Crop sales,,,132000,,,estimated,Crop 2027,\n"
+    "2026,actual,7,Rent,,,1150,3,,provisional,,March rent\n"
+    "2026,actual,,Well pump repair,repairs,outflow,4200,8,3,confirmed,,Not in the plan: give category, direction and asset_id\n"
 )
+
+
+def template_for(portfolio: Portfolio, year: int, kind: str = "actual") -> str:
+    """A CSV with one row per planned cashflow, keyed by cashflow_id, for `year`:
+    fill in the amounts (blank rows are skipped on import). The 'asset' column is
+    a label for reading only. Add rows without a cashflow_id for items not in the plan."""
+    names = {a.asset_id: a.name for a in portfolio.assets}
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(CSV_COLUMNS + ["asset"])
+    for cf in portfolio.cashflows:
+        w.writerow([year, kind, cf.flow_id, cf.name, cf.flow_type.value, cf.direction.value, "", "",
+                    cf.asset_id if cf.asset_id is not None else "", "", "", "",
+                    names.get(cf.asset_id, "household")])
+    return out.getvalue()
 
 
 @dataclass
@@ -61,7 +84,8 @@ class ImportRow:
     notes: str = ""
     status: str = "estimated"
     record_class: str = ""
-    # filled in by match_rows()
+    cashflow_id: object = None      # key of the planned cashflow (from the CSV)
+    # filled in by link_rows()
     asset_id: Optional[str] = None
     entity_id: Optional[str] = None
     flow_id: Optional[str] = None
@@ -85,7 +109,7 @@ def parse_csv(text: str) -> List[ImportRow]:
     errors instead of stopping the import."""
     reader = csv.DictReader(io.StringIO(text.lstrip("﻿")))  # tolerate Excel's BOM
     headers = [h.strip().lower() for h in (reader.fieldnames or [])]
-    missing = [c for c in ("year", "kind", "name", "category", "direction", "amount") if c not in headers]
+    missing = [c for c in ("year", "kind", "name", "amount") if c not in headers]
     if missing:
         raise ValueError(f"CSV is missing column(s): {', '.join(missing)}. Expected: {','.join(CSV_COLUMNS)}")
 
@@ -95,6 +119,8 @@ def parse_csv(text: str) -> List[ImportRow]:
         r = {k.strip().lower(): (v if isinstance(v, str) else "").strip() for k, v in raw.items() if k}
         if not any(r.values()):
             continue
+        if not r.get("amount"):
+            continue            # a template row nobody filled in
         row = ImportRow(line=i, name=r.get("name", ""), notes=r.get("notes", ""),
                         entity_text=r.get("entity", ""), asset_text=r.get("asset", ""))
         try:
@@ -104,12 +130,15 @@ def parse_csv(text: str) -> List[ImportRow]:
         row.kind = r.get("kind", "").lower()
         if row.kind not in ("actual", "forecast"):
             row.errors.append(f"kind must be actual or forecast, not '{row.kind}'")
+        for col in ("cashflow_id", "asset_id"):
+            if r.get(col):
+                setattr(row, col, _key(r[col]))
         category = r.get("category", "").lower()
         row.category = CATEGORY_ALIASES.get(category, category)
-        if row.category not in {t.value for t in FlowType}:
+        if row.category and row.category not in {t.value for t in FlowType}:
             row.errors.append(f"unknown category '{category}'")
         row.direction = r.get("direction", "").lower()
-        if row.direction not in ("inflow", "outflow"):
+        if row.direction and row.direction not in ("inflow", "outflow"):
             row.errors.append(f"direction must be inflow or outflow, not '{row.direction}'")
         try:
             row.amount = _money(r.get("amount", ""))
@@ -139,33 +168,41 @@ def _norm(text: str) -> str:
     return re.sub(r"[^a-z0-9]", "", (text or "").lower())
 
 
-def match_rows(rows: List[ImportRow], portfolio: Portfolio) -> List[ImportRow]:
-    """Find the asset, entity and planned cashflow for each row."""
-    assets = {_norm(a.name): a.asset_id for a in portfolio.assets}
-    entities = {_norm(e.name): e.entity_id for e in portfolio.entities}
+def link_rows(rows: List[ImportRow], portfolio: Portfolio) -> List[ImportRow]:
+    """Link each row to its planned cashflow by KEY (the row's cashflow_id). Never by name.
+
+    - cashflow_id given: it must be a planned cashflow's key; the row takes that
+      cashflow's asset, and its category and direction if they were left blank
+      (a direction that disagrees with the cashflow is an error).
+    - no cashflow_id: the row is "not in the plan". It needs a category and a
+      direction; asset_id, if given, must be an asset's key.
+    """
     for row in rows:
-        if row.asset_text:
-            row.asset_id = assets.get(_norm(row.asset_text))
-            if row.asset_id is None:
-                row.match_note = f"asset '{row.asset_text}' not found; "
-        if row.entity_text:
-            row.entity_id = entities.get(_norm(row.entity_text))
-            if row.entity_id is None:
-                row.match_note += f"entity '{row.entity_text}' not found; "
-        candidates = [cf for cf in portfolio.cashflows if cf.asset_id == row.asset_id]
-        by_name = [cf for cf in candidates if _norm(cf.name) == _norm(row.name)]
-        by_category = [cf for cf in candidates
-                       if cf.flow_type.value == row.category and cf.direction.value == row.direction]
-        if len(by_name) == 1:
-            row.flow_id = by_name[0].flow_id
-            row.match_note += "matched by name"
-        elif len(by_category) == 1:
-            row.flow_id = by_category[0].flow_id
-            row.match_note += f"matched by category to '{by_category[0].name}'"
-        else:
-            row.match_note += ("several possible cashflows -- pick one" if len(by_category) > 1
-                               else "not in the plan")
+        row.flow_id = None
+        if row.cashflow_id is not None:
+            cf = portfolio.get_cashflow(row.cashflow_id)
+            if cf is None:
+                row.errors.append(f"no planned cashflow #{row.cashflow_id}")
+                continue
+            row.flow_id, row.asset_id = cf.flow_id, cf.asset_id
+            row.category = row.category or cf.flow_type.value
+            row.direction = row.direction or cf.direction.value
+            if row.direction != cf.direction.value:
+                row.errors.append(f"direction '{row.direction}' disagrees with #{cf.flow_id} ({cf.direction.value})")
+            row.match_note = f"linked to #{cf.flow_id} {cf.name}"
+            continue
+        if row.asset_id is not None and portfolio.get_asset(row.asset_id) is None:
+            row.errors.append(f"no asset #{row.asset_id}")
+        if not row.category:
+            row.errors.append("category needed for an item not in the plan")
+        if not row.direction:
+            row.errors.append("direction needed for an item not in the plan")
+        where = f"asset #{row.asset_id}" if row.asset_id is not None else "the household"
+        row.match_note = f"not in the plan: counts once in {row.year}, on {where}"
     return rows
+
+
+match_rows = link_rows   # old name
 
 
 def commit_rows(rows: List[ImportRow], portfolio: Portfolio) -> int:
@@ -174,9 +211,7 @@ def commit_rows(rows: List[ImportRow], portfolio: Portfolio) -> int:
     for row in rows:
         if not row.ok:
             continue
-        actual_id = f"actual_{row.year}_{row.month or 0}_{row.kind}_{_norm(row.name)[:30]}_{saved}"
-        while any(a.actual_id == actual_id for a in portfolio.actuals):
-            actual_id += "_"
+        actual_id = portfolio.next_id("actual")
         try:
             portfolio.add_actual(Actual(
                 actual_id=actual_id, year=row.year, amount=row.amount, name=row.name, kind=row.kind,

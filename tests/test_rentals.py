@@ -85,9 +85,11 @@ def test_add_rental_creates_property_flows_and_mortgage():
     p = household()
     asset, flows, loan = rentals.add_rental(p, brix())
     assert asset.tax_category.value == "rental_income" and asset.depreciation_in_year(2026) == 10_000
-    kinds = {cf.flow_id.rsplit("_", 1)[-1]: cf for cf in flows}
+    kinds = {cf.line_item: cf for cf in flows}
     assert kinds["rent"].amount == 24_000 and kinds["vacancy"].amount == 1_200
-    assert kinds["tax"].flow_type == FlowType.PROPERTY_TAX
+    assert kinds["property_tax"].flow_type == FlowType.PROPERTY_TAX
+    assert isinstance(asset.asset_id, int) and all(isinstance(cf.flow_id, int) for cf in flows)
+    assert isinstance(loan.liability_id, int)
     assert loan.secured_by_asset_id == asset.asset_id and loan.balance == pytest.approx(251_057.17, abs=0.01)
     assert p.get_liability(loan.liability_id) is loan
 

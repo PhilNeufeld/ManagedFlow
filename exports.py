@@ -453,8 +453,8 @@ def _write_period_view_sheet(wb: Workbook, portfolio: Portfolio, years: int = 5)
     scenario = next((s for s in portfolio.scenarios if s.is_base_case), portfolio.scenarios[0] if portfolio.scenarios else None)
     if scenario is None:
         return
-    nodes = explorer.build_tree(portfolio)
     result = explorer.run(portfolio, scenario)
+    nodes = explorer.build_tree(result.working_portfolio)   # includes unplanned actuals
     pv = explorer.period_view(portfolio, nodes, explorer.ROOT, result, portfolio.assumptions.start_year, years)
     yrs = pv["years"]
     ws = wb.create_sheet("Period View")

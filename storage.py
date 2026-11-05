@@ -178,6 +178,13 @@ def save_portfolio(portfolio: Portfolio, path: str | Path, make_backup: bool = T
     tmp_path.replace(path)  # atomic on POSIX; avoids truncating the file on a crash mid-write
 
 
+def with_integer_keys(portfolio: Portfolio) -> Portfolio:
+    """A copy whose records all have integer primary keys (foreign keys follow).
+    For scripts that build a portfolio with readable text keys before saving it."""
+    from migrations import to_integer_keys
+    return Portfolio.from_dict(to_integer_keys(portfolio.to_dict()))
+
+
 def load_portfolio(path: str | Path) -> Portfolio:
     """Load and validate a Portfolio from a JSON file.
 

@@ -1,8 +1,8 @@
 {
   "metadata": {
-    "file_version": "0.9",
-    "created_at": "2026-11-04T23:52:07+00:00",
-    "updated_at": "2026-11-04T23:52:07+00:00",
+    "file_version": "1.1",
+    "created_at": "2026-11-05T04:05:36+00:00",
+    "updated_at": "2026-11-05T04:05:36+00:00",
     "notes": "Fictional example household for learning and testing. Not real data."
   },
   "household": {
@@ -32,25 +32,25 @@
   },
   "entities": [
     {
-      "entity_id": "entity_joint",
+      "entity_id": 1,
       "name": "Alex & Sam (joint)",
       "entity_type": "joint",
       "notes": ""
     },
     {
-      "entity_id": "entity_trust",
+      "entity_id": 2,
       "name": "Alex & Sam Family Trust",
       "entity_type": "trust",
       "notes": ""
     },
     {
-      "entity_id": "entity_llc",
+      "entity_id": 3,
       "name": "Elm Street LLC",
       "entity_type": "llc",
       "notes": ""
     },
     {
-      "entity_id": "entity_harbor",
+      "entity_id": 4,
       "name": "Harbor Partners LP",
       "entity_type": "partnership",
       "notes": ""
@@ -58,11 +58,11 @@
   ],
   "assets": [
     {
-      "asset_id": "asset_brokerage",
+      "asset_id": 1,
       "name": "Brokerage",
       "asset_type": "equity_fund",
       "owner": "Joint",
-      "entity_id": "entity_joint",
+      "entity_id": 1,
       "initial_value": 400000,
       "current_value": 400000,
       "start_year": 2026,
@@ -85,11 +85,11 @@
       "earner_person_id": null
     },
     {
-      "asset_id": "asset_savings",
+      "asset_id": 2,
       "name": "Savings",
       "asset_type": "cash",
       "owner": "Joint",
-      "entity_id": "entity_joint",
+      "entity_id": 1,
       "initial_value": 60000,
       "current_value": 60000,
       "start_year": 2026,
@@ -112,11 +112,11 @@
       "earner_person_id": null
     },
     {
-      "asset_id": "asset_elm_rental",
+      "asset_id": 3,
       "name": "Elm St rental",
       "asset_type": "real_estate",
       "owner": "Joint",
-      "entity_id": "entity_llc",
+      "entity_id": 3,
       "initial_value": 350000,
       "current_value": 350000,
       "start_year": 2026,
@@ -130,7 +130,7 @@
       "sale_year": 2034,
       "sale_assumptions": {},
       "start_event_id": null,
-      "end_event_id": "event_sell_elm",
+      "end_event_id": 3,
       "sale_month": 1,
       "depreciable_basis": 250000,
       "placed_in_service_year": 2015,
@@ -139,11 +139,11 @@
       "earner_person_id": null
     },
     {
-      "asset_id": "asset_oak",
+      "asset_id": 4,
       "name": "Oak Ave duplex",
       "asset_type": "real_estate",
       "owner": "Elm Street LLC",
-      "entity_id": "entity_llc",
+      "entity_id": 3,
       "initial_value": 520000,
       "current_value": 520000,
       "start_year": 2027,
@@ -156,7 +156,7 @@
       "do_not_sell": false,
       "sale_year": null,
       "sale_assumptions": {},
-      "start_event_id": "event_buy_oak",
+      "start_event_id": 4,
       "end_event_id": null,
       "sale_month": null,
       "depreciable_basis": 400000,
@@ -166,11 +166,11 @@
       "earner_person_id": null
     },
     {
-      "asset_id": "asset_harbor",
+      "asset_id": 5,
       "name": "Harbor Plaza",
       "asset_type": "real_estate",
       "owner": "Harbor Partners LP",
-      "entity_id": "entity_harbor",
+      "entity_id": 4,
       "initial_value": 4000000,
       "current_value": 4000000,
       "start_year": 2026,
@@ -193,11 +193,11 @@
       "earner_person_id": null
     },
     {
-      "asset_id": "asset_annuity",
+      "asset_id": 6,
       "name": "Sam annuity",
       "asset_type": "annuity",
       "owner": "Sam",
-      "entity_id": "entity_joint",
+      "entity_id": 1,
       "initial_value": 150000,
       "current_value": 150000,
       "start_year": 2026,
@@ -222,7 +222,7 @@
   ],
   "cashflows": [
     {
-      "flow_id": "flow_alex_salary",
+      "flow_id": 1,
       "name": "Alex salary",
       "flow_type": "salary_income",
       "direction": "inflow",
@@ -242,11 +242,12 @@
       "start_month": 1,
       "end_month": 6,
       "start_event_id": null,
-      "end_event_id": "event_alex_retires",
-      "person_id": "person_alex"
+      "end_event_id": 1,
+      "person_id": 1,
+      "line_item": ""
     },
     {
-      "flow_id": "flow_alex_pension",
+      "flow_id": 2,
       "name": "Alex pension",
       "flow_type": "pension_income",
       "direction": "inflow",
@@ -265,12 +266,13 @@
       "notes": "",
       "start_month": 7,
       "end_month": 12,
-      "start_event_id": "event_alex_retires",
+      "start_event_id": 1,
       "end_event_id": null,
-      "person_id": "person_alex"
+      "person_id": 1,
+      "line_item": ""
     },
     {
-      "flow_id": "flow_sam_salary",
+      "flow_id": 3,
       "name": "Sam salary",
       "flow_type": "salary_income",
       "direction": "inflow",
@@ -290,11 +292,12 @@
       "start_month": 1,
       "end_month": 6,
       "start_event_id": null,
-      "end_event_id": "event_sam_retires",
-      "person_id": "person_sam"
+      "end_event_id": 2,
+      "person_id": 2,
+      "line_item": ""
     },
     {
-      "flow_id": "flow_sam_pension",
+      "flow_id": 4,
       "name": "Sam pension",
       "flow_type": "pension_income",
       "direction": "inflow",
@@ -313,18 +316,19 @@
       "notes": "",
       "start_month": 7,
       "end_month": 12,
-      "start_event_id": "event_sam_retires",
+      "start_event_id": 2,
       "end_event_id": null,
-      "person_id": "person_sam"
+      "person_id": 2,
+      "line_item": ""
     },
     {
-      "flow_id": "flow_elm_rent",
+      "flow_id": 5,
       "name": "Elm St rent",
       "flow_type": "rent_income",
       "direction": "inflow",
       "amount": 2200,
       "start_year": 2026,
-      "asset_id": "asset_elm_rental",
+      "asset_id": 3,
       "end_year": 2033,
       "frequency": "monthly",
       "annual_growth_rate": 0.03,
@@ -338,17 +342,18 @@
       "start_month": 1,
       "end_month": 12,
       "start_event_id": null,
-      "end_event_id": "event_sell_elm",
-      "person_id": null
+      "end_event_id": 3,
+      "person_id": null,
+      "line_item": ""
     },
     {
-      "flow_id": "flow_elm_expenses",
+      "flow_id": 6,
       "name": "Elm St expenses",
       "flow_type": "operating_expense",
       "direction": "outflow",
       "amount": 6000,
       "start_year": 2026,
-      "asset_id": "asset_elm_rental",
+      "asset_id": 3,
       "end_year": 2033,
       "frequency": "annual",
       "annual_growth_rate": 0.03,
@@ -362,17 +367,18 @@
       "start_month": 1,
       "end_month": 12,
       "start_event_id": null,
-      "end_event_id": "event_sell_elm",
-      "person_id": null
+      "end_event_id": 3,
+      "person_id": null,
+      "line_item": ""
     },
     {
-      "flow_id": "flow_elm_sale",
+      "flow_id": 7,
       "name": "Elm St sale proceeds",
       "flow_type": "sale_proceeds",
       "direction": "inflow",
       "amount": 420000,
       "start_year": 2034,
-      "asset_id": "asset_elm_rental",
+      "asset_id": 3,
       "end_year": null,
       "frequency": "one_time",
       "annual_growth_rate": 0.0,
@@ -385,12 +391,13 @@
       "notes": "",
       "start_month": 1,
       "end_month": 12,
-      "start_event_id": "event_sell_elm",
+      "start_event_id": 3,
       "end_event_id": null,
-      "person_id": null
+      "person_id": null,
+      "line_item": ""
     },
     {
-      "flow_id": "flow_living",
+      "flow_id": 8,
       "name": "Living expenses",
       "flow_type": "living_expense",
       "direction": "outflow",
@@ -411,16 +418,17 @@
       "end_month": 12,
       "start_event_id": null,
       "end_event_id": null,
-      "person_id": null
+      "person_id": null,
+      "line_item": ""
     },
     {
-      "flow_id": "flow_oak_rent",
+      "flow_id": 9,
       "name": "Oak Ave - Gross scheduled rent",
       "flow_type": "rent_income",
       "direction": "inflow",
       "amount": 43200,
       "start_year": 2027,
-      "asset_id": "asset_oak",
+      "asset_id": 4,
       "end_year": null,
       "frequency": "annual",
       "annual_growth_rate": 0.03,
@@ -435,16 +443,17 @@
       "end_month": 12,
       "start_event_id": null,
       "end_event_id": null,
-      "person_id": null
+      "person_id": null,
+      "line_item": ""
     },
     {
-      "flow_id": "flow_oak_vacancy",
+      "flow_id": 10,
       "name": "Oak Ave - Vacancy & credit loss",
       "flow_type": "operating_expense",
       "direction": "outflow",
       "amount": 2160,
       "start_year": 2027,
-      "asset_id": "asset_oak",
+      "asset_id": 4,
       "end_year": null,
       "frequency": "annual",
       "annual_growth_rate": 0.03,
@@ -459,16 +468,17 @@
       "end_month": 12,
       "start_event_id": null,
       "end_event_id": null,
-      "person_id": null
+      "person_id": null,
+      "line_item": ""
     },
     {
-      "flow_id": "flow_oak_tax",
+      "flow_id": 11,
       "name": "Oak Ave - Property tax",
       "flow_type": "property_tax",
       "direction": "outflow",
       "amount": 6500,
       "start_year": 2027,
-      "asset_id": "asset_oak",
+      "asset_id": 4,
       "end_year": null,
       "frequency": "annual",
       "annual_growth_rate": 0.02,
@@ -483,16 +493,17 @@
       "end_month": 12,
       "start_event_id": null,
       "end_event_id": null,
-      "person_id": null
+      "person_id": null,
+      "line_item": ""
     },
     {
-      "flow_id": "flow_oak_insurance",
+      "flow_id": 12,
       "name": "Oak Ave - Insurance",
       "flow_type": "insurance",
       "direction": "outflow",
       "amount": 2400,
       "start_year": 2027,
-      "asset_id": "asset_oak",
+      "asset_id": 4,
       "end_year": null,
       "frequency": "annual",
       "annual_growth_rate": 0.04,
@@ -507,16 +518,17 @@
       "end_month": 12,
       "start_event_id": null,
       "end_event_id": null,
-      "person_id": null
+      "person_id": null,
+      "line_item": ""
     },
     {
-      "flow_id": "flow_oak_repairs",
+      "flow_id": 13,
       "name": "Oak Ave - Repairs & maintenance",
       "flow_type": "repairs",
       "direction": "outflow",
       "amount": 3000,
       "start_year": 2027,
-      "asset_id": "asset_oak",
+      "asset_id": 4,
       "end_year": null,
       "frequency": "annual",
       "annual_growth_rate": 0.03,
@@ -531,16 +543,17 @@
       "end_month": 12,
       "start_event_id": null,
       "end_event_id": null,
-      "person_id": null
+      "person_id": null,
+      "line_item": ""
     },
     {
-      "flow_id": "flow_oak_mgmt",
+      "flow_id": 14,
       "name": "Oak Ave - Property management",
       "flow_type": "management_fee",
       "direction": "outflow",
       "amount": 3456,
       "start_year": 2027,
-      "asset_id": "asset_oak",
+      "asset_id": 4,
       "end_year": null,
       "frequency": "annual",
       "annual_growth_rate": 0.03,
@@ -555,16 +568,17 @@
       "end_month": 12,
       "start_event_id": null,
       "end_event_id": null,
-      "person_id": null
+      "person_id": null,
+      "line_item": ""
     },
     {
-      "flow_id": "flow_harbor",
+      "flow_id": 15,
       "name": "Harbor Plaza distributions",
       "flow_type": "business_distribution",
       "direction": "inflow",
       "amount": 200000,
       "start_year": 2028,
-      "asset_id": "asset_harbor",
+      "asset_id": 5,
       "end_year": null,
       "frequency": "annual",
       "annual_growth_rate": 0.02,
@@ -577,18 +591,19 @@
       "notes": "",
       "start_month": 1,
       "end_month": 12,
-      "start_event_id": "event_harbor_dist",
+      "start_event_id": 5,
       "end_event_id": null,
-      "person_id": null
+      "person_id": null,
+      "line_item": ""
     },
     {
-      "flow_id": "flow_annuity_taxable",
+      "flow_id": 16,
       "name": "Sam annuity - taxable part",
       "flow_type": "annuity_income",
       "direction": "inflow",
       "amount": 375,
       "start_year": 2031,
-      "asset_id": "asset_annuity",
+      "asset_id": 6,
       "end_year": null,
       "frequency": "monthly",
       "annual_growth_rate": 0.0,
@@ -601,18 +616,19 @@
       "notes": "",
       "start_month": 7,
       "end_month": 12,
-      "start_event_id": "event_annuity",
+      "start_event_id": 8,
       "end_event_id": null,
-      "person_id": "person_sam"
+      "person_id": 2,
+      "line_item": ""
     },
     {
-      "flow_id": "flow_annuity_principal",
+      "flow_id": 17,
       "name": "Sam annuity - return of principal",
       "flow_type": "annuity_income",
       "direction": "inflow",
       "amount": 375,
       "start_year": 2031,
-      "asset_id": "asset_annuity",
+      "asset_id": 6,
       "end_year": null,
       "frequency": "monthly",
       "annual_growth_rate": 0.0,
@@ -625,12 +641,13 @@
       "notes": "",
       "start_month": 7,
       "end_month": 12,
-      "start_event_id": "event_annuity",
+      "start_event_id": 8,
       "end_event_id": null,
-      "person_id": "person_sam"
+      "person_id": 2,
+      "line_item": ""
     },
     {
-      "flow_id": "flow_alex_ss",
+      "flow_id": 18,
       "name": "Alex Social Security",
       "flow_type": "social_security_income",
       "direction": "inflow",
@@ -649,12 +666,13 @@
       "notes": "",
       "start_month": 7,
       "end_month": 12,
-      "start_event_id": "event_alex_ss",
+      "start_event_id": 7,
       "end_event_id": null,
-      "person_id": "person_alex"
+      "person_id": 1,
+      "line_item": ""
     },
     {
-      "flow_id": "flow_sam_ss",
+      "flow_id": 19,
       "name": "Sam Social Security",
       "flow_type": "social_security_income",
       "direction": "inflow",
@@ -673,22 +691,23 @@
       "notes": "",
       "start_month": 7,
       "end_month": 12,
-      "start_event_id": "event_sam_ss",
+      "start_event_id": 6,
       "end_event_id": null,
-      "person_id": "person_sam"
+      "person_id": 2,
+      "line_item": ""
     }
   ],
   "liabilities": [
     {
       "kind": "loan",
-      "liability_id": "liability_elm_mortgage",
+      "liability_id": 1,
       "name": "Elm St mortgage",
       "liability_type": "mortgage",
       "balance": 180000,
       "annual_interest_rate": 0.045,
       "start_year": 2026,
-      "entity_id": "entity_joint",
-      "secured_by_asset_id": "asset_elm_rental",
+      "entity_id": 1,
+      "secured_by_asset_id": 3,
       "lender": "Example Bank",
       "notes": "",
       "active": true,
@@ -705,14 +724,14 @@
     },
     {
       "kind": "loan",
-      "liability_id": "liability_oak_mortgage",
+      "liability_id": 2,
       "name": "Oak Ave mortgage",
       "liability_type": "mortgage",
       "balance": 400000,
       "annual_interest_rate": 0.0625,
       "start_year": 2027,
-      "entity_id": "entity_llc",
-      "secured_by_asset_id": "asset_oak",
+      "entity_id": 3,
+      "secured_by_asset_id": 4,
       "lender": "Example Credit Union",
       "notes": "",
       "active": true,
@@ -729,13 +748,13 @@
     },
     {
       "kind": "credit_line",
-      "liability_id": "liability_heloc",
+      "liability_id": 3,
       "name": "HELOC",
       "liability_type": "heloc",
       "balance": 20000,
       "annual_interest_rate": 0.08,
       "start_year": 2026,
-      "entity_id": "entity_joint",
+      "entity_id": 1,
       "secured_by_asset_id": null,
       "lender": "",
       "notes": "",
@@ -749,25 +768,25 @@
   ],
   "events": [
     {
-      "event_id": "event_alex_retires",
+      "event_id": 1,
       "name": "Alex retires",
       "year": 2026,
       "month": 7,
       "notes": "",
-      "person_id": "person_alex",
+      "person_id": 1,
       "age": 61
     },
     {
-      "event_id": "event_sam_retires",
+      "event_id": 2,
       "name": "Sam retires",
       "year": 2030,
       "month": 7,
       "notes": "",
-      "person_id": "person_sam",
+      "person_id": 2,
       "age": 63
     },
     {
-      "event_id": "event_sell_elm",
+      "event_id": 3,
       "name": "Sell Elm St rental",
       "year": 2034,
       "month": 1,
@@ -776,7 +795,7 @@
       "age": null
     },
     {
-      "event_id": "event_buy_oak",
+      "event_id": 4,
       "name": "Buy Oak Ave duplex",
       "year": 2027,
       "month": 1,
@@ -785,7 +804,7 @@
       "age": null
     },
     {
-      "event_id": "event_harbor_dist",
+      "event_id": 5,
       "name": "Harbor Plaza distributions start",
       "year": 2028,
       "month": 1,
@@ -794,25 +813,25 @@
       "age": null
     },
     {
-      "event_id": "event_sam_ss",
+      "event_id": 6,
       "name": "Sam claims Social Security",
       "year": 2029,
       "month": 7,
       "notes": "",
-      "person_id": "person_sam",
+      "person_id": 2,
       "age": 62
     },
     {
-      "event_id": "event_alex_ss",
+      "event_id": 7,
       "name": "Alex claims Social Security",
       "year": 2032,
       "month": 7,
       "notes": "",
-      "person_id": "person_alex",
+      "person_id": 1,
       "age": 67
     },
     {
-      "event_id": "event_annuity",
+      "event_id": 8,
       "name": "Annuity payments start",
       "year": 2031,
       "month": 7,
@@ -823,7 +842,7 @@
   ],
   "people": [
     {
-      "person_id": "person_alex",
+      "person_id": 1,
       "name": "Alex",
       "birth_year": 1965,
       "birth_month": 7,
@@ -832,7 +851,7 @@
       "substantial_self_employment": true
     },
     {
-      "person_id": "person_sam",
+      "person_id": 2,
       "name": "Sam",
       "birth_year": 1967,
       "birth_month": 7,
@@ -843,69 +862,78 @@
   ],
   "memberships": [
     {
-      "entity_id": "entity_joint",
-      "person_id": "person_alex",
+      "membership_id": 1,
+      "entity_id": 1,
+      "person_id": 1,
       "role": "owner",
       "notes": ""
     },
     {
-      "entity_id": "entity_joint",
-      "person_id": "person_sam",
+      "membership_id": 2,
+      "entity_id": 1,
+      "person_id": 2,
       "role": "owner",
       "notes": ""
     },
     {
-      "entity_id": "entity_trust",
-      "person_id": "person_alex",
+      "membership_id": 3,
+      "entity_id": 2,
+      "person_id": 1,
       "role": "trustee",
       "notes": ""
     },
     {
-      "entity_id": "entity_trust",
-      "person_id": "person_sam",
+      "membership_id": 4,
+      "entity_id": 2,
+      "person_id": 2,
       "role": "trustee",
       "notes": ""
     },
     {
-      "entity_id": "entity_llc",
-      "person_id": "person_alex",
+      "membership_id": 5,
+      "entity_id": 3,
+      "person_id": 1,
       "role": "manager",
       "notes": ""
     }
   ],
   "ownerships": [
     {
-      "owner_entity_id": "entity_joint",
+      "owner_entity_id": 1,
       "owned_type": "entity",
-      "owned_id": "entity_trust",
+      "owned_id": 2,
       "percent": 1.0,
-      "notes": ""
+      "notes": "",
+      "ownership_id": 1
     },
     {
-      "owner_entity_id": "entity_joint",
+      "owner_entity_id": 1,
       "owned_type": "entity",
-      "owned_id": "entity_llc",
+      "owned_id": 3,
       "percent": 1.0,
-      "notes": ""
+      "notes": "",
+      "ownership_id": 2
     },
     {
-      "owner_entity_id": "entity_trust",
+      "owner_entity_id": 2,
       "owned_type": "entity",
-      "owned_id": "entity_harbor",
+      "owned_id": 4,
       "percent": 0.15,
-      "notes": ""
+      "notes": "",
+      "ownership_id": 3
     },
     {
-      "owner_entity_id": "entity_llc",
+      "owner_entity_id": 3,
       "owned_type": "entity",
-      "owned_id": "entity_harbor",
+      "owned_id": 4,
       "percent": 0.05,
-      "notes": ""
+      "notes": "",
+      "ownership_id": 4
     }
   ],
   "actuals": [
     {
-      "actual_id": "actual_elm_exp_2026",
+      "actual_id": 1,
       "year": 2026,
       "amount": 7250,
       "name": "Elm St expenses",
@@ -913,15 +941,15 @@
       "direction": "outflow",
       "category": "operating_expense",
       "month": null,
-      "flow_id": "flow_elm_expenses",
-      "asset_id": "asset_elm_rental",
+      "flow_id": 6,
+      "asset_id": 3,
       "entity_id": null,
       "notes": "Includes a $1,250 roof repair",
       "status": "confirmed",
       "record_class": "Elm 2026"
     },
     {
-      "actual_id": "actual_elm_rent_2027",
+      "actual_id": 2,
       "year": 2027,
       "amount": 27500,
       "name": "Elm St rent",
@@ -929,8 +957,8 @@
       "direction": "inflow",
       "category": "rent_income",
       "month": null,
-      "flow_id": "flow_elm_rent",
-      "asset_id": "asset_elm_rental",
+      "flow_id": 5,
+      "asset_id": 3,
       "entity_id": null,
       "notes": "New lease from March",
       "status": "estimated",
@@ -939,12 +967,12 @@
   ],
   "bundles": [
     {
-      "bundle_id": "bundle_rentals",
+      "bundle_id": 1,
       "name": "Rentals",
-      "entity_id": "entity_llc",
+      "entity_id": 3,
       "asset_ids": [
-        "asset_elm_rental",
-        "asset_oak"
+        3,
+        4
       ],
       "cashflow_ids": [],
       "liability_ids": [],
@@ -953,7 +981,7 @@
   ],
   "scenarios": [
     {
-      "scenario_id": "base",
+      "scenario_id": 1,
       "name": "Base",
       "description": "",
       "is_base_case": true,
@@ -964,6 +992,7 @@
       "event_overrides": {},
       "ownership_view": "share",
       "use_actuals": true,
+      "count_unplanned_actuals": true,
       "withdrawal_order_override": null,
       "allow_illiquid_withdrawals": false,
       "reinvest_surplus": true,
@@ -972,7 +1001,7 @@
       "notes": ""
     },
     {
-      "scenario_id": "alex_retires_2028",
+      "scenario_id": 2,
       "name": "Alex retires Jan 2028",
       "description": "",
       "is_base_case": false,
@@ -981,13 +1010,14 @@
       "asset_overrides": {},
       "cashflow_overrides": {},
       "event_overrides": {
-        "event_alex_retires": {
+        "1": {
           "year": 2028,
           "month": 1
         }
       },
       "ownership_view": "share",
       "use_actuals": true,
+      "count_unplanned_actuals": true,
       "withdrawal_order_override": null,
       "allow_illiquid_withdrawals": false,
       "reinvest_surplus": true,
@@ -996,7 +1026,7 @@
       "notes": ""
     },
     {
-      "scenario_id": "higher_inflation",
+      "scenario_id": 3,
       "name": "Higher inflation (4.5%)",
       "description": "",
       "is_base_case": false,
@@ -1007,6 +1037,7 @@
       "event_overrides": {},
       "ownership_view": "share",
       "use_actuals": true,
+      "count_unplanned_actuals": true,
       "withdrawal_order_override": null,
       "allow_illiquid_withdrawals": false,
       "reinvest_surplus": true,
@@ -1015,7 +1046,7 @@
       "notes": ""
     },
     {
-      "scenario_id": "sam_retires_65",
+      "scenario_id": 4,
       "name": "Sam retires at 65",
       "description": "",
       "is_base_case": false,
@@ -1024,12 +1055,13 @@
       "asset_overrides": {},
       "cashflow_overrides": {},
       "event_overrides": {
-        "event_sam_retires": {
+        "2": {
           "age": 65
         }
       },
       "ownership_view": "share",
       "use_actuals": true,
+      "count_unplanned_actuals": true,
       "withdrawal_order_override": null,
       "allow_illiquid_withdrawals": false,
       "reinvest_surplus": true,
@@ -1038,7 +1070,7 @@
       "notes": ""
     },
     {
-      "scenario_id": "sam_claims_67",
+      "scenario_id": 5,
       "name": "Sam claims Social Security at 67",
       "description": "",
       "is_base_case": false,
@@ -1047,12 +1079,13 @@
       "asset_overrides": {},
       "cashflow_overrides": {},
       "event_overrides": {
-        "event_sam_ss": {
+        "6": {
           "age": 67
         }
       },
       "ownership_view": "share",
       "use_actuals": true,
+      "count_unplanned_actuals": true,
       "withdrawal_order_override": null,
       "allow_illiquid_withdrawals": false,
       "reinvest_surplus": true,

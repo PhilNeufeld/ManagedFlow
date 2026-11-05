@@ -107,7 +107,7 @@ def test_interim_entity_person_link_becomes_an_owner_membership():
     data.pop("memberships")
     data["entities"][0]["person_id"] = "phil"  # how the brief v0.5 build stored it
     p = Portfolio.from_dict(data)
-    assert names(p.people_in("e")) == [("Phil", "owner")]
+    assert names(p.people_in(p.entities[0].entity_id)) == [("Phil", "owner")]   # keys renumbered in v1.0
 
 
 def test_old_files_get_an_empty_membership_list(v0_1_data):
@@ -138,3 +138,34 @@ def test_file_with_two_owners_on_a_personal_entity_is_rejected():
     data["memberships"].append({"entity_id": "phil_personal", "person_id": "debbie", "role": "owner", "notes": ""})
     with pytest.raises(ValidationError, match="only one owner"):
         Portfolio.from_dict(data)
+
+
+# --- primary keys on the link table (v1.1) -------------------------------------------------------------
+
+def test_links_get_integer_primary_keys_and_the_pair_stays_unique():
+    p = household()
+    ids = [m.membership_id for m in p.memberships]
+    assert all(isinstance(i, int) for i in ids) and len(set(ids)) == len(ids)
+    new = Membership(entity_id="trust", person_id="phil", role="beneficiary")
+    p.add_membership(new)
+    assert new.membership_id == max(ids) + 1
+    with pytest.raises(ValidationError, match="already has that role"):
+        p.add_membership(Membership(entity_id="trust", person_id="phil", role="beneficiary"))
+
+
+def test_changing_a_role_keeps_the_primary_key():
+    p = household()
+    m = p.memberships[0]
+    p.replace_membership(m.membership_id, Membership(entity_id=m.entity_id, person_id=m.person_id, role="other"))
+    assert p.get_membership(m.membership_id).role.value == "other"
+    p.remove_membership(m.membership_id)
+    assert p.get_membership(m.membership_id) is None
+
+
+def test_old_files_give_links_a_key():
+    data = household().to_dict()
+    for row in data["memberships"]:
+        row.pop("membership_id")
+    data["metadata"]["file_version"] = "1.0"
+    p = Portfolio.from_dict(data)
+    assert sorted(m.membership_id for m in p.memberships) == list(range(1, len(p.memberships) + 1))

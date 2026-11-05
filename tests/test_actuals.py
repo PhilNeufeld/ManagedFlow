@@ -15,13 +15,14 @@ from models import (
     Scenario, ValidationError,
 )
 
-CSV = """year,kind,name,category,direction,amount,month,entity,asset,notes
-2026,actual,Pistachio crop sales,crop_sales,inflow,"$118,500",,Branfeld Investments,Pistachios,Lower yield
-2027,forecast,Pistachio crop sales,crop_sales,inflow,150000,,Branfeld Investments,Pistachios,
-2026,actual,Brix rent,rent,inflow,1100,1,Branfeld Investments,4392 brix,
-2026,actual,Brix rent,rent,inflow,1100,2,Branfeld Investments,4392 Brix,
-2026,actual,Brix rent,rent,inflow,1100,3,Branfeld Investments,4392 Brix,
-2026,actual,Well pump repair,repairs,outflow,4200,,Branfeld Investments,Pistachios,Not budgeted
+# Rows link by cashflow_id (the planned cashflow's key); the last row has none: not in the plan.
+CSV = """year,kind,cashflow_id,name,category,direction,amount,month,asset_id,notes
+2026,actual,crop,Pistachio crop sales,crop_sales,inflow,"$118,500",,,Lower yield
+2027,forecast,crop,Pistachio crop sales,,,150000,,,
+2026,actual,brix_rent,Brix rent,,,1100,1,,
+2026,actual,brix_rent,Brix rent,,,1100,2,,
+2026,actual,brix_rent,Brix rent,,,1100,3,,
+2026,actual,,Well pump repair,repairs,outflow,4200,,pistachios,Not budgeted
 """
 
 
@@ -89,11 +90,43 @@ def test_missing_columns_are_named():
 
 # --- matching to the plan -------------------------------------------------------------------------
 
-def test_rows_match_their_planned_cashflows():
+def test_rows_link_by_key():
     _, rows = imported()
     assert [r.flow_id for r in rows] == ["crop", "crop", "brix_rent", "brix_rent", "brix_rent", None]
-    assert rows[2].asset_id == "brix"  # "4392 brix" matched regardless of case
-    assert "not in the plan" in rows[5].match_note
+    assert rows[2].asset_id == "brix"                      # the asset comes from the linked cashflow
+    assert (rows[1].category, rows[1].direction) == ("crop_sales", "inflow")   # filled from the cashflow
+    assert rows[5].asset_id == "pistachios" and "not in the plan" in rows[5].match_note
+
+
+def test_a_matching_name_alone_never_links():
+    csv_text = ("year,kind,cashflow_id,name,category,direction,amount\n"
+                "2026,actual,,Pistachio crop sales,crop_sales,inflow,100\n")
+    rows = actuals.link_rows(actuals.parse_csv(csv_text), household())
+    assert rows[0].flow_id is None and rows[0].ok
+
+
+def test_bad_keys_are_reported():
+    csv_text = ("year,kind,cashflow_id,name,category,direction,amount,asset_id\n"
+                "2026,actual,nope,X,,,100,\n"                       # no such cashflow
+                "2026,actual,crop,X,,outflow,100,\n"                 # crop sales are an inflow
+                "2026,actual,,Y,,,100,\n"                            # unplanned without category/direction
+                "2026,actual,,Z,repairs,outflow,100,barn\n")         # no such asset
+    rows = actuals.link_rows(actuals.parse_csv(csv_text), household())
+    assert "no planned cashflow #nope" in rows[0].errors[0]
+    assert "disagrees" in rows[1].errors[0]
+    assert len(rows[2].errors) == 2
+    assert "no asset #barn" in rows[3].errors[0]
+
+
+def test_template_lists_every_planned_cashflow_with_its_key_and_blank_rows_are_skipped():
+    p = household()
+    text = actuals.template_for(p, 2026)
+    rows = actuals.parse_csv(text)
+    assert rows == []                                     # nothing filled in yet: all skipped
+    filled = text.replace(",inflow,,", ",inflow,500,", 1)  # fill the first row's amount
+    rows = actuals.link_rows(actuals.parse_csv(filled), p)
+    assert len(rows) == 1 and rows[0].flow_id == p.cashflows[0].flow_id and rows[0].amount == 500
+    assert {line.split(",")[2] for line in text.splitlines()[1:]} == {str(cf.flow_id) for cf in p.cashflows}
 
 
 def test_reimporting_replaces_instead_of_duplicating():
@@ -243,3 +276,71 @@ def test_status_and_class_survive_save_and_load():
     a = Actual(actual_id="x", year=2026, amount=5, status="provisional", record_class="Crop 2026")
     back = Actual.from_dict(a.to_dict())
     assert (back.status, back.record_class) == ("provisional", "Crop 2026")
+
+
+# --- unplanned actuals: count once, in their own year ---------------------------------------------------
+
+def year_result(p, scenario_id, year):
+    return next(r for r in simulation.run_simulation(p, p.get_scenario(scenario_id)).annual_results if r.year == year)
+
+
+def test_an_unplanned_repair_counts_once_in_its_year():
+    p, _ = imported()                       # includes "Well pump repair" $4,200, not in the plan
+    p.scenarios.append(Scenario(scenario_id="ignore", name="Ignore unplanned", count_unplanned_actuals=False))
+    with_it, without = year_result(p, "base", 2026), year_result(p, "ignore", 2026)
+    assert with_it.total_expenses - without.total_expenses == pytest.approx(4_200)
+    assert with_it.total_gross_income == pytest.approx(without.total_gross_income)
+    later_with, later_without = year_result(p, "base", 2027), year_result(p, "ignore", 2027)
+    assert later_with.total_expenses == pytest.approx(later_without.total_expenses)   # never repeats
+
+
+def test_an_unplanned_receipt_on_a_shared_asset_is_your_share():
+    p = household()
+    p.add_actual(Actual(actual_id="x", year=2026, amount=1_000, name="Settlement", category="other",
+                        direction="inflow", asset_id="lvm_center"))   # you own 7.45%; you received $1,000
+    base = year_result(p, "base", 2026).total_gross_income
+    plan = year_result(p, "plan_only", 2026).total_gross_income
+    assert base - plan == pytest.approx(1_000)
+
+
+def test_unplanned_household_item_and_actual_beats_forecast():
+    p = household()
+    p.add_actual(Actual(actual_id="f", year=2026, amount=9_000, name="Gift", kind="forecast", category="other"))
+    p.add_actual(Actual(actual_id="a", year=2026, amount=5_000, name="Gift", kind="actual", category="other"))
+    assert year_result(p, "base", 2026).total_gross_income - year_result(p, "plan_only", 2026).total_gross_income \
+        == pytest.approx(5_000)
+
+
+def test_unplanned_items_dont_change_the_stored_plan():
+    p, _ = imported()
+    before = len(p.cashflows)
+    simulation.run_simulation(p, p.get_scenario("base"))
+    assert len(p.cashflows) == before and not any(str(cf.flow_id).startswith("unplanned") for cf in p.cashflows)
+
+
+# --- re-linking a stored record -------------------------------------------------------------------------------
+
+def test_relinking_a_record_moves_it_into_the_plan():
+    p, _ = imported()
+    rec = next(a for a in p.actuals if a.name == "Well pump repair")
+    assert rec in p.unplanned_actuals(2026)
+    p.add_cashflow(Cashflow(flow_id="pist_repairs", name="Orchard repairs", flow_type=FlowType.REPAIRS,
+                            direction=CashflowDirection.OUTFLOW, amount=3_000, start_year=2026,
+                            asset_id="pistachios"))
+    p.relink_actual(rec.actual_id, "pist_repairs")
+    assert rec.flow_id == "pist_repairs" and rec.asset_id == "pistachios" and not p.unplanned_actuals()
+    amount, source = p.actual_annual_amount(p.get_cashflow("pist_repairs"), 2026)
+    assert amount == 4_200 and source == "actual"                 # replaces the $3,000 plan
+    p.relink_actual(rec.actual_id, None)
+    assert rec.flow_id is None
+
+
+def test_relinking_to_an_unknown_cashflow_is_refused():
+    p, _ = imported()
+    with pytest.raises(ValidationError):
+        p.relink_actual(p.actuals[0].actual_id, "nope")
+
+
+def test_imported_records_get_integer_keys():
+    p, _ = imported()
+    assert [a.actual_id for a in p.actuals] == list(range(1, len(p.actuals) + 1))

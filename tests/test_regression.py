@@ -19,10 +19,13 @@ BASELINE = json.loads((FIXTURES / "baseline_v0_1.json").read_text())
 
 def _assert_matches_baseline(results):
     actual = summarize(results)
-    assert actual.keys() == BASELINE.keys()
-    for scenario_id, years in BASELINE.items():
-        for expected, got in zip(years, actual[scenario_id]):
+    # Scenarios compared in order: since v1.0 their keys are integers, not the baseline's text keys.
+    assert len(actual) == len(BASELINE)
+    for (scenario_id, years), got_years in zip(BASELINE.items(), actual.values()):
+        for expected, got in zip(years, got_years):
             for key, value in expected.items():
+                if isinstance(value, dict):   # keyed by asset: compare in asset order (keys renumbered in v1.0)
+                    value, got = list(value.values()), {**got, key: list(got[key].values())}
                 assert got[key] == pytest.approx(value, rel=1e-9, abs=1e-6), (
                     f"{scenario_id} {expected['year']} {key}"
                 )

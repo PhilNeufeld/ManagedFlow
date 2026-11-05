@@ -220,5 +220,6 @@ def build_example_portfolio() -> Portfolio:
 
 
 if __name__ == "__main__":
-    storage.save_portfolio(build_example_portfolio(), OUT, make_backup=False)
+    # Readable keys while building (tests use them); integer keys in the saved file.
+    storage.save_portfolio(storage.with_integer_keys(build_example_portfolio()), OUT, make_backup=False)
     print(f"Example portfolio written to {OUT}")

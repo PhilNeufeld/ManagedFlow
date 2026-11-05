@@ -294,9 +294,12 @@ If someone claims before full retirement age (FRA: 67 for anyone born 1960 or la
 
 ## Record what actually happened (actuals)?
 
-1. Actuals tab: download the CSV template (year, kind, name, category, direction, amount, month, entity, asset, notes, and optional status and class).
-2. One row per item: kind = actual (what happened) or forecast (a near-term estimate); status = confirmed, provisional or estimated; class groups items such as "Crop 2026".
-3. Upload it, check each row's matched planned cashflow, and Import.
+1. Actuals tab: pick the year and kind, and download "Template for this portfolio (with keys)". It lists every planned cashflow with its **cashflow_id** -- the cashflow's key.
+2. Fill in the amounts (rows left blank are skipped). kind = actual (what happened) or forecast (a near-term estimate); status = confirmed, provisional or estimated; class groups items such as "Crop 2026".
+3. For anything not in the plan, add a row with no cashflow_id: give its name, category, direction and amount, and asset_id if it belongs to an asset.
+4. Upload it. Each row is linked by its cashflow_id; check the review grid (you can pick a cashflow, by key, for a row that has none), then Import.
+
+> Rows are linked by key, never by name: a row named exactly like a planned cashflow but without its cashflow_id stays "not in the plan".
 
 ## Do actuals replace forecasts and the plan?
 
@@ -307,8 +310,18 @@ Yes, item by item and year by year: **actual beats forecast, and forecast beats 
 - Several records of the same kind for one cashflow and year add up (e.g. crop sales + crop insurance).
 - Only years with a record change. A 2027 forecast changes 2027; 2028 onward follows the plan.
 - This applies everywhere results appear: Simulation, Explore (chart and table), the rental pro forma and the Excel export, in any scenario with **Use actuals** ticked. Untick it (e.g. a "Plan only" scenario) to see the plan alone.
-- Records not linked to a planned cashflow ("not in the plan") don't change projections; they appear in the plan-vs-actual report.
+- Records not linked to a planned cashflow ("not in the plan") count **once, in their own year**, on their asset (or the household): a surprise $4,200 repair lowers that year's cash flow, and is deducted if the asset is a rental or business; it never repeats. A scenario setting, "Count unplanned actuals", turns this off. They're also flagged ⚠ in the plan-vs-actual report.
 - Social Security: the earnings test is applied to plan and forecast amounts, but not to a recorded actual (an actual is what was really paid).
+
+## Link a record I already imported to the plan?
+
+1. Actuals tab: a warning lists any records not linked to a planned cashflow.
+2. Open "Link a record to a planned cashflow", pick the record and its planned cashflow (by key), and click **Save link**. Choose "(not in the plan)" to unlink.
+3. Click **Save portfolio**. The record now replaces the plan for its cashflow and year instead of counting as a one-off.
+
+## What are the keys (IDs)?
+
+Every table -- entities, people, events, assets, liabilities, cashflows, actuals, collections, scenarios -- has an integer primary key (1, 2, 3... per table). Links between records always use these keys (a cashflow's asset_id is the asset's key), never names, so renaming a record never breaks a link. Keys are assigned automatically and never change. The link tables have their own integer keys too (membership_id, ownership_id), and the pair of records each one joins must be unique: one ownership link per owner and owned item; one membership per entity, person and role.
 
 ## Run a what-if?
 
@@ -362,6 +375,8 @@ Household-specific to-dos live next to each portfolio in `data/<file>_tasks.md` 
 | 0.9+ | Per-person payroll and self-employment tax (each spouse's own wage base); Social Security earnings test |
 | 0.9+ | Explore tab: drill-down chart (entity > collection > asset > cashflow/loan) and 1-5 year period table with events; Period View export |
 | 0.9+ | Help tab and the user manual, built from one source: a generic edition (example household) and a private edition (your portfolio) |
+| 1.1 | Link tables (memberships, ownerships) get integer primary keys; the joined pair stays a unique constraint; edit in place |
+| 1.0 | Integer primary keys in every table (migration renumbers older files); actuals import links by key (cashflow_id), never by name, with a template listing each planned cashflow's key; unplanned actuals count once in their own year; re-link stored records |
 
 ## Next (in this order)
 

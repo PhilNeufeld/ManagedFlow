@@ -10,7 +10,7 @@ Every saved file records its schema in metadata.file_version. migrate()
 looks at that version and applies each upgrade step in order until the
 data is current -- like climbing a ladder one rung at a time:
 
-    "0.1" --(_v0_1_to_v0_2)--> "0.2" --(_v0_2_to_v0_3)--> "0.3" --(_v0_3_to_v0_4)--> "0.4" --(_v0_4_to_v0_5)--> "0.5" --(_v0_5_to_v0_6)--> "0.6" --(_v0_6_to_v0_7)--> "0.7" --(_v0_7_to_v0_8)--> "0.8" --(_v0_8_to_v0_9)--> "0.9"
+    "0.1" --(_v0_1_to_v0_2)--> "0.2" --(_v0_2_to_v0_3)--> "0.3" --(_v0_3_to_v0_4)--> "0.4" --(_v0_4_to_v0_5)--> "0.5" --(_v0_5_to_v0_6)--> "0.6" --(_v0_6_to_v0_7)--> "0.7" --(_v0_7_to_v0_8)--> "0.8" --(_v0_8_to_v0_9)--> "0.9" --(_v0_9_to_v1_0)--> "1.0" --(_v1_0_to_v1_1)--> "1.1"
 
 To change the model in the future:
   1. Bump CURRENT_SCHEMA_VERSION.
@@ -27,7 +27,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Callable, Dict
 
-CURRENT_SCHEMA_VERSION = "0.9"
+CURRENT_SCHEMA_VERSION = "1.1"
 
 
 class MigrationError(ValueError):
@@ -136,6 +136,102 @@ def _v0_8_to_v0_9(data: Dict[str, Any]) -> Dict[str, Any]:
     return data
 
 
+# Tables with an integer primary key: list name -> primary-key field.
+PK_FIELDS = {
+    "entities": "entity_id", "people": "person_id", "events": "event_id", "assets": "asset_id",
+    "cashflows": "flow_id", "liabilities": "liability_id", "actuals": "actual_id",
+    "bundles": "bundle_id", "scenarios": "scenario_id",
+    "memberships": "membership_id", "ownerships": "ownership_id",
+}
+# Foreign keys: list name -> {field: table it points to}
+FK_FIELDS = {
+    "events": {"person_id": "people"},
+    "assets": {"entity_id": "entities", "start_event_id": "events", "end_event_id": "events",
+               "earner_person_id": "people"},
+    "cashflows": {"asset_id": "assets", "start_event_id": "events", "end_event_id": "events",
+                  "person_id": "people"},
+    "liabilities": {"entity_id": "entities", "secured_by_asset_id": "assets", "start_event_id": "events",
+                    "end_event_id": "events"},
+    "memberships": {"entity_id": "entities", "person_id": "people"},
+    "actuals": {"flow_id": "cashflows", "asset_id": "assets", "entity_id": "entities"},
+    "bundles": {"entity_id": "entities"},
+}
+FK_LISTS = {   # list fields holding keys
+    "bundles": {"asset_ids": "assets", "cashflow_ids": "cashflows", "liability_ids": "liabilities"},
+    "scenarios": {"entity_ids": "entities", "bundle_ids": "bundles"},
+}
+FK_DICT_KEYS = {   # dicts keyed by another table's key
+    "scenarios": {"asset_overrides": "assets", "cashflow_overrides": "cashflows", "event_overrides": "events"},
+}
+
+
+def to_integer_keys(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Give every record in every table an integer primary key (1, 2, 3... per
+    table, in list order) and rewrite every foreign key to match. Keys that are
+    already integers are kept. Works on the raw dict; used by the 0.9 -> 1.0
+    migration and by scripts that build a portfolio with readable keys."""
+    maps: Dict[str, Dict[Any, int]] = {}
+    for table, pk in PK_FIELDS.items():
+        rows = data.get(table) or []
+        used = {r[pk] for r in rows if isinstance(r.get(pk), int)}
+        nxt, m = 1, {}
+        for r in rows:
+            old = r.get(pk)
+            if isinstance(old, int):
+                m[old] = old
+                continue
+            while nxt in used:
+                nxt += 1
+            if old is None:            # no key yet (e.g. a link row before v1.1): just give it one
+                r[pk] = nxt
+            else:
+                m[old] = nxt
+            used.add(nxt)
+        maps[table] = m
+    remap = lambda table, v: maps[table].get(v, v) if v is not None else None  # noqa: E731
+    for table, pk in PK_FIELDS.items():
+        for r in data.get(table) or []:
+            r[pk] = remap(table, r.get(pk))
+    for table, fks in FK_FIELDS.items():
+        for r in data.get(table) or []:
+            for f, target in fks.items():
+                if f in r:
+                    r[f] = remap(target, r[f])
+    for table, fks in FK_LISTS.items():
+        for r in data.get(table) or []:
+            for f, target in fks.items():
+                r[f] = [remap(target, v) for v in r.get(f) or []]
+    for table, fks in FK_DICT_KEYS.items():
+        for r in data.get(table) or []:
+            for f, target in fks.items():
+                r[f] = {remap(target, _int_or(k)): v for k, v in (r.get(f) or {}).items()}
+    for o in data.get("ownerships") or []:
+        o["owner_entity_id"] = remap("entities", o.get("owner_entity_id"))
+        o["owned_id"] = remap("entities" if o.get("owned_type") == "entity" else "assets", o.get("owned_id"))
+    return data
+
+
+def _int_or(k):
+    """JSON object keys are always text: turn '12' back into 12."""
+    return int(k) if isinstance(k, str) and k.isdigit() else k
+
+
+def _v0_9_to_v1_0(data: Dict[str, Any]) -> Dict[str, Any]:
+    """v1.0: integer primary keys in every table (they used to be text made
+    from the name, like 'flow_phil_salary'); foreign keys point at them."""
+    data = to_integer_keys(data)
+    data.setdefault("metadata", {})["file_version"] = "1.0"
+    return data
+
+
+def _v1_0_to_v1_1(data: Dict[str, Any]) -> Dict[str, Any]:
+    """v1.1: the link tables (memberships, ownerships) get integer primary keys too.
+    Their column pairs stay unique (enforced by the model)."""
+    data = to_integer_keys(data)
+    data.setdefault("metadata", {})["file_version"] = "1.1"
+    return data
+
+
 # version found in the file -> function that upgrades it one step
 _STEPS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "0.1": _v0_1_to_v0_2,
@@ -146,6 +242,8 @@ _STEPS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "0.6": _v0_6_to_v0_7,
     "0.7": _v0_7_to_v0_8,
     "0.8": _v0_8_to_v0_9,
+    "0.9": _v0_9_to_v1_0,
+    "1.0": _v1_0_to_v1_1,
 }
 
 

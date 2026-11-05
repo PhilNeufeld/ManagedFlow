@@ -76,14 +76,14 @@ def build_tree(p: Portfolio) -> Dict[str, Node]:
         s["assets"] |= set(b.asset_ids); s["liabilities"] |= set(b.liability_ids); s["flows"] |= set(b.cashflow_ids)
 
     def add_asset(parent, asset, factor):
-        nid = add(parent, "a:" + asset.asset_id, asset.name, "Asset", asset.asset_id, factor)
+        nid = add(parent, f"a:{asset.asset_id}", asset.name, "Asset", asset.asset_id, factor)
         for cf in p.cashflows_for_asset(asset.asset_id):
-            add(nid, "c:" + cf.flow_id, cf.name, "Cashflow", cf.flow_id, factor)
+            add(nid, f"c:{cf.flow_id}", cf.name, "Cashflow", cf.flow_id, factor)
         for li in p.liabilities_secured_by(asset.asset_id):
-            add(nid, "l:" + li.liability_id, li.name, "Liability", li.liability_id, factor)
+            add(nid, f"l:{li.liability_id}", li.name, "Liability", li.liability_id, factor)
 
     def add_entity(parent, entity, factor, seen):
-        nid = add(parent, "e:" + entity.entity_id, entity.name, "Entity", entity.entity_id, factor)
+        nid = add(parent, f"e:{entity.entity_id}", entity.name, "Entity", entity.entity_id, factor)
         seen = seen | {entity.entity_id}
         for o in p.ownerships:
             if o.owner_entity_id == entity.entity_id and o.owned_type == "entity" and o.owned_id not in seen:
@@ -92,7 +92,7 @@ def build_tree(p: Portfolio) -> Dict[str, Node]:
                     add_entity(nid, child, factor * o.percent, seen)
         in_bundles = bundled.get(entity.entity_id, {"assets": set(), "liabilities": set(), "flows": set()})
         for b in p.bundles_for_entity(entity.entity_id):
-            bid = add(nid, "b:" + b.bundle_id, b.name, "Collection", b.bundle_id, factor)
+            bid = add(nid, f"b:{b.bundle_id}", b.name, "Collection", b.bundle_id, factor)
             for aid in b.asset_ids:
                 a = p.get_asset(aid)
                 if a:
@@ -100,11 +100,11 @@ def build_tree(p: Portfolio) -> Dict[str, Node]:
             for lid in b.liability_ids:
                 li = p.get_liability(lid)
                 if li and not li.secured_by_asset_id:
-                    add(bid, "l:" + lid, li.name, "Liability", lid, factor)
+                    add(bid, f"l:{lid}", li.name, "Liability", lid, factor)
             for fid in b.cashflow_ids:
                 cf = p.get_cashflow(fid)
                 if cf and not cf.asset_id:
-                    add(bid, "c:" + fid, cf.name, "Cashflow", fid, factor)
+                    add(bid, f"c:{fid}", cf.name, "Cashflow", fid, factor)
         for a in p.assets:
             if a.asset_id in in_bundles["assets"]:
                 continue
@@ -117,7 +117,7 @@ def build_tree(p: Portfolio) -> Dict[str, Node]:
                 add_asset(nid, a, factor)
         for li in p.liabilities:
             if li.entity_id == entity.entity_id and not li.secured_by_asset_id and li.liability_id not in in_bundles["liabilities"]:
-                add(nid, "l:" + li.liability_id, li.name, "Liability", li.liability_id, factor)
+                add(nid, f"l:{li.liability_id}", li.name, "Liability", li.liability_id, factor)
 
     add(None, ROOT, "Whole plan", "Household", None, 1.0)
     owned = {o.owned_id for o in p.ownerships if o.owned_type == "entity"}
@@ -140,11 +140,11 @@ def build_tree(p: Portfolio) -> Dict[str, Node]:
         for who in sorted(groups, key=lambda w: (w == "Shared", w)):
             gid = add(hh, "p:" + who, who, "Household", None, 1.0)
             for cf in groups[who]:
-                add(gid, "c:" + cf.flow_id, cf.name, "Cashflow", cf.flow_id, 1.0)
+                add(gid, f"c:{cf.flow_id}", cf.name, "Cashflow", cf.flow_id, 1.0)
         for a in loose_assets:
             add_asset(hh, a, 1.0)
         for li in loose_liabs:
-            add(hh, "l:" + li.liability_id, li.name, "Liability", li.liability_id, 1.0)
+            add(hh, f"l:{li.liability_id}", li.name, "Liability", li.liability_id, 1.0)
     return nodes
 
 

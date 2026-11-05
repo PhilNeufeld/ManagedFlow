@@ -75,7 +75,8 @@ def apply_scenario(portfolio: Portfolio, scenario: Scenario) -> Tuple[Portfolio,
     # Recorded actuals/forecasts replace the plan for their years (before the
     # ownership scaling below, which they're designed to pass through).
     if getattr(scenario, "use_actuals", True):
-        working.apply_actuals(working.assumptions.inflation_rate)
+        working.apply_actuals(working.assumptions.inflation_rate,
+                              include_unplanned=getattr(scenario, "count_unplanned_actuals", True))
 
     # Last: scale to your ownership % unless this scenario asks for the 100% view.
     if getattr(scenario, "ownership_view", "share") != "full":

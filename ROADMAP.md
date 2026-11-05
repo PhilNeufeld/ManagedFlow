@@ -22,6 +22,8 @@ Household-specific to-dos live next to each portfolio in `data/<file>_tasks.md`
 | 0.9+ | Per-person payroll and self-employment tax (each spouse's own wage base); Social Security earnings test |
 | 0.9+ | Explore tab: drill-down chart (entity > collection > asset > cashflow/loan) and 1-5 year period table with events; Period View export |
 | 0.9+ | Help tab and the user manual, built from one source: a generic edition (example household) and a private edition (your portfolio) |
+| 1.1 | Link tables (memberships, ownerships) get integer primary keys; the joined pair stays a unique constraint; edit in place |
+| 1.0 | Integer primary keys in every table (migration renumbers older files); actuals import links by key (cashflow_id), never by name, with a template listing each planned cashflow's key; unplanned actuals count once in their own year; re-link stored records |
 
 ## Next (in this order)
 

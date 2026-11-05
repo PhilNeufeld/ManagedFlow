@@ -173,6 +173,22 @@ def _require(condition: bool, message: str) -> None:
         raise ValidationError(message)
 
 
+# Primary keys are integers (1, 2, 3... per table) in saved files and for every
+# record the app creates. The model treats a key as an opaque value, so tests
+# may build small in-memory portfolios with readable text keys.
+Key = Any
+
+
+def _key(k):
+    """'12' -> 12 (JSON object keys are text); anything else unchanged."""
+    return int(k) if isinstance(k, str) and k.isdigit() else k
+
+
+def next_key(existing) -> int:
+    """The next integer primary key for a table: one more than the largest in use."""
+    return max((k for k in existing if isinstance(k, int)), default=0) + 1
+
+
 def _enum_value(value: Any, enum_cls):
     """Accept either an enum member or its raw string value."""
     if isinstance(value, enum_cls):
@@ -228,6 +244,9 @@ class Cashflow:
     # base), and a Social Security benefit is subject to its owner's earnings
     # test. None = the first person in the household.
     person_id: Optional[str] = None
+    # What line of a statement this is, for templates like "Add a rental property":
+    # e.g. "rent", "vacancy", "property_tax", "insurance". Blank for most flows.
+    line_item: str = ""
     # {year: annual amount} that replaces the planned amount in that year.
     # Filled in on a scenario's working copy from recorded Actuals; never saved.
     year_overrides: Dict[int, float] = field(default_factory=dict, repr=False, compare=False)
@@ -547,6 +566,8 @@ class Membership:
     person_id: str
     role: MembershipRole = MembershipRole.OWNER
     notes: str = ""
+    # Primary key (integer). Assigned automatically when the link is added.
+    membership_id: Key = None
 
     def __post_init__(self) -> None:
         self.role = _enum_value(self.role, MembershipRole)
@@ -554,11 +575,11 @@ class Membership:
 
     @property
     def key(self) -> str:
-        """Unique identity of a link: entity + person + role."""
+        """The UNIQUE CONSTRAINT (not the primary key): one link per entity + person + role."""
         return f"{self.entity_id}|{self.person_id}|{self.role.value}"
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"entity_id": self.entity_id, "person_id": self.person_id,
+        return {"membership_id": self.membership_id, "entity_id": self.entity_id, "person_id": self.person_id,
                 "role": self.role.value, "notes": self.notes}
 
     @classmethod
@@ -589,6 +610,8 @@ class Ownership:
     owned_id: str
     percent: float
     notes: str = ""
+    # Primary key (integer). Assigned automatically when the link is added.
+    ownership_id: Key = None
 
     def __post_init__(self) -> None:
         _require(self.owned_type in ("entity", "asset"), "Ownership.owned_type must be 'entity' or 'asset'")
@@ -600,6 +623,7 @@ class Ownership:
 
     @property
     def key(self) -> str:
+        """The UNIQUE CONSTRAINT (not the primary key): one link per owner + owned item."""
         return f"{self.owner_entity_id}|{self.owned_type}|{self.owned_id}"
 
     def to_dict(self) -> Dict[str, Any]:
@@ -1016,6 +1040,24 @@ def liability_from_dict(data: Dict[str, Any]) -> Liability:
 
 ACTUAL_STATUSES = ("confirmed", "provisional", "estimated")
 
+# How an UNPLANNED inflow is taxed, by its category: (taxable, tax category).
+# Outflows are never income; repairs, insurance etc. on a rental or business are
+# deducted by the tax engine through their category.
+_UNPLANNED_TAX = {
+    FlowType.RENT_INCOME: (True, TaxCategory.RENTAL_INCOME),
+    FlowType.CROP_SALES: (True, TaxCategory.BUSINESS_INCOME),
+    FlowType.BUSINESS_DISTRIBUTION: (True, TaxCategory.BUSINESS_INCOME),
+    FlowType.CONSULTING_INCOME: (True, TaxCategory.SELF_EMPLOYMENT_INCOME),
+    FlowType.DIVIDEND_INCOME: (True, TaxCategory.QUALIFIED_DIVIDENDS),
+    FlowType.PENSION_INCOME: (True, TaxCategory.PENSION_INCOME),
+    FlowType.TRUST_DISTRIBUTION: (True, TaxCategory.TRUST_INCOME),
+    FlowType.SOCIAL_SECURITY_INCOME: (False, TaxCategory.NONE),   # taxed through its own rules
+    FlowType.SALE_PROCEEDS: (False, TaxCategory.NONE),
+    FlowType.LOAN_PRINCIPAL_REPAYMENT: (False, TaxCategory.NONE),
+    FlowType.REFINANCE_PROCEEDS: (False, TaxCategory.NONE),
+    FlowType.WITHDRAWAL: (False, TaxCategory.NONE),
+}
+
 
 @dataclass
 class Actual:
@@ -1234,6 +1276,8 @@ class Scenario:
 
     # Use recorded actuals/forecasts in place of the plan where they exist.
     use_actuals: bool = True
+    # Count records that aren't linked to a planned cashflow, once, in their own year.
+    count_unplanned_actuals: bool = True
 
     # Withdrawal / reinvestment behavior
     withdrawal_order_override: Optional[List[str]] = None
@@ -1255,6 +1299,9 @@ class Scenario:
     def __post_init__(self) -> None:
         _require(bool(self.scenario_id), "Scenario.scenario_id is required")
         _require(bool(self.name), "Scenario.name is required")
+        # Saved JSON turns integer dict keys into text ("12"): turn them back into keys.
+        for name in ("asset_overrides", "cashflow_overrides", "event_overrides"):
+            setattr(self, name, {_key(k): v for k, v in (getattr(self, name) or {}).items()})
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -1464,6 +1511,13 @@ class Portfolio:
     metadata_notes: str = ""
 
     def __post_init__(self) -> None:
+        # Link tables get integer primary keys too; fill in any missing ones.
+        for rows, pk in ((self.memberships, "membership_id"), (self.ownerships, "ownership_id")):
+            for r in rows:
+                if getattr(r, pk) is None:
+                    setattr(r, pk, next_key(getattr(x, pk) for x in rows))
+            ids = [getattr(r, pk) for r in rows]
+            _require(len(ids) == len(set(ids)), f"Duplicate {pk}(s) found")
         asset_ids = [a.asset_id for a in self.assets]
         duplicates = {a for a in asset_ids if asset_ids.count(a) > 1}
         _require(not duplicates, f"Duplicate asset_id(s) found: {duplicates}")
@@ -2058,11 +2112,18 @@ class Portfolio:
         label = "actual" if kinds == {"actual"} else "forecast" if kinds == {"forecast"} else "actual/forecast"
         return recorded + rest, (label if rest == 0 else f"{label} + plan")
 
-    def apply_actuals(self, inflation_rate: float = 0.0) -> None:
+    def apply_actuals(self, inflation_rate: float = 0.0, include_unplanned: bool = True) -> None:
         """On a scenario's working copy: put recorded amounts in place of the
         plan (cf.year_overrides). Stored in 100%-of-asset terms (divided by
         your share) so that apply_ownership_shares() brings them back to
-        exactly what you recorded."""
+        exactly what you recorded.
+
+        include_unplanned: records NOT linked to a planned cashflow (a surprise
+        repair, a one-off payment) count once, in their own year, as a one-time
+        cashflow on their asset (or the household) -- never in later years. For
+        the same item and year, an actual beats a forecast."""
+        if include_unplanned:
+            self._add_unplanned_flows()
         years_by_flow = {}
         for a in self.actuals:
             if a.flow_id:
@@ -2073,6 +2134,61 @@ class Portfolio:
                 result = self.actual_annual_amount(cf, year, inflation_rate)
                 if result is not None and share > 0:
                     cf.year_overrides[year] = result[0] / share
+
+    def _add_unplanned_flows(self) -> None:
+        chosen: Dict[tuple, "Actual"] = {}
+        for a in self.unplanned_actuals():
+            asset_id = a.asset_id if a.asset_id and self.get_asset(a.asset_id) else None
+            slot = (a.name.lower(), asset_id, a.year, a.month, a.direction.value)
+            if slot not in chosen or (a.kind == "actual" and chosen[slot].kind != "actual"):
+                chosen[slot] = a
+        totals: Dict[tuple, list] = {}
+        for (name, asset_id, year, month, direction), a in chosen.items():
+            totals.setdefault((name, asset_id, year, month, direction), []).append(a)
+        for (name, asset_id, year, month, direction), recs in totals.items():
+            a = recs[0]
+            share = self.asset_share(asset_id) if asset_id else 1.0
+            if share <= 0:
+                continue
+            taxable, tax_category = _UNPLANNED_TAX.get(a.category, (True, TaxCategory.ORDINARY_INCOME))
+            if a.direction != CashflowDirection.INFLOW:
+                taxable, tax_category = False, TaxCategory.NONE
+            self.cashflows.append(Cashflow(
+                flow_id=f"unplanned:{a.actual_id}", name=f"Unplanned: {a.name}", flow_type=a.category,
+                direction=a.direction, amount=sum(r.amount for r in recs) / share, start_year=year, end_year=year,
+                start_month=month or 1, end_month=month or 1, frequency=Frequency.ONE_TIME, asset_id=asset_id,
+                taxable=taxable, tax_category=tax_category, line_item="unplanned",
+                notes=f"Recorded {a.kind} not linked to the plan; counts in {year} only",
+                person_id=None))
+
+    _TABLES = {"entity": ("entities", "entity_id"), "person": ("people", "person_id"),
+               "event": ("events", "event_id"), "asset": ("assets", "asset_id"),
+               "cashflow": ("cashflows", "flow_id"), "liability": ("liabilities", "liability_id"),
+               "actual": ("actuals", "actual_id"), "bundle": ("bundles", "bundle_id"),
+               "scenario": ("scenarios", "scenario_id"), "membership": ("memberships", "membership_id"),
+               "ownership": ("ownerships", "ownership_id")}
+
+    def next_id(self, table: str) -> int:
+        """Next integer primary key for a table: 'asset', 'cashflow', 'liability', 'event',
+        'person', 'entity', 'actual', 'bundle' or 'scenario'."""
+        name, pk = self._TABLES[table]
+        return next_key(getattr(r, pk) for r in getattr(self, name))
+
+    def relink_actual(self, actual_id, flow_id) -> None:
+        """Point a stored record at a planned cashflow (by its key), or unlink it (None).
+        A linked record takes its cashflow's asset."""
+        rec = next((a for a in self.actuals if a.actual_id == actual_id), None)
+        _require(rec is not None, f"No actual '{actual_id}' found")
+        if flow_id is None:
+            rec.flow_id = None
+            return
+        cf = self.get_cashflow(flow_id)
+        _require(cf is not None, f"No cashflow with id '{flow_id}'")
+        rec.flow_id, rec.asset_id = flow_id, cf.asset_id
+
+    def unplanned_actuals(self, year: Optional[int] = None) -> List["Actual"]:
+        """Records not linked to a planned cashflow (optionally for one year)."""
+        return [a for a in self.actuals if not a.flow_id and (year is None or a.year == year)]
 
     def add_actual(self, actual: Actual) -> None:
         """Add a record; one already in the same slot (same item, year, month
@@ -2088,11 +2204,29 @@ class Portfolio:
 
     def add_ownership(self, ownership: Ownership) -> None:
         self._check_ownerships(self.ownerships + [ownership])  # checks loops and totals first
+        if ownership.ownership_id is None:
+            ownership.ownership_id = self.next_id("ownership")
+        _require(self.get_ownership(ownership.ownership_id) is None,
+                 f"Ownership id {ownership.ownership_id} already exists")
         self.ownerships.append(ownership)
 
-    def remove_ownership(self, key: str) -> None:
-        _require(any(o.key == key for o in self.ownerships), f"No ownership link '{key}' found to remove")
-        self.ownerships = [o for o in self.ownerships if o.key != key]
+    def get_ownership(self, ownership_id) -> Optional[Ownership]:
+        return next((o for o in self.ownerships if o.ownership_id == ownership_id), None)
+
+    def replace_ownership(self, ownership_id, new: Ownership) -> None:
+        """Change a link in place (e.g. its percent), keeping its primary key."""
+        old = self.get_ownership(ownership_id)
+        _require(old is not None, f"No ownership link {ownership_id} found")
+        new.ownership_id = ownership_id
+        others = [o for o in self.ownerships if o.ownership_id != ownership_id]
+        self._check_ownerships(others + [new])
+        self.ownerships[self.ownerships.index(old)] = new
+
+    def remove_ownership(self, ownership_id) -> None:
+        """Remove by primary key (the old text key 'owner|type|owned' still works)."""
+        match = [o for o in self.ownerships if ownership_id in (o.ownership_id, o.key)]
+        _require(bool(match), f"No ownership link '{ownership_id}' found to remove")
+        self.ownerships = [o for o in self.ownerships if o not in match]
 
     # -- memberships (people <-> entities, many-to-many) -----------------------------
 
@@ -2121,11 +2255,30 @@ class Portfolio:
         _require(all(m.key != membership.key for m in self.memberships),
                  "That person already has that role in that entity")
         self._check_one_personal_owner(self.get_entity(membership.entity_id), self.memberships + [membership])
+        if membership.membership_id is None:
+            membership.membership_id = self.next_id("membership")
+        _require(self.get_membership(membership.membership_id) is None,
+                 f"Membership id {membership.membership_id} already exists")
         self.memberships.append(membership)
 
-    def remove_membership(self, key: str) -> None:
-        _require(any(m.key == key for m in self.memberships), f"No membership '{key}' found to remove")
-        self.memberships = [m for m in self.memberships if m.key != key]
+    def get_membership(self, membership_id) -> Optional[Membership]:
+        return next((m for m in self.memberships if m.membership_id == membership_id), None)
+
+    def replace_membership(self, membership_id, new: Membership) -> None:
+        """Change a link in place (e.g. its role), keeping its primary key."""
+        old = self.get_membership(membership_id)
+        _require(old is not None, f"No membership {membership_id} found")
+        new.membership_id = membership_id
+        others = [m for m in self.memberships if m.membership_id != membership_id]
+        _require(all(m.key != new.key for m in others), "That person already has that role in that entity")
+        self._check_one_personal_owner(self.get_entity(new.entity_id), others + [new])
+        self.memberships[self.memberships.index(old)] = new
+
+    def remove_membership(self, membership_id) -> None:
+        """Remove by primary key (the old text key 'entity|person|role' still works)."""
+        match = [m for m in self.memberships if membership_id in (m.membership_id, m.key)]
+        _require(bool(match), f"No membership '{membership_id}' found to remove")
+        self.memberships = [m for m in self.memberships if m not in match]
 
     def replace_entity(self, entity_id: str, new_entity: Entity) -> None:
         self._check_one_personal_owner(new_entity, self.memberships)  # e.g. switching joint -> personal

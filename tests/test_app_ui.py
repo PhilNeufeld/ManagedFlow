@@ -84,7 +84,8 @@ def test_birthday_on_a_new_personal_entity_creates_the_person_and_owner_link(tmp
     no_crash(at)
 
     p = stored(at)
-    (person, role), = p.people_in("entity_phil")
+    assert p.entities[0].entity_id == 1                      # new records get integer keys
+    (person, role), = p.people_in(p.entities[0].entity_id)
     assert (person.name, person.birth_year, person.birth_month, role.value) == ("Phil", 1965, 2, "owner")
     row = table(at, "People (role)").iloc[0]
     assert (row["People (role)"], row["Born"]) == ("Phil (owner)", "Feb 1965")
@@ -144,13 +145,15 @@ def test_create_personal_entity_button(tmp_path):
 def test_changing_a_links_role(tmp_path):
     at = start(couple(), tmp_path)
     at = link(at, "entity_joint", "person_debbie")
-    at.session_state["_editor_membership"] = {"mode": "edit", "record_id": "entity_joint|person_debbie|owner"}
+    link_id = next(m.membership_id for m in stored(at).memberships if m.person_id == "person_debbie")
+    at.session_state["_editor_membership"] = {"mode": "edit", "record_id": link_id}   # edit by primary key
     at.run()
     editor_widget(at, at.selectbox, "membership", "role").set_value("beneficiary")
     at = next(b for b in at.button if b.key and b.key.startswith("_editor_membership_save_")).click().run()
     no_crash(at)
     roles = [r.value for _, r in stored(at).entities_of("person_debbie")]
     assert roles == ["beneficiary"]
+    assert stored(at).get_membership(link_id).role.value == "beneficiary"   # same key, changed in place
 
 
 # --- ownership % ------------------------------------------------------------------------------------------
@@ -198,7 +201,8 @@ def test_actuals_import_review_and_report(tmp_path):
     at.session_state["actuals_preview"] = actuals.match_rows(actuals.parse_csv(CSV), p)
     at.run()
     review = table(at, "Planned cashflow")
-    assert list(review["Planned cashflow"])[:3] == ["Pistachio crop sales (Pistachios)"] * 2 + ["Brix rent (4392 Brix)"]
+    assert list(review["Planned cashflow"])[:3] == ["#crop · Pistachio crop sales (Pistachios)"] * 2 \
+        + ["#brix_rent · Brix rent (4392 Brix)"]
     assert review["Planned cashflow"].iloc[5] == "(not in the plan)"
 
     at = click(at, key="actuals_import")
@@ -210,6 +214,7 @@ def test_actuals_import_review_and_report(tmp_path):
     assert report.loc["Pistachio crop sales", "Planned"] == "$130,000"
     assert report.loc["Pistachio crop sales", "Actual / forecast"] == "$118,500"
     assert report.loc["Well pump repair", "Flag"] == "⚠"
+    assert any("1 record(s) aren't linked" in w.value for w in at.warning)    # the unplanned repair
 
     at.selectbox(key="pva_year").set_value(2027).run()
     breaks = table(at, "Gap %").set_index("Item")
@@ -373,3 +378,28 @@ def test_help_tab_shows_the_manual_and_searches(tmp_path):
     assert any("FAQ" in l for l in labels)
     at.radio(key="help_source").set_value("mine").run()
     no_crash(at)
+
+
+def test_relinking_a_stored_record_on_screen(tmp_path):
+    import actuals
+    from test_actuals import CSV, household
+    from models import Cashflow, CashflowDirection, FlowType
+    p = household()
+    p.add_cashflow(Cashflow(flow_id="pist_repairs", name="Orchard repairs", flow_type=FlowType.REPAIRS,
+                            direction=CashflowDirection.OUTFLOW, amount=3_000, start_year=2026, asset_id="pistachios"))
+    actuals.commit_rows(actuals.link_rows(actuals.parse_csv(CSV), p), p)
+    at = start(p, tmp_path)
+    pump = next(a for a in p.actuals if a.name == "Well pump repair")
+    assert at.selectbox(key="relink_record").value == pump.actual_id      # the unlinked one is picked first
+    at.selectbox(key=f"relink_target_{pump.actual_id}").set_value("pist_repairs")
+    at = click(at, key="relink_save")
+    no_crash(at)
+    assert stored(at).actuals[[a.actual_id for a in stored(at).actuals].index(pump.actual_id)].flow_id == "pist_repairs"
+    assert not any("aren't linked" in w.value for w in at.warning)
+
+
+def test_portfolio_template_download_lists_keys(tmp_path):
+    from test_actuals import household
+    at = start(household(), tmp_path)
+    no_crash(at)
+    assert any(b.label.startswith("⬇ Template for this portfolio") for b in at.get("download_button"))

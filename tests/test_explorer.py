@@ -160,3 +160,17 @@ def test_export_has_period_view_sheet(tmp_path):
     ws = wb["Period View"]
     assert ws["A4"].value == "Item" and ws["A5"].value == "Events"
     assert any(ws.cell(row=r, column=1).value == "Household: Phil" for r in range(1, ws.max_row + 1))
+
+
+def test_explore_totals_include_unplanned_actuals():
+    from models import Actual
+    p = plan()
+    p.actuals.append(Actual(actual_id=1, year=2026, amount=2_500, name="Roof patch", category="repairs",
+                            direction="outflow", asset_id="house"))
+    p.actuals.append(Actual(actual_id=2, year=2026, amount=1_000, name="Refund", category="other"))
+    res = explorer.run(p, p.get_scenario("base"))
+    nodes = explorer.build_tree(res.working_portfolio)
+    labels = {n.label for n in nodes.values()}
+    assert {"Unplanned: Roof patch", "Unplanned: Refund"} <= labels
+    whole = explorer.node_series(nodes, explorer.ROOT, res)[0]
+    assert whole["Net cash flow"] == pytest.approx(res.annual_results[0].net_cashflow)

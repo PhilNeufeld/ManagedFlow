@@ -53,6 +53,7 @@ from models import (
     Scenario,
     TaxCategory,
     ValidationError,
+    next_key,
     format_currency,
 )
 
@@ -87,25 +88,12 @@ def _get_portfolio_path() -> Path | None:
     return st.session_state.get("portfolio_path")
 
 
-def _generate_id(prefix: str, name: str, existing_ids: list[str]) -> str:
-    """Auto-generate a unique, human-readable id from a name, e.g.
-    name="Rental Address 1" -> "asset_rental_address_1". Falls back to a
-    numbered id (e.g. "asset_3") if the name is blank or the slug is
-    somehow still taken. IDs are never typed by the user -- this keeps
-    primary keys internal/stable and avoids collisions or stray
-    characters breaking JSON/Excel/lookup keys downstream.
-    """
-    existing = set(existing_ids)
-    slug = "".join(c if c.isalnum() else "_" for c in (name or "").strip().lower())
-    slug = "_".join(filter(None, slug.split("_")))  # collapse repeated underscores
-    base = f"{prefix}_{slug}" if slug else prefix
-
-    if base not in existing:
-        return base
-    n = 2
-    while f"{base}_{n}" in existing:
-        n += 1
-    return f"{base}_{n}"
+def _generate_id(prefix: str, name: str, existing_ids: list) -> int:
+    """The next integer primary key for a table (one more than the largest in use).
+    Keys are never typed by the user and never change, even when a record is
+    renamed; links between records always use them, never names.
+    (prefix and name are unused; kept so every call site reads the same.)"""
+    return next_key(existing_ids)
 
 
 def _clear_simulation_cache() -> None:
@@ -966,15 +954,10 @@ def _render_cashflow_editor(portfolio: Portfolio, editor: dict) -> None:
 # ---------------------------------------------------------------------------
 
 def _flow_labels(portfolio: Portfolio) -> dict:
-    """flow_id -> 'Name (asset)' label, unique even when names repeat."""
+    """flow_id -> '#key · Name (asset)'. The key makes every label unique; links use the key."""
     asset_names = {a.asset_id: a.name for a in portfolio.assets}
-    labels = {}
-    for cf in portfolio.cashflows:
-        label = f"{cf.name} ({asset_names.get(cf.asset_id, 'household')})"
-        while label in labels.values():
-            label += " *"
-        labels[cf.flow_id] = label
-    return labels
+    return {cf.flow_id: f"#{cf.flow_id} · {cf.name} ({asset_names.get(cf.asset_id, 'household')})"
+            for cf in portfolio.cashflows}
 
 
 def _money_cols(df, cols):
@@ -992,8 +975,24 @@ def render_actuals_tab(portfolio: Portfolio) -> None:
         "the plan in simulations for their year (actual beats forecast beats plan; a part-year of "
         "monthly records is topped up with the plan for the other months)."
     )
-    st.download_button("⬇ Download CSV template", actuals_engine.TEMPLATE_CSV, file_name="actuals_template.csv",
-                       mime="text/csv", key="actuals_template")
+    st.caption("Rows link to the plan by **cashflow_id** -- the planned cashflow's key -- never by name. "
+               "Start from the template for this portfolio: every planned cashflow is listed with its key; "
+               "fill in the amounts (rows left blank are skipped) and add rows without a cashflow_id for "
+               "anything not in the plan.")
+    t1, t2, t3 = st.columns([1.3, 1, 1.3])
+    with t1:
+        tpl_year = st.number_input("Template year", min_value=portfolio.assumptions.start_year - 5,
+                                   max_value=portfolio.assumptions.end_year, step=1,
+                                   value=portfolio.assumptions.start_year, key="actuals_tpl_year")
+    with t2:
+        tpl_kind = st.radio("Kind", ["actual", "forecast"], horizontal=True, key="actuals_tpl_kind")
+    with t3:
+        st.download_button("⬇ Template for this portfolio (with keys)",
+                           actuals_engine.template_for(portfolio, int(tpl_year), tpl_kind),
+                           file_name=f"actuals_{int(tpl_year)}_{tpl_kind}.csv", mime="text/csv",
+                           key="actuals_template_portfolio")
+        st.download_button("⬇ Blank example", actuals_engine.TEMPLATE_CSV, file_name="actuals_example.csv",
+                           mime="text/csv", key="actuals_template")
 
     # --- import ---------------------------------------------------------------
     st.subheader("Import a CSV")
@@ -1011,7 +1010,7 @@ def render_actuals_tab(portfolio: Portfolio) -> None:
         else:
             try:
                 rows = actuals_engine.parse_csv(text)
-                st.session_state["actuals_preview"] = actuals_engine.match_rows(rows, portfolio)
+                st.session_state["actuals_preview"] = actuals_engine.link_rows(rows, portfolio)
             except ValueError as exc:
                 st.error(str(exc))
 
@@ -1020,15 +1019,18 @@ def render_actuals_tab(portfolio: Portfolio) -> None:
         labels = _flow_labels(portfolio)
         not_in_plan = "(not in the plan)"
         label_to_flow = {v: k for k, v in labels.items()}
+        asset_names = {x.asset_id: x.name for x in portfolio.assets}
         df = pd.DataFrame([
             {"Import": r.ok, "Line": r.line, "Year": r.year, "Kind": r.kind, "Name": r.name,
-             "Direction": r.direction, "Amount": r.amount, "Month": r.month, "Asset": r.asset_text,
+             "Direction": r.direction, "Amount": r.amount, "Month": r.month,
+             "Asset": f"#{r.asset_id} · {asset_names[r.asset_id]}" if r.asset_id in asset_names else "",
              "Status": r.status, "Class": r.record_class,
              "Planned cashflow": labels.get(r.flow_id, not_in_plan),
              "Notes": "; ".join(r.errors) if r.errors else r.match_note}
             for r in preview
         ])
-        st.caption("Check each match (change 'Planned cashflow' if needed), untick rows to skip, then import.")
+        st.caption("Each row is linked by its cashflow_id. To link a row that has none, pick its planned "
+                   "cashflow (by key) in 'Planned cashflow'; untick rows to skip; then import.")
         edited = st.data_editor(
             df, hide_index=True, use_container_width=True, key="actuals_editor",
             disabled=[c for c in df.columns if c not in ("Import", "Planned cashflow")],
@@ -1042,7 +1044,13 @@ def render_actuals_tab(portfolio: Portfolio) -> None:
             chosen = []
             for r, (_, e) in zip(preview, edited.iterrows()):
                 if bool(e["Import"]) and r.ok:
-                    r.flow_id = label_to_flow.get(e["Planned cashflow"])
+                    new_flow = label_to_flow.get(e["Planned cashflow"])
+                    if new_flow != r.flow_id:          # picked (or cleared) in the grid
+                        r.flow_id = new_flow
+                        if new_flow is not None:
+                            cf = portfolio.get_cashflow(new_flow)
+                            r.asset_id, r.direction = cf.asset_id, cf.direction.value
+                            r.category = r.category or cf.flow_type.value
                     chosen.append(r)
             saved = actuals_engine.commit_rows(chosen, portfolio)
             st.session_state.pop("actuals_preview", None)
@@ -1054,12 +1062,19 @@ def render_actuals_tab(portfolio: Portfolio) -> None:
     if portfolio.actuals:
         labels = _flow_labels(portfolio)
         df = pd.DataFrame([
-            {"Year": a.year, "Month": MONTH_NAMES[a.month - 1] if a.month else "full year", "Kind": a.kind,
-             "Item": a.name, "Direction": a.direction.value, "Amount": format_currency(a.amount),
+            {"ID": a.actual_id, "Year": a.year, "Month": MONTH_NAMES[a.month - 1] if a.month else "full year",
+             "Kind": a.kind, "Item": a.name, "Direction": a.direction.value, "Amount": format_currency(a.amount),
              "Status": a.status, "Class": a.record_class,
              "Planned cashflow": labels.get(a.flow_id, "(not in the plan)"), "Notes": a.notes}
             for a in sorted(portfolio.actuals, key=lambda a: (a.year, a.month or 0, a.name))
         ])
+        unlinked = portfolio.unplanned_actuals()
+        if unlinked:
+            st.warning(f"{len(unlinked)} record(s) aren't linked to a planned cashflow: "
+                       + "; ".join(f"#{a.actual_id} {a.name} ({a.year}, {format_currency(a.amount)})"
+                                   for a in unlinked[:5]) + ("..." if len(unlinked) > 5 else "")
+                       + ". Each counts once, in its own year (scenario setting 'Count unplanned actuals'). "
+                         "Link it below if it belongs to a planned cashflow.")
         ordered = sorted(portfolio.actuals, key=lambda a: (a.year, a.month or 0, a.name))
 
         def _delete(actual_id: str) -> bool:
@@ -1068,6 +1083,32 @@ def render_actuals_tab(portfolio: Portfolio) -> None:
             return True
 
         _render_selectable_table("actual", df, [a.actual_id for a in ordered], _delete, delete_label="this record")
+
+        with st.expander("Link a record to a planned cashflow", expanded=bool(unlinked)):
+            rec_labels = {a.actual_id: f"#{a.actual_id} · {a.year} {a.kind} · {a.name} · {format_currency(a.amount)}"
+                          + ("" if a.flow_id else "  (not in the plan)") for a in ordered}
+            not_in_plan = "(not in the plan)"
+            l1, l2 = st.columns(2)
+            with l1:
+                rec_id = st.selectbox("Record", [a.actual_id for a in ordered], key="relink_record",
+                                      format_func=rec_labels.get,
+                                      index=next((i for i, a in enumerate(ordered) if not a.flow_id), 0))
+            with l2:
+                current = next(a.flow_id for a in ordered if a.actual_id == rec_id)
+                options = [None] + [cf.flow_id for cf in portfolio.cashflows]
+                target = st.selectbox("Planned cashflow (by key)", options, key=f"relink_target_{rec_id}",
+                                      index=options.index(current) if current in options else 0,
+                                      format_func=lambda fid: not_in_plan if fid is None else labels[fid])
+            if st.button("Save link", key="relink_save"):
+                try:
+                    portfolio.relink_actual(rec_id, target)
+                    _clear_simulation_cache()
+                    st.success(f"Record #{rec_id} is now "
+                               + (f"linked to {labels[target]}." if target is not None else "not in the plan.")
+                               + " Click Save portfolio in the sidebar to keep it.")
+                    st.rerun()
+                except ValidationError as exc:
+                    st.error(str(exc))
     else:
         st.info("No actuals yet. Import a CSV above.")
         return
@@ -1149,24 +1190,24 @@ def render_ownership_section(portfolio: Portfolio) -> None:
 
     if portfolio.ownerships:
         df = pd.DataFrame([
-            {"Owner": entity_names.get(o.owner_entity_id, o.owner_entity_id), "Owns": owned_name(o),
+            {"ID": o.ownership_id, "Owner": entity_names.get(o.owner_entity_id, o.owner_entity_id), "Owns": owned_name(o),
              "Kind": o.owned_type, "Percent": f"{o.percent * 100:g}%",
              "Your share of it": f"{(portfolio.entity_share(o.owned_id) if o.owned_type == 'entity' else portfolio.asset_share(o.owned_id)):.2%}",
              "Notes": o.notes}
             for o in portfolio.ownerships
         ])
 
-        def _delete_link(key: str) -> bool:
-            portfolio.remove_ownership(key)
+        def _delete_link(ownership_id) -> bool:
+            portfolio.remove_ownership(ownership_id)
             _clear_simulation_cache()
             st.success("Ownership link removed.")
             return True
 
-        _render_selectable_table(kind, df, [o.key for o in portfolio.ownerships], _delete_link,
+        _render_selectable_table(kind, df, [o.ownership_id for o in portfolio.ownerships], _delete_link,
                                  delete_label="this ownership link")
         editor = _editor_get(kind)
         if editor and editor["mode"] == "edit":
-            o = next((x for x in portfolio.ownerships if x.key == editor["record_id"]), None)
+            o = portfolio.get_ownership(editor["record_id"])
             if o is None:
                 _editor_close(kind)
             else:
@@ -1175,12 +1216,10 @@ def render_ownership_section(portfolio: Portfolio) -> None:
                     min_value=0.0001, max_value=100.0, value=o.percent * 100, step=0.05, format="%.4f",
                     key=_editor_widget_key(kind, "percent"))
                 if st.button("💾 Save percent", key=_editor_widget_key(kind, "save")):
-                    others = [x for x in portfolio.ownerships if x.key != o.key]
                     try:
-                        updated = Ownership(owner_entity_id=o.owner_entity_id, owned_type=o.owned_type,
-                                            owned_id=o.owned_id, percent=new_pct / 100, notes=o.notes)
-                        portfolio._check_ownerships(others + [updated])
-                        portfolio.ownerships = others + [updated]
+                        portfolio.replace_ownership(o.ownership_id, Ownership(
+                            owner_entity_id=o.owner_entity_id, owned_type=o.owned_type, owned_id=o.owned_id,
+                            percent=new_pct / 100, notes=o.notes))
                         _clear_simulation_cache()
                         _editor_close(kind)
                         st.rerun()
@@ -1236,21 +1275,22 @@ def render_memberships_section(portfolio: Portfolio) -> None:
     person_names = {p.person_id: p.name for p in portfolio.people}
     if portfolio.memberships:
         df = pd.DataFrame([
-            {"Entity": entity_names.get(m.entity_id, m.entity_id), "Person": person_names.get(m.person_id, m.person_id),
+            {"ID": m.membership_id, "Entity": entity_names.get(m.entity_id, m.entity_id),
+             "Person": person_names.get(m.person_id, m.person_id),
              "Role": m.role.value.replace("_", " "), "Notes": m.notes}
             for m in portfolio.memberships
         ])
 
-        def _delete_link(key: str) -> bool:
-            portfolio.remove_membership(key)
+        def _delete_link(membership_id) -> bool:
+            portfolio.remove_membership(membership_id)
             st.success("Link removed.")
             return True
 
-        _render_selectable_table(kind, df, [m.key for m in portfolio.memberships], _delete_link,
+        _render_selectable_table(kind, df, [m.membership_id for m in portfolio.memberships], _delete_link,
                                  delete_label="this link")
         editor = _editor_get(kind)
         if editor and editor["mode"] == "edit":
-            m = next((x for x in portfolio.memberships if x.key == editor["record_id"]), None)
+            m = portfolio.get_membership(editor["record_id"])
             if m is None:
                 _editor_close(kind)
             else:
@@ -1260,13 +1300,11 @@ def render_memberships_section(portfolio: Portfolio) -> None:
                                         format_func=lambda r: r.replace("_", " "))
                 if st.button("💾 Save role", key=_editor_widget_key(kind, "save")):
                     try:
-                        portfolio.remove_membership(m.key)
-                        portfolio.add_membership(Membership(entity_id=m.entity_id, person_id=m.person_id,
-                                                            role=new_role, notes=m.notes))
+                        portfolio.replace_membership(m.membership_id, Membership(
+                            entity_id=m.entity_id, person_id=m.person_id, role=new_role, notes=m.notes))
                         _editor_close(kind)
                         st.rerun()
                     except ValidationError as exc:
-                        portfolio.memberships.append(m)  # put the original back
                         st.error(str(exc))
 
     if not (portfolio.entities and portfolio.people):
@@ -2478,6 +2516,11 @@ def _render_scenario_editor(portfolio: Portfolio, editor: dict) -> None:
             "Use recorded actuals and forecasts where they exist (untick to see the pure plan)",
             value=existing.use_actuals if existing else True, key=field("use_actuals"),
         )
+        count_unplanned = st.checkbox(
+            "Count unplanned actuals (records not linked to the plan) once, in their own year",
+            value=getattr(existing, "count_unplanned_actuals", True) if existing else True,
+            key=field("count_unplanned"),
+        )
         full_view = st.checkbox(
             "100% view: ignore ownership % (show every asset, loan and cashflow at full size)",
             value=(existing.ownership_view == "full") if existing else False, key=field("full_view"),
@@ -2558,6 +2601,7 @@ def _render_scenario_editor(portfolio: Portfolio, editor: dict) -> None:
                     is_base_case=existing.is_base_case if existing else False,
                     ownership_view="full" if full_view else "share",
                     use_actuals=use_actuals,
+                    count_unplanned_actuals=count_unplanned,
                     # keep settings this form doesn't show (previously lost when editing)
                     event_overrides=dict(existing.event_overrides) if existing else {},
                     expense_growth_rate_override=existing.expense_growth_rate_override if existing else None,
@@ -2847,7 +2891,8 @@ def render_explore_tab(portfolio: Portfolio) -> None:
         cached = (scenario_id, explorer.run(portfolio, scenario))
         st.session_state["explore_result"] = cached
     result = cached[1]
-    nodes = explorer.build_tree(portfolio)
+    # Built from the scenario's working copy, so unplanned actuals show up under their asset.
+    nodes = explorer.build_tree(result.working_portfolio)
     focus = st.session_state.get("explore_focus", explorer.ROOT)
     if focus not in nodes:
         focus = explorer.ROOT

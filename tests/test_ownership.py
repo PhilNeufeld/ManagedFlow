@@ -155,3 +155,19 @@ def test_old_files_get_no_ownerships_and_the_share_view(v0_1_data):
     new = migrate(v0_1_data)
     assert new["ownerships"] == []
     assert all(s["ownership_view"] == "share" for s in new["scenarios"])
+
+
+# --- primary keys on the link table (v1.1) -------------------------------------------------------------
+
+def test_ownership_links_have_integer_keys_and_edit_in_place():
+    from models import Ownership
+    p = Portfolio(entities=[Entity(entity_id=1, name="Us"), Entity(entity_id=2, name="LP", entity_type="partnership")])
+    link = Ownership(owner_entity_id=1, owned_type="entity", owned_id=2, percent=0.2)
+    p.add_ownership(link)
+    assert link.ownership_id == 1
+    p.replace_ownership(1, Ownership(owner_entity_id=1, owned_type="entity", owned_id=2, percent=0.25))
+    assert p.get_ownership(1).percent == 0.25 and p.entity_share(2) == pytest.approx(0.25)
+    with pytest.raises(ValidationError):                      # the owner/owned pair stays unique
+        p.add_ownership(Ownership(owner_entity_id=1, owned_type="entity", owned_id=2, percent=0.1))
+    p.remove_ownership(1)
+    assert not p.ownerships
