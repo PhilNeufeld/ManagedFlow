@@ -193,15 +193,15 @@ The detailed tax method estimates federal (2026 tables) and California (2025 tab
 
 ## Social Security earnings test
 
-If someone claims before full retirement age (FRA: 67 for anyone born 1960 or later) and keeps working, SSA withholds benefits: $1 for every $2 of earnings over $25,560 (2027); in the year FRA is reached, $1 for every $3 over $67,920, counting only months before FRA. Earnings = wages + net self-employment earnings. In the first year of benefits, a month with low wages and no substantial self-employment work is paid in full. Withheld months are credited back as a higher benefit at FRA; that increase isn't modeled yet.
+If someone claims before full retirement age (FRA: 67 for anyone born 1960 or later) and keeps working, SSA withholds benefits: $1 for every $2 of earnings over $25,560 (2027); in the year FRA is reached, $1 for every $3 over $67,920, counting only months before FRA. Earnings = wages + net self-employment earnings. In the first year of benefits, a month with low wages and no substantial self-employment work is paid in full. Withheld months are credited back at FRA: for benefits set up under Social Security (Entities > People), the benefit is recomputed as if claimed that many months later.
 
 > **In the example household (2029):** Social Security earnings test: $9,000 of Sam's $9,000 benefit withheld (earnings $70,000 vs the $27,117 limit). SSA credits withheld months back as a higher benefit at full retirement age -- not modeled.
 
 ## Not modeled yet
 
-- AMT, QBI deduction, IRMAA, most credits, depreciation recapture on sale.
+- AMT, QBI deduction, IRMAA, most credits, depreciation recapture on sale; capital gains on taxable-account withdrawals.
 - Allocated partnership income (K-1) that differs from the cash distributed.
-- The Social Security increase at FRA for withheld months; spousal and survivor benefit rules.
+- For Social Security entered as a plain cashflow (instead of under People): the credit-back at FRA, spousal and survivor rules.
 
 # 8. Saving, backups and archiving a data set
 
@@ -265,9 +265,31 @@ If someone claims before full retirement age (FRA: 67 for anyone born 1960 or la
 
 ## Add Social Security?
 
-1. Create a claim event (a date, or an age for the person).
-2. Cashflows: type Social Security income, the monthly benefit at that claiming age, growth = expected COLA, start event = the claim event, and set "Whose earnings or benefit" to the person.
-3. The earnings test is applied automatically if the person claims before FRA while working. In the person's editor, untick "Works substantially in their own business" if they don't (generally over 45 hours a month).
+1. Entities tab > People > "Social Security (from your SSA statement)". For each person enter the PIA -- the monthly benefit at full retirement age on the SSA statement, in the plan's first-year dollars -- the claiming age (62-70, plus months) and the COLA.
+2. ManagedFlow applies SSA's rules: 5/9 of 1% less per month claimed early (5/12 of 1% beyond 36 months), 2/3 of 1% more per month after full retirement age up to 70; a spousal top-up to half the spouse's PIA (reduced if claimed early; it starts once both have filed); and at a death (plan-to age) the survivor keeps the larger benefit.
+3. The earnings test applies automatically to anyone claiming before FRA while working, and at FRA the benefit is recomputed to credit back the withheld months. In the person's editor, untick "Works substantially in their own business" if they don't (generally over 45 hours a month).
+4. Don't also enter Social Security as a cashflow -- the screen warns if both exist.
+
+## Decide when to claim Social Security?
+
+1. Simulation tab > "Social Security claiming analysis": pick the ages to compare (e.g. 62, 67, 70) and click **Compare**.
+2. The whole plan runs once for every combination of both spouses' ages. Each row shows lifetime benefits, how much the earnings test withheld, total tax and net worth at the end of the plan; ◀ marks your current choice.
+3. The chart shows cumulative benefits by year for the options you pick: where the lines cross is the break-even age.
+4. To keep a choice, change the claiming age in the person's Social Security settings -- or make a scenario for it.
+
+## Set up IRAs, Roth and brokerage accounts?
+
+1. Assets tab > the account's editor: set **Account type** -- Taxable (brokerage, savings), Tax-deferred (traditional IRA, 401k) or Roth -- and the **Account owner**.
+2. Liquidity "liquid" or "semi-liquid" lets the plan draw on it to cover a shortfall. Within a liquidity group it draws taxable accounts first, then tax-deferred, then Roth last.
+3. A withdrawal from a tax-deferred account is ordinary income: ManagedFlow re-estimates the tax and withdraws a little more to pay it (grossing up). Roth and taxable-account withdrawals aren't income (capital gains in a taxable account aren't modeled yet).
+4. Required minimum distributions start automatically at the owner's RMD age -- 75 if born 1960 or later, 73 if born 1951-59, 72 if earlier: each year the prior year-end balance / the IRS Uniform Lifetime Table factor (24.6 at 75, 12.2 at 90...) leaves the account as taxable income. Roth accounts have none.
+
+## Model a note or fee someone owes me (a receivable)?
+
+1. Assets tab > Add new asset, type **receivable**. Value = the balance owed when payments start.
+2. Under Receivable terms: interest rate, number of monthly payments (or the payment), and the first payment month and year -- or an event (e.g. "Loan closes").
+3. Tick "Principal is taxable income" for a fee earned but paid later (choose how it's taxed, e.g. self-employment income) -- leave it unticked for a loan you made, whose principal is a tax-free return of your money.
+4. Each year ManagedFlow splits the payments into interest (taxed as interest) and principal, and the asset's value is the balance still owed, counted in net worth. It's never drawn on to cover a shortfall.
 
 ## Model a salary that ends at retirement?
 
@@ -375,18 +397,17 @@ Household-specific to-dos live next to each portfolio in `data/<file>_tasks.md` 
 | 0.9+ | Per-person payroll and self-employment tax (each spouse's own wage base); Social Security earnings test |
 | 0.9+ | Explore tab: drill-down chart (entity > collection > asset > cashflow/loan) and 1-5 year period table with events; Period View export |
 | 0.9+ | Help tab and the user manual, built from one source: a generic edition (example household) and a private edition (your portfolio) |
+| 1.2 | Accounts: taxable / tax-deferred / Roth with an owner; required minimum distributions (SECURE 2.0 ages, Uniform Lifetime Table); shortfalls drawn taxable -> tax-deferred -> Roth; tax-deferred withdrawals taxed and grossed up |
+| 1.2 | Social Security class: PIA + claiming age by SSA's rules; spousal and survivor benefits; earnings-test months credited back at FRA; claiming-age comparison through the whole plan. Receivables: notes and fees owed to you, paid down monthly, interest and principal taxed separately |
 | 1.1 | Link tables (memberships, ownerships) get integer primary keys; the joined pair stays a unique constraint; edit in place |
 | 1.0 | Integer primary keys in every table (migration renumbers older files); actuals import links by key (cashflow_id), never by name, with a template listing each planned cashflow's key; unplanned actuals count once in their own year; re-link stored records |
 
 ## Next (in this order)
 
-1. **How each account is taxed** -- taxable / tax-deferred / Roth on assets; withdrawal order by tax treatment; required minimum distributions.
-2. **Social Security class** -- benefit at full retirement age + claiming age -> adjusted benefit; spousal and survivor rules; withheld months credited back at full retirement age.
-3. **Spending policy** (lower priority) -- spending that adjusts to markets (guardrails), used by Monte Carlo.
+1. **Spending policy** (lower priority) -- spending that adjusts to markets (guardrails), used by Monte Carlo.
 
 ## Next after a portfolio is populated
 
-- **Receivables** -- a note or fee you're OWED (a note receivable, a fee paid over time): a balance paid down over time, like a loan in reverse, counted in net worth.
 - **Allocated income vs. cash** -- partnership income allocated to you (K-1) can differ from the cash distributed; tax the allocation, count the cash.
 - **Notes and tasks** -- dated notes and tasks (status, due date) attached to any record or to the portfolio.
 - **Notes on classes** -- a note per actuals class (e.g. "Crop 2026: crop failure").
@@ -394,7 +415,9 @@ Household-specific to-dos live next to each portfolio in `data/<file>_tasks.md` 
 
 ## Longer term
 
-- **Social Security claiming analysis** -- compare claiming ages (62-70) for each spouse, including spousal/survivor effects, on lifetime income and net worth.
+- Accounts: cost basis and capital gains on taxable-account withdrawals; Roth conversions (how much to convert each year to fill a tax bracket); inherited IRAs (10-year rule).
+
+- Social Security extras: benefits for a divorced spouse; a survivor claiming before their own full retirement age; family maximum.
 - **Tax impact analysis** -- per-property breakdown and "what if" comparisons (e.g. sell before vs. after depreciation runs out), depreciation recapture on sale.
 - Tax engine extras: AMT, QBI deduction, IRMAA, CA exemption-credit phase-out, filing status change after a spouse's death.
 - **Highest steady spending** -- solve for the largest inflation-adjusted spending level the plan can sustain for life.

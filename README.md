@@ -406,8 +406,8 @@ year before. Put real CSVs in `data/`: they're kept off GitHub.
 ## Ownership %
 
 On the **Entities** tab, "Ownership %" records which entity owns what share
-of another entity or of an asset (Family LP owns 6.45% of LVM; Branfeld owns
-33.3% of 2049 Broadway). Your share of anything = the percents multiplied
+of another entity or of an asset (Family LP owns 6.45% of Plaza; Oak Hill owns
+33.3% of 88 Market St). Your share of anything = the percents multiplied
 along each path from an entity nobody owns (your household), added across
 paths -- "Explain a share" shows the paths. Simulations scale each asset,
 its cashflows and its loans to your share; tick "100% view" on a scenario
@@ -417,7 +417,7 @@ cashflows once, on the entity that holds it.
 ## People and memberships
 
 People and entities are many-to-many, linked by a **Membership** with a
-role: the joint entity holds Phil *and* Debbie (owners); Phil is in his
+role: the joint entity holds Alex *and* Sam (owners); Alex is in his
 personal entity *and* the joint one; a trust can have a trustee and
 beneficiaries. Manage links under "Who's in each entity" on the
 **Entities** tab. Giving a personal entity a birthday creates its person
@@ -473,7 +473,7 @@ python -m pytest
 - `tests/test_events.py`: retirement splits the year; moving events moves records.
 - `tests/test_people.py`: birthdays drive events; ages in results; survivor scenario.
 - `tests/test_memberships.py`: people <-> entities many-to-many with roles; one owner per personal entity.
-- `tests/test_ownership.py`: share math on the Neufeld chain (LVM 7.45%); loops and >100% refused.
+- `tests/test_ownership.py`: share math on the family chain (Plaza 7.45%); loops and >100% refused.
 - `tests/test_actuals.py`: CSV import and matching; actual > forecast > plan; plan-vs-actual; trend breaks.
 - `tests/test_taxes.py`: the tax engine against hand arithmetic from the published tables.
 - `tests/test_app_ui.py`: **screen tests** -- drives the app headlessly (fills forms,

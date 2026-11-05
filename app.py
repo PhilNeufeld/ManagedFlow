@@ -310,6 +310,8 @@ def render_assets_tab(portfolio: Portfolio) -> None:
                     "Current Value": format_currency(a.current_value),
                     "Growth Rate": a.annual_growth_rate,
                     "Liquidity": a.liquidity_category.value,
+                    "Account": {"taxable": "taxable", "tax_deferred": "tax-deferred", "roth": "Roth"}.get(
+                        a.account_tax, ""),
                     "Active": a.active,
                     "Do Not Sell": a.do_not_sell,
                     "Your share": f"{portfolio.asset_share(a.asset_id):.2%}",
@@ -557,6 +559,50 @@ def _render_asset_editor(portfolio: Portfolio, editor: dict) -> None:
             earner = _person_picker("Whose self-employment income", portfolio,
                                     existing.earner_person_id if existing else None, field("earner"),
                                     "Each spouse's payroll and self-employment tax is worked out separately.")
+        ac1, ac2 = st.columns(2)
+        with ac1:
+            acct_labels = {"": "Not an investment account", "taxable": "Taxable (brokerage, savings)",
+                           "tax_deferred": "Tax-deferred (traditional IRA, 401k): withdrawals + RMDs taxed",
+                           "roth": "Roth: tax-free, no RMDs"}
+            account_tax = st.selectbox("Account type", list(acct_labels), format_func=acct_labels.get,
+                                       index=list(acct_labels).index(existing.account_tax) if existing else 0,
+                                       key=field("account_tax"))
+        with ac2:
+            owner_person = _person_picker("Account owner (sets RMD age)", portfolio,
+                                          existing.owner_person_id if existing else None, field("owner_person"))
+        st.markdown("**Receivable terms** -- only for type *receivable* (a note or fee owed to you, paid "
+                    "down monthly). Value above = the balance owed when payments start.")
+        rc1, rc2, rc3, rc4 = st.columns(4)
+        with rc1:
+            rcv_rate = st.number_input("Interest rate (%)", min_value=0.0, max_value=50.0, step=0.125, format="%.3f",
+                                       value=float(existing.receivable_rate * 100) if existing else 0.0,
+                                       key=field("rcv_rate"))
+            rcv_months = st.number_input("Payments (months, 0 = use payment)", min_value=0, step=12,
+                                         value=int(existing.receivable_months or 0) if existing else 0,
+                                         key=field("rcv_months"))
+        with rc2:
+            rcv_payment = st.number_input("Monthly payment (0 = calculate)", min_value=0.0, step=100.0,
+                                          value=float(existing.receivable_payment or 0.0) if existing else 0.0,
+                                          key=field("rcv_payment"))
+            rcv_first_month = st.selectbox("First payment month", list(range(1, 13)),
+                                           format_func=lambda mo: MONTH_NAMES[mo - 1], key=field("rcv_first_month"),
+                                           index=(existing.first_payment_month - 1) if existing else 0)
+        with rc3:
+            rcv_first_year = st.number_input("First payment year (0 = asset start)", min_value=0, step=1,
+                                             value=int(existing.first_payment_year or 0) if existing else 0,
+                                             key=field("rcv_first_year"))
+            rcv_event = _event_picker("...or first payment at event", portfolio,
+                                      existing.first_payment_event_id if existing else None, field("rcv_event"))
+        with rc4:
+            rcv_principal_taxable = st.checkbox(
+                "Principal is taxable income (e.g. a fee paid later; not for a loan you made)",
+                value=existing.principal_taxable if existing else False, key=field("rcv_principal_taxable"))
+            rcv_principal_cat = st.selectbox(
+                "...taxed as", ["self_employment_income", "ordinary_income", "business_income", "capital_gains"],
+                index=(["self_employment_income", "ordinary_income", "business_income", "capital_gains"].index(
+                    existing.principal_tax_category.value) if existing and existing.principal_tax_category.value in
+                    ("self_employment_income", "ordinary_income", "business_income", "capital_gains") else 0),
+                key=field("rcv_principal_cat"))
         do_not_sell = st.checkbox("Do not sell", value=defaults["do_not_sell"], key=field("do_not_sell"))
         active = st.checkbox("Active", value=defaults["active"], key=field("active"))
         notes = st.text_area("Notes", value=defaults["notes"], key=field("notes"))
@@ -607,6 +653,16 @@ def _render_asset_editor(portfolio: Portfolio, editor: dict) -> None:
                     recovery_years=recovery_years,
                     subject_to_se_tax=subject_to_se,
                     earner_person_id=earner,
+                    receivable_rate=rcv_rate / 100,
+                    receivable_months=int(rcv_months) or None,
+                    receivable_payment=rcv_payment or None,
+                    first_payment_year=int(rcv_first_year) or None,
+                    first_payment_month=int(rcv_first_month),
+                    first_payment_event_id=rcv_event,
+                    principal_taxable=rcv_principal_taxable,
+                    principal_tax_category=rcv_principal_cat if rcv_principal_taxable else "none",
+                    account_tax=account_tax,
+                    owner_person_id=owner_person,
                 )
 
                 if mode == "new":
@@ -1266,9 +1322,9 @@ def render_ownership_section(portfolio: Portfolio) -> None:
 def render_memberships_section(portfolio: Portfolio) -> None:
     st.subheader("Who's in each entity")
     st.caption(
-        "Links people to entities, with a role. One person can be in many entities (Phil in his "
+        "Links people to entities, with a role. One person can be in many entities (Alex in his "
         "personal entity and the joint one); one entity can hold many people (the joint entity holds "
-        "Phil and Debbie). Roles record e.g. trustee or beneficiary of a trust."
+        "Alex and Sam). Roles record e.g. trustee or beneficiary of a trust."
     )
     kind = "membership"
     entity_names = {e.entity_id: e.name for e in portfolio.entities}
@@ -1328,6 +1384,83 @@ def render_memberships_section(portfolio: Portfolio) -> None:
                 st.error(str(exc))
 
 
+def render_social_security_section(portfolio: Portfolio) -> None:
+    """Social Security per person, from SSA's rules: PIA + claiming age -> benefit."""
+    if not portfolio.people:
+        return
+    import social_security as ss_engine
+    from models import SocialSecurity
+    with st.expander("Social Security (from your SSA statement)", expanded=bool(portfolio.social_security)):
+        st.caption(
+            "Enter each person's PIA -- the monthly benefit at full retirement age on their SSA statement, in "
+            f"{portfolio.assumptions.start_year} dollars -- and when they plan to claim. ManagedFlow applies "
+            "SSA's rules: smaller if claimed early, 8%/yr larger after full retirement age (to 70), a spousal "
+            "top-up to half the spouse's PIA, a survivor benefit at a death (plan-to age), the earnings test "
+            "and its credit-back at full retirement age. Don't also enter Social Security as a cashflow.")
+        plans = ss_engine.plan_benefits(portfolio)
+        recs = {s.person_id: s for s in portfolio.social_security}
+        typed = [cf for cf in portfolio.cashflows if cf.flow_type.value == "social_security_income"]
+        if typed and portfolio.social_security:
+            st.warning("Social Security is ALSO entered as cashflow(s): " + ", ".join(cf.name for cf in typed)
+                       + ". Delete those, or it will be counted twice.")
+        for person in portfolio.people:
+            rec = recs.get(person.person_id)
+            fra_y, fra_m = person.full_retirement_date()
+            st.markdown(f"**{person.name}** -- full retirement age {person.full_retirement_age()[0]}"
+                        f"{(' and ' + str(person.full_retirement_age()[1]) + ' months') if person.full_retirement_age()[1] else ''}"
+                        f" ({MONTH_NAMES[fra_m - 1]} {fra_y})")
+            k = f"ss_{person.person_id}"
+            c1, c2, c3, c4, c5 = st.columns([1.4, 1, 1, 1, 1.6])
+            with c1:
+                pia = st.number_input("PIA ($/month at full retirement age)", min_value=0.0, step=50.0,
+                                      value=float(rec.pia) if rec else 0.0, key=f"{k}_pia")
+            with c2:
+                age_y = st.number_input("Claim at age", min_value=62, max_value=70, step=1,
+                                        value=rec.claim_age_years if rec else 67, key=f"{k}_age")
+            with c3:
+                age_m = st.number_input("+ months", min_value=0, max_value=11, step=1,
+                                        value=rec.claim_age_months if rec else 0, key=f"{k}_months")
+            with c4:
+                cola = st.number_input("COLA (%/yr)", min_value=0.0, max_value=10.0, step=0.1,
+                                       value=float(rec.cola * 100) if rec else 2.5, key=f"{k}_cola")
+            with c5:
+                spousal = st.checkbox("Spousal top-up", value=rec.spousal if rec else True, key=f"{k}_spousal")
+                survivor = st.checkbox("Survivor benefit", value=rec.survivor if rec else True, key=f"{k}_survivor")
+            b1, b2, b3 = st.columns([1, 1, 4])
+            with b1:
+                if st.button("💾 Save", key=f"{k}_save"):
+                    try:
+                        new = SocialSecurity(
+                            ss_id=rec.ss_id if rec else portfolio.next_id("social_security"),
+                            person_id=person.person_id, pia=pia, claim_age_years=int(age_y),
+                            claim_age_months=int(age_m), cola=cola / 100, spousal=spousal, survivor=survivor,
+                            notes=rec.notes if rec else "")
+                        portfolio.social_security = [s for s in portfolio.social_security
+                                                     if s.person_id != person.person_id] + [new]
+                        _clear_simulation_cache()
+                        st.rerun()
+                    except ValidationError as exc:
+                        st.error(str(exc))
+            with b2:
+                if rec and st.button("Remove", key=f"{k}_remove"):
+                    portfolio.social_security = [s for s in portfolio.social_security if s.person_id != person.person_id]
+                    _clear_simulation_cache()
+                    st.rerun()
+            with b3:
+                bp = plans.get(person.person_id)
+                if bp:
+                    parts = [f"starts {MONTH_NAMES[bp.claim[1] - 1]} {bp.claim[0]} at "
+                             f"{format_currency(bp.own_monthly)}/mo ({bp.own_factor:.1%} of PIA)"]
+                    if bp.spousal_monthly:
+                        parts.append(f"+ spousal {format_currency(bp.spousal_monthly)}/mo from "
+                                     f"{MONTH_NAMES[bp.spousal_start[1] - 1]} {bp.spousal_start[0]}")
+                    if bp.survivor_monthly:
+                        parts.append(f"+ survivor {format_currency(bp.survivor_monthly)}/mo from "
+                                     f"{MONTH_NAMES[bp.survivor_start[1] - 1]} {bp.survivor_start[0]}")
+                    st.caption("; ".join(parts) + f" ({portfolio.assumptions.start_year} dollars, before COLA "
+                               "and the earnings test).")
+
+
 def render_people_section(portfolio: Portfolio) -> None:
     st.subheader("People")
     st.caption(
@@ -1378,6 +1511,8 @@ def render_people_section(portfolio: Portfolio) -> None:
                 portfolio.add_membership(Membership(entity_id=eid, person_id=pid, role="owner"))
                 _clear_simulation_cache()
                 st.rerun()
+
+    render_social_security_section(portfolio)
 
     editor = _editor_get(kind)
     if editor is None:
@@ -1529,7 +1664,7 @@ def render_events_tab(portfolio: Portfolio) -> None:
     # Outside the form so the form can switch fields (forms don't rerun until Save).
     timing_options = ["fixed", "age"] if portfolio.people else ["fixed"]
     if not portfolio.people:
-        st.caption("To have this event follow someone's age (e.g. 'Phil turns 65'), give a personal "
+        st.caption("To have this event follow someone's age (e.g. 'Alex turns 65'), give a personal "
                    "entity a birthday on the Entities tab first.")
     timing = st.radio(
         "When", timing_options, horizontal=True, key=field("timing"),
@@ -1936,8 +2071,8 @@ def render_bundles_tab(portfolio: Portfolio) -> None:
     st.header("Bundles")
     st.caption(
         "A Bundle groups related assets, liabilities and household cashflows under an "
-        "Entity -- e.g. \"4392 Brix\" (the house, its loan, rent and expenses) or "
-        "\"Phil earnings\" (just a salary). Cashflows and loans linked to a bundled asset "
+        "Entity -- e.g. \"12 Elm St\" (the house, its loan, rent and expenses) or "
+        "\"Alex earnings\" (just a salary). Cashflows and loans linked to a bundled asset "
         "come along automatically. Scenarios can be scoped to run against one Bundle."
     )
     bundle_kind = "bundle"
@@ -2604,6 +2739,7 @@ def _render_scenario_editor(portfolio: Portfolio, editor: dict) -> None:
                     count_unplanned_actuals=count_unplanned,
                     # keep settings this form doesn't show (previously lost when editing)
                     event_overrides=dict(existing.event_overrides) if existing else {},
+                    ss_overrides=dict(getattr(existing, "ss_overrides", {}) or {}) if existing else {},
                     expense_growth_rate_override=existing.expense_growth_rate_override if existing else None,
                     withdrawal_order_override=existing.withdrawal_order_override if existing else None,
                     notes=existing.notes if existing else "",
@@ -3086,6 +3222,65 @@ def render_help_tab(portfolio: Portfolio) -> None:
                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
 
+def render_claiming_analysis(portfolio: Portfolio) -> None:
+    """Compare claiming ages for each person's Social Security, through the whole plan."""
+    if not portfolio.social_security or not portfolio.scenarios:
+        return
+    import altair as alt
+    import social_security as ss_engine
+    st.divider()
+    st.subheader("Social Security claiming analysis")
+    st.caption("Runs the whole plan once for every combination of claiming ages, so the earnings test, its "
+               "credit-back, spousal and survivor benefits, taxes and investment growth all count. Uses the "
+               "base scenario; amounts in future dollars.")
+    c1, c2 = st.columns([3, 1])
+    with c1:
+        ages = st.multiselect("Claiming ages to compare", list(range(62, 71)), default=[62, 67, 70],
+                              key="ss_analysis_ages")
+    with c2:
+        st.write("")
+        go = st.button("Compare", key="ss_analysis_run", type="primary")
+    base = next((s for s in portfolio.scenarios if s.is_base_case), portfolio.scenarios[0])
+    if go and ages:
+        with st.spinner(f"Running {len(ages) ** len(portfolio.social_security)} versions of the plan..."):
+            st.session_state["ss_analysis"] = ss_engine.claiming_analysis(portfolio, base, tuple(sorted(ages)))
+    rows = st.session_state.get("ss_analysis")
+    if not rows:
+        return
+    names = {p.person_id: p.name for p in portfolio.people}
+    current = {f"{names.get(s.person_id, s.person_id)} claims at": s.claim_age_years for s in portfolio.social_security}
+    nw_col = next(k for k in rows[0] if k.startswith("Net worth"))
+    df = pd.DataFrame([{k: v for k, v in r.items() if k != "_by_year"} for r in rows]).sort_values(nw_col, ascending=False)
+    age_cols = [c for c in df.columns if c.endswith("claims at")]
+    df.insert(0, "Option", df[age_cols].astype(str).agg(" / ".join, axis=1))
+    df["Your plan now"] = df[age_cols].apply(lambda r: "◀" if all(r[c] == current.get(c) for c in age_cols) else "",
+                                             axis=1)
+    shown = df.copy()
+    for c in ["Lifetime Social Security", "Withheld (earnings test)", "Total tax", nw_col]:
+        shown[c] = shown[c].apply(format_currency)
+    st.dataframe(shown.drop(columns=age_cols), hide_index=True, use_container_width=True)
+    st.caption("Option = " + " / ".join(c.replace(" claims at", "") for c in age_cols) + " claiming ages.")
+    keep = list(df["Option"].head(3))
+    now = df.loc[df["Your plan now"] == "◀", "Option"]
+    if len(now) and now.iloc[0] not in keep:
+        keep.append(now.iloc[0])
+    pick = st.multiselect("Cumulative Social Security by year", list(df["Option"]), default=keep, key="ss_analysis_pick")
+    long = []
+    for r, opt in zip(rows, df.sort_index()["Option"]):
+        if opt in pick:
+            total = 0.0
+            for year, amount in sorted(r["_by_year"].items()):
+                total += amount
+                long.append({"Year": year, "Option": opt, "Cumulative": total})
+    if long:
+        st.altair_chart(alt.Chart(pd.DataFrame(long)).mark_line(strokeWidth=2).encode(
+            x=alt.X("Year:O", axis=alt.Axis(labelAngle=0, values=[y for y in range(1900, 2200, 5)])),
+            y=alt.Y("Cumulative:Q", axis=alt.Axis(format="$,.0s"), title=None),
+            color=alt.Color("Option:N", legend=alt.Legend(orient="top", title=None)),
+            tooltip=["Year:O", "Option:N", alt.Tooltip("Cumulative:Q", format="$,.0f")],
+        ).properties(height=300), use_container_width=True)
+
+
 def render_monte_carlo_section(portfolio: Portfolio) -> None:
     st.divider()
     st.header("Monte Carlo")
@@ -3205,7 +3400,7 @@ def render_quick_add(portfolio: Portfolio) -> None:
         )
         text = st.text_area(
             "Description",
-            placeholder="4392 Brix rental worth $295k with a Nation Star loan of $194,613 at 4.25%, "
+            placeholder="12 Elm St rental worth $300k with an Example Bank loan of $180,000 at 4.5%, "
                         "25 years left; rent $1,150 a month",
             key="quick_add_text",
         )
@@ -3268,7 +3463,8 @@ def main() -> None:
         ("Events", render_events_tab),
         ("Assumptions", render_assumptions_tab),
         ("Scenarios", render_scenarios_tab),
-        ("Simulation", lambda p: (render_simulation_tab(p), render_monte_carlo_section(p))),
+        ("Simulation", lambda p: (render_simulation_tab(p), render_claiming_analysis(p),
+                                  render_monte_carlo_section(p))),
         ("Explore", render_explore_tab),
         ("Help", render_help_tab),
         ("Export", render_export_tab),

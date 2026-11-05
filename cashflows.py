@@ -69,11 +69,16 @@ def withdraw_for_shortfall(
             a
             for a in assets
             if a.active
+            and a.asset_type.value != "receivable"      # its value is the balance owed, not cash to draw
             and a.liquidity_category.value == liquidity_value
             and (not a.do_not_sell or scenario.allow_illiquid_withdrawals)
             and a.current_value > 0
         ]
 
+        # Within a liquidity group, draw in tax order: taxable accounts first, then other
+        # assets, then tax-deferred (withdrawals are income), Roth last (tax-free growth).
+        tax_order = {"taxable": 0, "": 1, "tax_deferred": 2, "roth": 3}
+        candidates.sort(key=lambda a: tax_order.get(getattr(a, "account_tax", ""), 1))
         for asset in candidates:
             if remaining <= 0:
                 break

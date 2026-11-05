@@ -198,10 +198,10 @@ def test_selling_the_rental_releases_suspended_losses():
 def test_your_share_of_depreciation_follows_ownership():
     p = Portfolio(
         assumptions=Assumptions(start_year=2026, end_year=2026, inflation_rate=0.0, tax_method="detailed"),
-        entities=[Entity(entity_id="branfeld", name="Branfeld", entity_type="llc"),
+        entities=[Entity(entity_id="oakhill", name="Oak Hill", entity_type="llc"),
                   Entity(entity_id="owner", name="Owner", entity_type="joint")],
-        ownerships=[Ownership(owner_entity_id="owner", owned_type="entity", owned_id="branfeld", percent=0.5)],
-        assets=[rental(entity_id="branfeld", depreciable_basis=275_000, placed_in_service_year=2020,
+        ownerships=[Ownership(owner_entity_id="owner", owned_type="entity", owned_id="oakhill", percent=0.5)],
+        assets=[rental(entity_id="oakhill", depreciable_basis=275_000, placed_in_service_year=2020,
                        recovery_years=27.5)],
         scenarios=[Scenario(scenario_id="base", name="Base")],
     )

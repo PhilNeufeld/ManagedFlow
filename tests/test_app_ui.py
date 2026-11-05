@@ -54,13 +54,13 @@ def no_crash(at):
 
 
 def couple():
-    """Phil (personal entity with birthday) and Debbie (person only), plus a joint entity."""
+    """Alex (personal entity with birthday) and Sam (person only), plus a joint entity."""
     return Portfolio(
-        people=[Person(person_id="person_phil", name="Phil", birth_year=1965, birth_month=2),
-                Person(person_id="person_debbie", name="Debbie", birth_year=1964, birth_month=10)],
-        entities=[Entity(entity_id="entity_phil", name="Phil", entity_type="personal"),
-                  Entity(entity_id="entity_joint", name="Philip & Debbie Neufeld", entity_type="joint")],
-        memberships=[Membership(entity_id="entity_phil", person_id="person_phil")],
+        people=[Person(person_id="person_alex", name="Alex", birth_year=1965, birth_month=2),
+                Person(person_id="person_sam", name="Sam", birth_year=1964, birth_month=10)],
+        entities=[Entity(entity_id="entity_alex", name="Alex", entity_type="personal"),
+                  Entity(entity_id="entity_joint", name="Alex & Sam Rivera", entity_type="joint")],
+        memberships=[Membership(entity_id="entity_alex", person_id="person_alex")],
     )
 
 
@@ -76,7 +76,7 @@ def link(at, entity_id, person_id, role="owner"):
 def test_birthday_on_a_new_personal_entity_creates_the_person_and_owner_link(tmp_path):
     at = start(Portfolio(), tmp_path)
     at = click(at, key="entity_add_new_btn")
-    editor_widget(at, at.text_input, "entity", "name").input("Phil")
+    editor_widget(at, at.text_input, "entity", "name").input("Alex")
     editor_widget(at, at.number_input, "entity", "birth_year").set_value(1965)
     editor_widget(at, at.selectbox, "entity", "birth_month").set_value(2).run()
     assert any("Age in" in i.value and "**61**" in i.value for i in at.info)  # live age while typing
@@ -86,72 +86,72 @@ def test_birthday_on_a_new_personal_entity_creates_the_person_and_owner_link(tmp
     p = stored(at)
     assert p.entities[0].entity_id == 1                      # new records get integer keys
     (person, role), = p.people_in(p.entities[0].entity_id)
-    assert (person.name, person.birth_year, person.birth_month, role.value) == ("Phil", 1965, 2, "owner")
+    assert (person.name, person.birth_year, person.birth_month, role.value) == ("Alex", 1965, 2, "owner")
     row = table(at, "People (role)").iloc[0]
-    assert (row["People (role)"], row["Born"]) == ("Phil (owner)", "Feb 1965")
+    assert (row["People (role)"], row["Born"]) == ("Alex (owner)", "Feb 1965")
 
 
 def test_saving_the_personal_entity_again_updates_the_person_without_a_second_link(tmp_path):
     at = start(couple(), tmp_path)
-    at.session_state["_editor_entity"] = {"mode": "edit", "record_id": "entity_phil"}  # = Edit selected
+    at.session_state["_editor_entity"] = {"mode": "edit", "record_id": "entity_alex"}  # = Edit selected
     at.run()
     editor_widget(at, at.number_input, "entity", "birth_year").set_value(1966).run()
     at = click(at, label="💾 Save entity")
     no_crash(at)
     p = stored(at)
-    assert p.get_person("person_phil").birth_year == 1966
-    assert len([m for m in p.memberships if m.entity_id == "entity_phil"]) == 1
+    assert p.get_person("person_alex").birth_year == 1966
+    assert len([m for m in p.memberships if m.entity_id == "entity_alex"]) == 1
 
 
 # --- linking people and entities ------------------------------------------------------------------------
 
 def test_linking_both_spouses_shows_in_both_directions(tmp_path):
     at = start(couple(), tmp_path)
-    at = link(at, "entity_joint", "person_phil")
-    at = link(at, "entity_joint", "person_debbie")
+    at = link(at, "entity_joint", "person_alex")
+    at = link(at, "entity_joint", "person_sam")
     no_crash(at)
 
     entities = table(at, "People (role)").set_index("Name")
-    assert entities.loc["Philip & Debbie Neufeld", "People (role)"] == "Phil (owner), Debbie (owner)"
+    assert entities.loc["Alex & Sam Rivera", "People (role)"] == "Alex (owner), Sam (owner)"
     people = table(at, "Entities (role)").set_index("Name")
-    assert people.loc["Phil", "Entities (role)"] == "Phil (owner); Philip & Debbie Neufeld (owner)"
-    assert people.loc["Debbie", "Entities (role)"] == "Philip & Debbie Neufeld (owner)"
+    assert people.loc["Alex", "Entities (role)"] == "Alex (owner); Alex & Sam Rivera (owner)"
+    assert people.loc["Sam", "Entities (role)"] == "Alex & Sam Rivera (owner)"
 
 
 def test_duplicate_link_shows_an_error_instead_of_crashing(tmp_path):
     at = start(couple(), tmp_path)
-    at = link(at, "entity_phil", "person_phil")  # already linked as owner
+    at = link(at, "entity_alex", "person_alex")  # already linked as owner
     no_crash(at)
     assert any("already has that role" in e.value for e in at.error)
 
 
 def test_second_owner_on_a_personal_entity_is_refused_on_screen(tmp_path):
     at = start(couple(), tmp_path)
-    at = link(at, "entity_phil", "person_debbie")
+    at = link(at, "entity_alex", "person_sam")
     no_crash(at)
     assert any("only one owner" in e.value for e in at.error)
-    assert len(stored(at).people_in("entity_phil")) == 1
+    assert len(stored(at).people_in("entity_alex")) == 1
 
 
 def test_create_personal_entity_button(tmp_path):
     at = start(couple(), tmp_path)
-    at.selectbox(key="personal_entity_pick").set_value("person_debbie")
+    at.selectbox(key="personal_entity_pick").set_value("person_sam")
     at = click(at, key="personal_entity_create")
     no_crash(at)
-    debbie_entities = [(e.entity_type.value, r.value) for e, r in stored(at).entities_of("person_debbie")]
-    assert debbie_entities == [("personal", "owner")]
+    sam_entities = [(e.entity_type.value, r.value) for e, r in stored(at).entities_of("person_sam")]
+    assert sam_entities == [("personal", "owner")]
 
 
 def test_changing_a_links_role(tmp_path):
     at = start(couple(), tmp_path)
-    at = link(at, "entity_joint", "person_debbie")
-    link_id = next(m.membership_id for m in stored(at).memberships if m.person_id == "person_debbie")
+    at = link(at, "entity_joint", "person_sam")
+    link_id = next(m.membership_id for m in stored(at).memberships if m.person_id == "person_sam")
     at.session_state["_editor_membership"] = {"mode": "edit", "record_id": link_id}   # edit by primary key
     at.run()
     editor_widget(at, at.selectbox, "membership", "role").set_value("beneficiary")
     at = next(b for b in at.button if b.key and b.key.startswith("_editor_membership_save_")).click().run()
     no_crash(at)
-    roles = [r.value for _, r in stored(at).entities_of("person_debbie")]
+    roles = [r.value for _, r in stored(at).entities_of("person_sam")]
     assert roles == ["beneficiary"]
     assert stored(at).get_membership(link_id).role.value == "beneficiary"   # same key, changed in place
 
@@ -160,9 +160,9 @@ def test_changing_a_links_role(tmp_path):
 
 def test_ownership_form_explain_and_over_100_check(tmp_path):
     p = couple()
-    p.entities += [Entity(entity_id="entity_lp", name="Neufeld Family LP", entity_type="partnership"),
-                   Entity(entity_id="entity_nv", name="Neufeld Ventures", entity_type="llc"),
-                   Entity(entity_id="entity_lvm", name="Loma Vista Marketplace", entity_type="llc")]
+    p.entities += [Entity(entity_id="entity_lp", name="Rivera Family LP", entity_type="partnership"),
+                   Entity(entity_id="entity_nv", name="Summit Ventures", entity_type="llc"),
+                   Entity(entity_id="entity_plaza", name="Harbor Plaza", entity_type="llc")]
     at = start(p, tmp_path)
 
     def own(owner, owned, pct):
@@ -173,20 +173,20 @@ def test_ownership_form_explain_and_over_100_check(tmp_path):
         return click(at, key="own_add")
 
     for owner, owned, pct in [("entity_joint", "entity_lp", 100.0), ("entity_joint", "entity_nv", 100.0),
-                              ("entity_lp", "entity_lvm", 6.45), ("entity_nv", "entity_lvm", 1.0)]:
+                              ("entity_lp", "entity_plaza", 6.45), ("entity_nv", "entity_plaza", 1.0)]:
         at = own(owner, owned, pct)
     no_crash(at)
-    assert stored(at).entity_share("entity_lvm") == pytest.approx(0.0745)
+    assert stored(at).entity_share("entity_plaza") == pytest.approx(0.0745)
 
-    at.selectbox(key="own_explain").set_value(("entity", "entity_lvm")).run()
+    at.selectbox(key="own_explain").set_value(("entity", "entity_plaza")).run()
     shown = [m.value for m in at.markdown]
-    assert any("Neufeld Family LP → Loma Vista Marketplace: **6.4500%**" in s for s in shown)
+    assert any("Rivera Family LP → Harbor Plaza: **6.4500%**" in s for s in shown)
     assert any("Total: **7.4500%**" in s for s in shown)
 
-    at = own("entity_joint", "entity_lvm", 95.0)  # 7.45% + 95% > 100%
+    at = own("entity_joint", "entity_plaza", 95.0)  # 7.45% + 95% > 100%
     no_crash(at)
     assert any("more than 100%" in e.value for e in at.error)
-    assert stored(at).entity_share("entity_lvm") == pytest.approx(0.0745)  # unchanged
+    assert stored(at).entity_share("entity_plaza") == pytest.approx(0.0745)  # unchanged
 
 
 # --- actuals tab ------------------------------------------------------------------------------------------
@@ -201,8 +201,8 @@ def test_actuals_import_review_and_report(tmp_path):
     at.session_state["actuals_preview"] = actuals.match_rows(actuals.parse_csv(CSV), p)
     at.run()
     review = table(at, "Planned cashflow")
-    assert list(review["Planned cashflow"])[:3] == ["#crop · Pistachio crop sales (Pistachios)"] * 2 \
-        + ["#brix_rent · Brix rent (4392 Brix)"]
+    assert list(review["Planned cashflow"])[:3] == ["#crop · Orchard crop sales (Orchard)"] * 2 \
+        + ["#elm_rent · Elm rent (12 Elm St)"]
     assert review["Planned cashflow"].iloc[5] == "(not in the plan)"
 
     at = click(at, key="actuals_import")
@@ -211,14 +211,14 @@ def test_actuals_import_review_and_report(tmp_path):
     assert any("Imported 6 record(s)" in s.value for s in at.success)
 
     report = table(at, "Difference %").set_index("Item")
-    assert report.loc["Pistachio crop sales", "Planned"] == "$130,000"
-    assert report.loc["Pistachio crop sales", "Actual / forecast"] == "$118,500"
+    assert report.loc["Orchard crop sales", "Planned"] == "$130,000"
+    assert report.loc["Orchard crop sales", "Actual / forecast"] == "$118,500"
     assert report.loc["Well pump repair", "Flag"] == "⚠"
     assert any("1 record(s) aren't linked" in w.value for w in at.warning)    # the unplanned repair
 
     at.selectbox(key="pva_year").set_value(2027).run()
     breaks = table(at, "Gap %").set_index("Item")
-    assert breaks.loc["Pistachio crop sales", "Flag"] == "⚠"  # 150,000 vs 120,870 expected
+    assert breaks.loc["Orchard crop sales", "Flag"] == "⚠"  # 150,000 vs 120,870 expected
     no_crash(at)
 
 
@@ -290,7 +290,7 @@ def _empty_plan():
 
 def test_add_rental_form_builds_property_and_mortgage_then_pro_forma_shows(tmp_path):
     at = start(_empty_plan(), tmp_path)
-    at.text_input(key="rental_name").set_value("4392 N Brix")
+    at.text_input(key="rental_name").set_value("12 Elm St")
     at.number_input(key="rental_value").set_value(400_000.0)
     at.number_input(key="rental_rent").set_value(24_000.0)
     at.number_input(key="rental_rgrowth").set_value(0.0)
@@ -304,7 +304,7 @@ def test_add_rental_form_builds_property_and_mortgage_then_pro_forma_shows(tmp_p
     at = click(at, label="Add rental")
     no_crash(at)
     p = stored(at)
-    assert [a.name for a in p.assets] == ["4392 N Brix"]
+    assert [a.name for a in p.assets] == ["12 Elm St"]
     loan = p.liabilities[0]
     assert loan.balance == pytest.approx(251_057.17, abs=0.01) and loan.term_months == 240
     assert any("240 (20.0 yrs; last Dec 2045)" in s.value for s in at.success)
@@ -320,7 +320,7 @@ def test_add_rental_form_builds_property_and_mortgage_then_pro_forma_shows(tmp_p
 def test_loan_editor_works_out_balance_from_original_terms(tmp_path):
     at = start(_empty_plan(), tmp_path)
     at = click(at, key="liability_add_new_btn")
-    editor_widget(at, at.text_input, "liability", "name").set_value("Brix mortgage")
+    editor_widget(at, at.text_input, "liability", "name").set_value("Elm mortgage")
     editor_widget(at, at.number_input, "liability", "rate").set_value(6.0)
     editor_widget(at, at.number_input, "liability", "original_amount").set_value(300_000.0)
     editor_widget(at, at.number_input, "liability", "original_years").set_value(30.0)
@@ -386,7 +386,7 @@ def test_relinking_a_stored_record_on_screen(tmp_path):
     from models import Cashflow, CashflowDirection, FlowType
     p = household()
     p.add_cashflow(Cashflow(flow_id="pist_repairs", name="Orchard repairs", flow_type=FlowType.REPAIRS,
-                            direction=CashflowDirection.OUTFLOW, amount=3_000, start_year=2026, asset_id="pistachios"))
+                            direction=CashflowDirection.OUTFLOW, amount=3_000, start_year=2026, asset_id="orchard"))
     actuals.commit_rows(actuals.link_rows(actuals.parse_csv(CSV), p), p)
     at = start(p, tmp_path)
     pump = next(a for a in p.actuals if a.name == "Well pump repair")
@@ -403,3 +403,24 @@ def test_portfolio_template_download_lists_keys(tmp_path):
     at = start(household(), tmp_path)
     no_crash(at)
     assert any(b.label.startswith("⬇ Template for this portfolio") for b in at.get("download_button"))
+
+
+# --- social security -------------------------------------------------------------------------------------
+
+def test_social_security_editor_and_claiming_analysis(tmp_path):
+    from tests.test_ss_benefits import plan as ss_plan
+    p = ss_plan()
+    p.social_security = []
+    at = start(p, tmp_path)
+    at.number_input(key="ss_1_pia").set_value(3_000.0)
+    at.number_input(key="ss_1_age").set_value(70)
+    at = click(at, key="ss_1_save")
+    no_crash(at)
+    rec = stored(at).social_security[0]
+    assert (rec.person_id, rec.pia, rec.claim_age_years) == (1, 3_000, 70)
+    assert any("124.0% of PIA" in c.value for c in at.caption)          # 8%/yr for 3 years past 67
+    at.multiselect(key="ss_analysis_ages").set_value([67, 70])
+    at = click(at, key="ss_analysis_run")
+    no_crash(at)
+    df = table(at, "Lifetime Social Security")
+    assert len(df) == 2 and "◀" in list(df["Your plan now"])

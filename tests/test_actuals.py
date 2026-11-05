@@ -1,9 +1,9 @@
 """Actuals and forecasts: import, matching, simulation, plan-vs-actual and
 trend breaks. Illustrative numbers you can check by hand:
 
-  Pistachios crop sales: plan $130,000 in 2026, growing 2%/yr
-  4392 Brix rent:        plan $1,000/month ($12,000/yr), no growth
-  LVM distribution:      plan $200,000/yr at 100%; you own 7.45%
+  Orchard crop sales: plan $130,000 in 2026, growing 2%/yr
+  12 Elm St rent:        plan $1,000/month ($12,000/yr), no growth
+  Plaza distribution:      plan $200,000/yr at 100%; you own 7.45%
 """
 import pytest
 
@@ -17,37 +17,37 @@ from models import (
 
 # Rows link by cashflow_id (the planned cashflow's key); the last row has none: not in the plan.
 CSV = """year,kind,cashflow_id,name,category,direction,amount,month,asset_id,notes
-2026,actual,crop,Pistachio crop sales,crop_sales,inflow,"$118,500",,,Lower yield
-2027,forecast,crop,Pistachio crop sales,,,150000,,,
-2026,actual,brix_rent,Brix rent,,,1100,1,,
-2026,actual,brix_rent,Brix rent,,,1100,2,,
-2026,actual,brix_rent,Brix rent,,,1100,3,,
-2026,actual,,Well pump repair,repairs,outflow,4200,,pistachios,Not budgeted
+2026,actual,crop,Orchard crop sales,crop_sales,inflow,"$118,500",,,Lower yield
+2027,forecast,crop,Orchard crop sales,,,150000,,,
+2026,actual,elm_rent,Elm rent,,,1100,1,,
+2026,actual,elm_rent,Elm rent,,,1100,2,,
+2026,actual,elm_rent,Elm rent,,,1100,3,,
+2026,actual,,Well pump repair,repairs,outflow,4200,,orchard,Not budgeted
 """
 
 
 def household():
     return Portfolio(
         assumptions=Assumptions(start_year=2026, end_year=2028, inflation_rate=0.0),
-        entities=[Entity(entity_id="branfeld", name="Branfeld Investments", entity_type="llc"),
-                  Entity(entity_id="lp", name="Neufeld Family LP", entity_type="partnership"),
-                  Entity(entity_id="lvm", name="Loma Vista Marketplace", entity_type="llc")],
-        ownerships=[Ownership(owner_entity_id="lp", owned_type="entity", owned_id="lvm", percent=0.0745)],
-        assets=[Asset(asset_id="pistachios", name="Pistachios", asset_type="business", owner="Branfeld",
-                      initial_value=1_000_000, start_year=2026, entity_id="branfeld"),
-                Asset(asset_id="brix", name="4392 Brix", asset_type="real_estate", owner="Branfeld",
-                      initial_value=300_000, start_year=2026, entity_id="branfeld"),
-                Asset(asset_id="lvm_center", name="LVM center", asset_type="real_estate", owner="LVM",
-                      initial_value=3_000_000, start_year=2026, entity_id="lvm")],
+        entities=[Entity(entity_id="oakhill", name="Oak Hill Investments", entity_type="llc"),
+                  Entity(entity_id="lp", name="Rivera Family LP", entity_type="partnership"),
+                  Entity(entity_id="plaza", name="Harbor Plaza", entity_type="llc")],
+        ownerships=[Ownership(owner_entity_id="lp", owned_type="entity", owned_id="plaza", percent=0.0745)],
+        assets=[Asset(asset_id="orchard", name="Orchard", asset_type="business", owner="Oak Hill",
+                      initial_value=1_000_000, start_year=2026, entity_id="oakhill"),
+                Asset(asset_id="elm", name="12 Elm St", asset_type="real_estate", owner="Oak Hill",
+                      initial_value=300_000, start_year=2026, entity_id="oakhill"),
+                Asset(asset_id="plaza_center", name="Plaza center", asset_type="real_estate", owner="Plaza",
+                      initial_value=3_000_000, start_year=2026, entity_id="plaza")],
         cashflows=[
-            Cashflow(flow_id="crop", name="Pistachio crop sales", flow_type=FlowType.CROP_SALES,
+            Cashflow(flow_id="crop", name="Orchard crop sales", flow_type=FlowType.CROP_SALES,
                      direction=CashflowDirection.INFLOW, amount=130_000, start_year=2026,
-                     annual_growth_rate=0.02, asset_id="pistachios"),
-            Cashflow(flow_id="brix_rent", name="Brix rent", flow_type=FlowType.RENT_INCOME,
+                     annual_growth_rate=0.02, asset_id="orchard"),
+            Cashflow(flow_id="elm_rent", name="Elm rent", flow_type=FlowType.RENT_INCOME,
                      direction=CashflowDirection.INFLOW, amount=1_000, frequency=Frequency.MONTHLY,
-                     start_year=2026, asset_id="brix"),
-            Cashflow(flow_id="lvm_dist", name="LVM distribution", flow_type=FlowType.BUSINESS_DISTRIBUTION,
-                     direction=CashflowDirection.INFLOW, amount=200_000, start_year=2026, asset_id="lvm_center"),
+                     start_year=2026, asset_id="elm"),
+            Cashflow(flow_id="plaza_dist", name="Plaza distribution", flow_type=FlowType.BUSINESS_DISTRIBUTION,
+                     direction=CashflowDirection.INFLOW, amount=200_000, start_year=2026, asset_id="plaza_center"),
         ],
         scenarios=[Scenario(scenario_id="base", name="Base"),
                    Scenario(scenario_id="plan_only", name="Plan only", use_actuals=False)],
@@ -92,15 +92,15 @@ def test_missing_columns_are_named():
 
 def test_rows_link_by_key():
     _, rows = imported()
-    assert [r.flow_id for r in rows] == ["crop", "crop", "brix_rent", "brix_rent", "brix_rent", None]
-    assert rows[2].asset_id == "brix"                      # the asset comes from the linked cashflow
+    assert [r.flow_id for r in rows] == ["crop", "crop", "elm_rent", "elm_rent", "elm_rent", None]
+    assert rows[2].asset_id == "elm"                      # the asset comes from the linked cashflow
     assert (rows[1].category, rows[1].direction) == ("crop_sales", "inflow")   # filled from the cashflow
-    assert rows[5].asset_id == "pistachios" and "not in the plan" in rows[5].match_note
+    assert rows[5].asset_id == "orchard" and "not in the plan" in rows[5].match_note
 
 
 def test_a_matching_name_alone_never_links():
     csv_text = ("year,kind,cashflow_id,name,category,direction,amount\n"
-                "2026,actual,,Pistachio crop sales,crop_sales,inflow,100\n")
+                "2026,actual,,Orchard crop sales,crop_sales,inflow,100\n")
     rows = actuals.link_rows(actuals.parse_csv(csv_text), household())
     assert rows[0].flow_id is None and rows[0].ok
 
@@ -142,13 +142,13 @@ def test_full_year_actual_replaces_the_plan():
     p, _ = imported()
     # plan 130,000 crop + 12,000 rent + 7.45% x 200,000 (14,900) = 156,900
     assert income(p, "plan_only", 2026) == pytest.approx(156_900)
-    # actual: crop 118,500; rent Jan-Mar actual 3,300 + Apr-Dec plan 9,000; LVM plan 14,900
+    # actual: crop 118,500; rent Jan-Mar actual 3,300 + Apr-Dec plan 9,000; Plaza plan 14,900
     assert income(p, "base", 2026) == pytest.approx(118_500 + 12_300 + 14_900)
 
 
 def test_part_year_of_monthly_actuals_is_topped_up_with_plan():
     p, _ = imported()
-    amount, source = p.actual_annual_amount(p.get_cashflow("brix_rent"), 2026)
+    amount, source = p.actual_annual_amount(p.get_cashflow("elm_rent"), 2026)
     assert amount == pytest.approx(3 * 1_100 + 9 * 1_000) and source == "actual + plan"
 
 
@@ -162,14 +162,14 @@ def test_actual_beats_forecast_for_the_same_month():
     p = household()
     for kind, amount in [("forecast", 900), ("actual", 1_250)]:
         p.add_actual(Actual(actual_id=f"a_{kind}", year=2026, month=5, kind=kind, amount=amount,
-                            name="Brix rent", flow_id="brix_rent"))
-    amount, _ = p.actual_annual_amount(p.get_cashflow("brix_rent"), 2026)
+                            name="Elm rent", flow_id="elm_rent"))
+    amount, _ = p.actual_annual_amount(p.get_cashflow("elm_rent"), 2026)
     assert amount == pytest.approx(1_250 + 11 * 1_000)
 
 
 def test_actuals_are_your_share_in_both_views():
     p = household()
-    p.add_actual(Actual(actual_id="d", year=2026, amount=15_000, name="LVM distribution", flow_id="lvm_dist"))
+    p.add_actual(Actual(actual_id="d", year=2026, amount=15_000, name="Plaza distribution", flow_id="plaza_dist"))
     p.scenarios.append(Scenario(scenario_id="full", name="100%", ownership_view="full"))
     share = income(p, "base", 2026) - (130_000 + 12_000)
     full = income(p, "full", 2026) - (130_000 + 12_000)
@@ -189,21 +189,21 @@ def test_stored_plan_is_untouched_and_overrides_are_never_saved():
 def test_plan_vs_actual_flags_big_misses_and_unplanned_items():
     p, _ = imported()
     rows = {r["Item"]: r for r in actuals.plan_vs_actual(p, 2026)}
-    crop = rows["Pistachio crop sales"]
+    crop = rows["Orchard crop sales"]
     assert (crop["Planned"], crop["Actual / forecast"], crop["Difference"]) == pytest.approx((130_000, 118_500, -11_500))
     # 11,500 / 130,000 = 8.8% short: under the default 10% threshold, so not flagged...
     assert not crop["Flag"]
     # ...but flagged when you tighten the threshold to 5%
     tight = {r["Item"]: r for r in actuals.plan_vs_actual(p, 2026, pct=0.05)}
-    assert tight["Pistachio crop sales"]["Flag"]
-    rent = rows["Brix rent"]
+    assert tight["Orchard crop sales"]["Flag"]
+    rent = rows["Elm rent"]
     assert rent["Difference"] == pytest.approx(300) and not rent["Flag"]  # under $1,000
     assert rows["Well pump repair"]["Source"] == "actual, NOT IN PLAN"
 
 
 def test_trend_break_on_next_years_forecast():
     p, _ = imported()
-    row = next(r for r in actuals.trend_breaks(p, 2027) if r["Item"] == "Pistachio crop sales")
+    row = next(r for r in actuals.trend_breaks(p, 2027) if r["Item"] == "Orchard crop sales")
     # 2026 actual 118,500 grown 2% = 120,870 expected; forecast 150,000 is +24%
     assert row["Prior year is"] == "actual" and row["This year is"] == "forecast"
     assert row["Expected"] == pytest.approx(120_870)
@@ -213,8 +213,8 @@ def test_trend_break_on_next_years_forecast():
 def test_forecast_that_continues_the_trend_is_not_flagged():
     p, _ = imported()
     p.add_actual(Actual(actual_id="f", year=2027, kind="forecast", amount=121_500,
-                        name="Pistachio crop sales", flow_id="crop"))
-    row = next(r for r in actuals.trend_breaks(p, 2027) if r["Item"] == "Pistachio crop sales")
+                        name="Orchard crop sales", flow_id="crop"))
+    row = next(r for r in actuals.trend_breaks(p, 2027) if r["Item"] == "Orchard crop sales")
     assert not row["Flag"]
 
 
@@ -244,9 +244,9 @@ def test_old_files_get_no_actuals(v0_1_data):
 # --- status and class -------------------------------------------------------------------------
 
 STATUS_CSV = """year,kind,name,category,direction,amount,month,entity,asset,notes,status,class
-2026,actual,Pistachio crop sales,crop_sales,inflow,10000,,Branfeld Investments,Pistachios,,confirmed,Crop 2026
-2026,actual,Crop insurance,crop_sales,inflow,58000,,Branfeld Investments,Pistachios,,Confirmed,Crop 2026
-2026,actual,2025 crop bonus,crop_sales,inflow,48619,,Branfeld Investments,Pistachios,,estimated,Crop 2025
+2026,actual,Orchard crop sales,crop_sales,inflow,10000,,Oak Hill Investments,Orchard,,confirmed,Crop 2026
+2026,actual,Crop insurance,crop_sales,inflow,58000,,Oak Hill Investments,Orchard,,Confirmed,Crop 2026
+2026,actual,2025 crop bonus,crop_sales,inflow,48619,,Oak Hill Investments,Orchard,,estimated,Crop 2025
 """
 
 
@@ -297,7 +297,7 @@ def test_an_unplanned_repair_counts_once_in_its_year():
 def test_an_unplanned_receipt_on_a_shared_asset_is_your_share():
     p = household()
     p.add_actual(Actual(actual_id="x", year=2026, amount=1_000, name="Settlement", category="other",
-                        direction="inflow", asset_id="lvm_center"))   # you own 7.45%; you received $1,000
+                        direction="inflow", asset_id="plaza_center"))   # you own 7.45%; you received $1,000
     base = year_result(p, "base", 2026).total_gross_income
     plan = year_result(p, "plan_only", 2026).total_gross_income
     assert base - plan == pytest.approx(1_000)
@@ -326,9 +326,9 @@ def test_relinking_a_record_moves_it_into_the_plan():
     assert rec in p.unplanned_actuals(2026)
     p.add_cashflow(Cashflow(flow_id="pist_repairs", name="Orchard repairs", flow_type=FlowType.REPAIRS,
                             direction=CashflowDirection.OUTFLOW, amount=3_000, start_year=2026,
-                            asset_id="pistachios"))
+                            asset_id="orchard"))
     p.relink_actual(rec.actual_id, "pist_repairs")
-    assert rec.flow_id == "pist_repairs" and rec.asset_id == "pistachios" and not p.unplanned_actuals()
+    assert rec.flow_id == "pist_repairs" and rec.asset_id == "orchard" and not p.unplanned_actuals()
     amount, source = p.actual_annual_amount(p.get_cashflow("pist_repairs"), 2026)
     assert amount == 4_200 and source == "actual"                 # replaces the $3,000 plan
     p.relink_actual(rec.actual_id, None)

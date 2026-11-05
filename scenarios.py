@@ -22,6 +22,8 @@ scenario file written for a future feature doesn't crash older code.
 from __future__ import annotations
 
 import copy
+
+import social_security
 from typing import Any, Dict, List, Tuple
 
 from models import Assumptions, Portfolio, Scenario
@@ -77,6 +79,18 @@ def apply_scenario(portfolio: Portfolio, scenario: Scenario) -> Tuple[Portfolio,
     if getattr(scenario, "use_actuals", True):
         working.apply_actuals(working.assumptions.inflation_rate,
                               include_unplanned=getattr(scenario, "count_unplanned_actuals", True))
+
+    # Social Security records -> benefit cashflows (own, spousal, survivor), with any claim-age what-ifs.
+    for ss in working.social_security:
+        for k, v in (getattr(scenario, "ss_overrides", {}) or {}).get(ss.ss_id, {}).items():
+            if k in ("claim_age_years", "claim_age_months", "pia", "cola"):
+                setattr(ss, k, v)
+            else:
+                warnings.append(f"Social Security override: unknown setting '{k}'")
+    social_security.apply_benefits(working)
+
+    # Receivables: each year's interest and principal received, and the balance still owed.
+    working.apply_receivables()
 
     # Last: scale to your ownership % unless this scenario asks for the 100% view.
     if getattr(scenario, "ownership_view", "share") != "full":

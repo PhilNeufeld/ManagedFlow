@@ -41,6 +41,7 @@ class AssetType(str, Enum):
     TRUST = "trust"
     CASH = "cash"
     PENSION = "pension"
+    RECEIVABLE = "receivable"   # money owed TO you (a note, a fee paid over time)
     OTHER = "other"
 
 
@@ -212,7 +213,7 @@ class Cashflow:
 
     May be attached to an asset (asset_id set) or be a household-level
     flow not tied to any asset (asset_id is None) -- e.g. living expenses,
-    pension income, or Fresno State teaching income.
+    pension income, or State University teaching income.
     """
 
     flow_id: str
@@ -450,9 +451,48 @@ class Person:
 
 
 @dataclass
+class SocialSecurity:
+    """A person's Social Security retirement benefit, worked out from SSA's rules
+    (see social_security.py) instead of typed in as a cashflow.
+
+    pia: the monthly benefit at full retirement age (your SSA statement's
+         "at full retirement age" figure), in plan-start-year dollars.
+    claim age: when benefits start (62 to 70). Earlier = permanently smaller,
+         later = larger (8%/yr after full retirement age, up to 70).
+    cola: yearly cost-of-living increase.
+    spousal: top up to half the spouse's PIA when that's more than your own.
+    survivor: when the spouse dies (their plan-to age), keep the larger of the two benefits.
+    """
+    ss_id: Key
+    person_id: Key
+    pia: float
+    claim_age_years: int = 67
+    claim_age_months: int = 0
+    cola: float = 0.025
+    spousal: bool = True
+    survivor: bool = True
+    notes: str = ""
+
+    def __post_init__(self) -> None:
+        _require(self.ss_id is not None and self.person_id is not None, "Social Security needs an id and a person")
+        _require(self.pia >= 0, "Social Security: PIA must be >= 0")
+        _require(62 <= self.claim_age_years <= 70 and 0 <= self.claim_age_months <= 11
+                 and (self.claim_age_years, self.claim_age_months) <= (70, 0),
+                 "Social Security: claim age must be between 62 and 70")
+        _require(-0.05 < self.cola < 0.2, "Social Security: COLA is a fraction (2.5% = 0.025)")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "SocialSecurity":
+        return cls(**data)
+
+
+@dataclass
 class Event:
     """A named moment that other records can be tied to: Retirement,
-    Debbie starts CalPERS, sell 2049 Broadway, Brix loan payoff.
+    Sam starts CalPERS, sell 88 Market St, Elm loan payoff.
 
     (year, month) is the FIRST month things are different. Records linked
     with start_event_id begin that month; records linked with end_event_id
@@ -550,14 +590,14 @@ class MembershipRole(str, Enum):
 class Membership:
     """A LINK between a Person and an Entity, with the role the person plays.
 
-    People and entities are many-to-many: Phil is in his personal entity AND
-    the joint entity; the joint entity holds Phil AND Debbie. A link class
+    People and entities are many-to-many: Alex is in his personal entity AND
+    the joint entity; the joint entity holds Alex AND Sam. A link class
     (like a join table in SQL) is used instead of a list because the link
     carries its own information -- the role:
 
-        entity_joint         person_phil    owner
-        entity_joint         person_debbie  owner
-        entity_family_trust  person_phil    trustee
+        entity_joint         person_alex    owner
+        entity_joint         person_sam  owner
+        entity_family_trust  person_alex    trustee
 
     The same person can hold several roles in one entity (one Membership each).
     """
@@ -592,17 +632,17 @@ class Ownership:
     """An entity owning a PERCENTAGE of another entity or of an asset.
 
         owner                    owned                       percent
-        Philip & Debbie (joint)  Neufeld Family LP (entity)  1.00
-        Neufeld Family LP        LVM (entity)                0.0645
-        Neufeld Ventures         LVM (entity)                0.01
-        Branfeld Investments     2049 Broadway (asset)       0.333
+        Alex & Sam (joint)  Rivera Family LP (entity)  1.00
+        Rivera Family LP        Plaza (entity)                0.0645
+        Summit Ventures         Plaza (entity)                0.01
+        Oak Hill Investments     88 Market St (asset)       0.333
 
     Your share of anything = multiply the percents along each path from an
-    entity nobody owns (your household), then add up the paths. LVM above:
+    entity nobody owns (your household), then add up the paths. Plaza above:
     1.00 x 0.0645 + 1.00 x 0.01 = 7.45%.
 
     percent is a fraction (6.45% = 0.0645). Only the owners you list count:
-    LVM's other investors don't need to be entered.
+    Plaza's other investors don't need to be entered.
     """
 
     owner_entity_id: str
@@ -637,6 +677,9 @@ class Ownership:
 # ---------------------------------------------------------------------------
 # Asset
 # ---------------------------------------------------------------------------
+
+ACCOUNT_TAX_TYPES = ("", "taxable", "tax_deferred", "roth")
+
 
 @dataclass
 class Asset:
@@ -678,6 +721,30 @@ class Asset:
     # Whose self-employment income it is (a Person). Each spouse's payroll and
     # self-employment taxes are worked out separately. None = the first person.
     earner_person_id: Optional[str] = None
+
+    # --- Accounts: how withdrawals are taxed. "" = not an investment account.
+    #   taxable      -- brokerage / savings: withdrawals aren't income (gains not modeled yet)
+    #   tax_deferred -- traditional IRA / 401(k): withdrawals and RMDs are ordinary income
+    #   roth         -- Roth IRA: withdrawals tax-free, no RMDs for the owner
+    account_tax: str = ""
+    # Whose account it is (a Person): their age sets required minimum distributions.
+    owner_person_id: Optional[str] = None
+
+    # --- Receivable terms (asset_type "receivable"): a balance owed TO you, paid
+    # down by monthly payments -- a loan in reverse. initial_value is the balance
+    # when payments start; it stays flat until then (no interest accrues before).
+    # Each year's payments split into interest (taxed as interest) and principal
+    # (taxed only if principal_taxable, e.g. a fee earned but paid later).
+    receivable_rate: float = 0.0
+    receivable_months: Optional[int] = None          # payments to go, from the first payment
+    receivable_payment: Optional[float] = None       # monthly payment (else amortized over the months)
+    first_payment_year: Optional[int] = None
+    first_payment_month: int = 1
+    first_payment_event_id: Optional[str] = None     # sets the two fields above
+    principal_taxable: bool = False
+    principal_tax_category: TaxCategory = TaxCategory.NONE
+    # {year: year-end value} set on a scenario's working copy (receivables); never saved.
+    value_overrides: Dict[int, float] = field(default_factory=dict, repr=False, compare=False)
     # Cashflows are NOT stored on the asset (schema v0.2). They live in
     # Portfolio.cashflows and point here via Cashflow.asset_id. Use
     # Portfolio.cashflows_for_asset(asset_id) to get them.
@@ -686,6 +753,14 @@ class Asset:
         self.asset_type = _enum_value(self.asset_type, AssetType)
         self.liquidity_category = _enum_value(self.liquidity_category, LiquidityCategory)
         self.tax_category = _enum_value(self.tax_category, TaxCategory)
+        self.principal_tax_category = _enum_value(self.principal_tax_category, TaxCategory)
+        _require(self.account_tax in ACCOUNT_TAX_TYPES,
+                 f"Asset '{self.name}': account_tax must be one of {', '.join(repr(t) for t in ACCOUNT_TAX_TYPES)}")
+        if self.asset_type == AssetType.RECEIVABLE:
+            _require(self.receivable_months or self.receivable_payment,
+                     f"Receivable '{self.name}': give the number of payments or the monthly payment")
+            _require(0 <= self.receivable_rate < 1, f"Receivable '{self.name}': rate is a fraction (7.75% = 0.0775)")
+            _require(1 <= self.first_payment_month <= 12, f"Receivable '{self.name}': first payment month must be 1-12")
 
         if self.current_value is None:
             self.current_value = self.initial_value
@@ -743,7 +818,46 @@ class Asset:
             "recovery_years": self.recovery_years,
             "subject_to_se_tax": self.subject_to_se_tax,
             "earner_person_id": self.earner_person_id,
+            "receivable_rate": self.receivable_rate,
+            "receivable_months": self.receivable_months,
+            "receivable_payment": self.receivable_payment,
+            "first_payment_year": self.first_payment_year,
+            "first_payment_month": self.first_payment_month,
+            "first_payment_event_id": self.first_payment_event_id,
+            "principal_taxable": self.principal_taxable,
+            "principal_tax_category": self.principal_tax_category.value,
+            "account_tax": self.account_tax,
+            "owner_person_id": self.owner_person_id,
         }
+
+    @property
+    def is_receivable(self) -> bool:
+        return self.asset_type == AssetType.RECEIVABLE
+
+    def receivable_monthly_payment(self) -> float:
+        if self.receivable_payment:
+            return self.receivable_payment
+        return amortized_monthly_payment(self.initial_value, self.receivable_rate, self.receivable_months)
+
+    def receivable_schedule(self, first_year: int, last_year: int) -> Dict[int, Tuple[float, float, float]]:
+        """{year: (interest received, principal received, balance at year end)} at 100%.
+        Before the first payment the balance just sits there; then each month:
+        interest = balance x rate/12, the rest of the payment pays down the balance."""
+        out = {}
+        balance = self.initial_value
+        pay = self.receivable_monthly_payment()
+        r = self.receivable_rate / 12
+        start = (self.first_payment_year or self.start_year, self.first_payment_month)
+        for year in range(first_year, last_year + 1):
+            interest = principal = 0.0
+            for month in range(1, 13):
+                if (year, month) < start or balance <= 0.005:
+                    continue
+                i = balance * r
+                p = min(pay - i, balance)
+                interest, principal, balance = interest + i, principal + p, balance - p
+            out[year] = (interest, principal, max(balance, 0.0) if balance > 0.005 else 0.0)
+        return out
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Asset":
@@ -1134,13 +1248,13 @@ class Actual:
 @dataclass
 class Bundle:
     """A named grouping of related Assets and Cashflows, attributed to an
-    Entity -- e.g. "4392 Brix": the house plus its rent and expenses, or
-    "Phil earnings": just a salary cashflow.
+    Entity -- e.g. "12 Elm St": the house plus its rent and expenses, or
+    "Alex earnings": just a salary cashflow.
 
     - asset_ids: assets in the bundle. Every cashflow linked to one of these
       assets (Cashflow.asset_id) comes along automatically.
     - cashflow_ids: household-level cashflows (asset_id None) that belong to
-      the bundle, e.g. the salary in "Phil earnings".
+      the bundle, e.g. the salary in "Alex earnings".
     - liability_ids: debts in the bundle. A debt secured by one of the
       bundle's assets comes along automatically, like its cashflows.
 
@@ -1278,6 +1392,8 @@ class Scenario:
     use_actuals: bool = True
     # Count records that aren't linked to a planned cashflow, once, in their own year.
     count_unplanned_actuals: bool = True
+    # Social Security what-ifs: {ss_id: {"claim_age_years": 70, "claim_age_months": 0}}
+    ss_overrides: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
     # Withdrawal / reinvestment behavior
     withdrawal_order_override: Optional[List[str]] = None
@@ -1300,7 +1416,7 @@ class Scenario:
         _require(bool(self.scenario_id), "Scenario.scenario_id is required")
         _require(bool(self.name), "Scenario.name is required")
         # Saved JSON turns integer dict keys into text ("12"): turn them back into keys.
-        for name in ("asset_overrides", "cashflow_overrides", "event_overrides"):
+        for name in ("asset_overrides", "cashflow_overrides", "event_overrides", "ss_overrides"):
             setattr(self, name, {_key(k): v for k, v in (getattr(self, name) or {}).items()})
 
     def to_dict(self) -> Dict[str, Any]:
@@ -1505,12 +1621,18 @@ class Portfolio:
     actuals: List[Actual] = field(default_factory=list)
     bundles: List[Bundle] = field(default_factory=list)
     scenarios: List[Scenario] = field(default_factory=list)
+    social_security: List[SocialSecurity] = field(default_factory=list)
     file_version: str = CURRENT_SCHEMA_VERSION
     created_at: str = ""
     updated_at: str = ""
     metadata_notes: str = ""
 
     def __post_init__(self) -> None:
+        person_keys = {p.person_id for p in self.people}
+        for s in self.social_security:
+            _require(s.person_id in person_keys, f"Social Security record {s.ss_id}: unknown person '{s.person_id}'")
+        ss_people = [s.person_id for s in self.social_security]
+        _require(len(ss_people) == len(set(ss_people)), "Only one Social Security record per person")
         # Link tables get integer primary keys too; fill in any missing ones.
         for rows, pk in ((self.memberships, "membership_id"), (self.ownerships, "ownership_id")):
             for r in rows:
@@ -1636,7 +1758,7 @@ class Portfolio:
             + [(a.asset_id, a) for a in self.assets]
             + [(li.liability_id, li) for li in self.liabilities]
         ):
-            for link in (rec.start_event_id, rec.end_event_id):
+            for link in (rec.start_event_id, rec.end_event_id, getattr(rec, "first_payment_event_id", None)):
                 if link:
                     yield rec_id, link
 
@@ -1667,6 +1789,9 @@ class Portfolio:
                 cf.end_year, cf.end_month = month_before(ev.year, ev.month)
             cf.check_dates()
         for a in self.assets:
+            if a.first_payment_event_id in events:
+                ev = events[a.first_payment_event_id]
+                a.first_payment_year, a.first_payment_month = ev.year, ev.month
             if a.start_event_id in events:
                 a.start_year = events[a.start_event_id].year
             if a.end_event_id in events:
@@ -2042,7 +2167,7 @@ class Portfolio:
 
     def share_paths(self, owned_type: str, owned_id: str) -> List[Tuple[List[str], float]]:
         """Explain a share: every ownership path (as entity names) and its share.
-        e.g. [(['Philip & Debbie', 'Family LP', 'LVM'], 0.0645), ...]"""
+        e.g. [(['Alex & Sam', 'Family LP', 'Plaza'], 0.0645), ...]"""
         names = {e.entity_id: e.name for e in self.entities}
         if owned_type == "asset" and not self._owners_of("asset", owned_id):
             asset = self.get_asset(owned_id)
@@ -2059,6 +2184,30 @@ class Portfolio:
                 paths.append((path + [label], share * o.percent))
         return paths
 
+    def apply_receivables(self) -> None:
+        """On a scenario's WORKING copy: for each receivable asset, add two cashflows
+        on it -- interest received and principal received -- with each year's amount,
+        and set the asset's year-end values to the balance still owed. At 100%;
+        apply_ownership_shares() then scales them like any asset."""
+        a0, a1 = self.assumptions.start_year, self.assumptions.end_year
+        for a in self.assets:
+            if not a.is_receivable or not a.active:
+                continue
+            sched = a.receivable_schedule(a0, a1)
+            a.value_overrides = {y: s[2] for y, s in sched.items() if y >= a.start_year}
+            common = dict(direction=CashflowDirection.INFLOW, amount=0.0, start_year=a0, asset_id=a.asset_id,
+                          person_id=a.earner_person_id, frequency=Frequency.ANNUAL)
+            interest = Cashflow(flow_id=f"rcv:{a.asset_id}:interest", name=f"{a.name} - interest received",
+                                flow_type=FlowType.INTEREST_INCOME, taxable=True,
+                                tax_category=TaxCategory.ORDINARY_INCOME, line_item="receivable_interest", **common)
+            principal = Cashflow(flow_id=f"rcv:{a.asset_id}:principal", name=f"{a.name} - principal received",
+                                 flow_type=FlowType.LOAN_PRINCIPAL_REPAYMENT, taxable=a.principal_taxable,
+                                 tax_category=a.principal_tax_category if a.principal_taxable else TaxCategory.NONE,
+                                 line_item="receivable_principal", **common)
+            interest.year_overrides = {y: s[0] for y, s in sched.items() if s[0]}
+            principal.year_overrides = {y: s[1] for y, s in sched.items() if s[1]}
+            self.cashflows += [interest, principal]
+
     def apply_ownership_shares(self) -> None:
         """Scale every asset, its cashflows and its loans by your share, IN
         PLACE. Only ever called on a scenario's working copy, never on the
@@ -2071,6 +2220,7 @@ class Portfolio:
             a.initial_value *= s
             a.current_value *= s
             a.depreciable_basis *= s
+            a.value_overrides = {y: v * s for y, v in a.value_overrides.items()}
         for cf in self.cashflows:
             if cf.asset_id is not None:
                 s = asset_shares.get(cf.asset_id, 1.0)
@@ -2166,7 +2316,8 @@ class Portfolio:
                "cashflow": ("cashflows", "flow_id"), "liability": ("liabilities", "liability_id"),
                "actual": ("actuals", "actual_id"), "bundle": ("bundles", "bundle_id"),
                "scenario": ("scenarios", "scenario_id"), "membership": ("memberships", "membership_id"),
-               "ownership": ("ownerships", "ownership_id")}
+               "ownership": ("ownerships", "ownership_id"),
+               "social_security": ("social_security", "ss_id")}
 
     def next_id(self, table: str) -> int:
         """Next integer primary key for a table: 'asset', 'cashflow', 'liability', 'event',
@@ -2329,6 +2480,7 @@ class Portfolio:
             "actuals": [a.to_dict() for a in self.actuals],
             "bundles": [b.to_dict() for b in self.bundles],
             "scenarios": [s.to_dict() for s in self.scenarios],
+            "social_security": [s.to_dict() for s in self.social_security],
         }
 
     @classmethod
@@ -2349,6 +2501,7 @@ class Portfolio:
             actuals=[Actual.from_dict(a) for a in data.get("actuals", [])],
             bundles=[Bundle.from_dict(b) for b in data.get("bundles", [])],
             scenarios=[Scenario.from_dict(s) for s in data.get("scenarios", [])],
+            social_security=[SocialSecurity.from_dict(s) for s in data.get("social_security", [])],
             file_version=metadata.get("file_version", CURRENT_SCHEMA_VERSION),
             created_at=metadata.get("created_at", ""),
             updated_at=metadata.get("updated_at", ""),

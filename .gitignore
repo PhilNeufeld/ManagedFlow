@@ -9,7 +9,9 @@ __pycache__/
 data/*.backup_*.json
 
 # Your real household data and reports (keep off GitHub)
-data/PDNeufeld.json
+data/*.json
+!data/example_transition.json
+!data/portfolio_sample.json
 outputs/
 # Actuals/forecast imports (real household numbers)
 data/*.csv

@@ -58,11 +58,11 @@ def test_empty_text_never_calls_the_api(sample_portfolio):
 
 def test_house_loan_and_rent_in_one_sentence_link_together(sample_portfolio):
     result, _ = draft(sample_portfolio, [
-        {"record_type": "asset", "ref": "r1", "name": "4392 Brix", "asset_type": "real_estate",
+        {"record_type": "asset", "ref": "r1", "name": "12 Elm St", "asset_type": "real_estate",
          "initial_value": 295_000, "annual_growth_rate": 0.03},
-        {"record_type": "loan", "ref": "r2", "name": "Brix mortgage", "lender": "Nation Star",
+        {"record_type": "loan", "ref": "r2", "name": "Elm mortgage", "lender": "Example Bank",
          "balance": 194_613, "annual_interest_rate": 0.0425, "term_months": 300, "secured_by_asset_id": "r1"},
-        {"record_type": "cashflow", "name": "Brix rent", "flow_type": "rent_income", "direction": "inflow",
+        {"record_type": "cashflow", "name": "Elm rent", "flow_type": "rent_income", "direction": "inflow",
          "amount": 1_150, "frequency": "monthly", "asset_id": "r1", "taxable": True},
     ])
     assert all(d.ok for d in result.drafts), [d.errors for d in result.drafts]
@@ -76,9 +76,9 @@ def test_house_loan_and_rent_in_one_sentence_link_together(sample_portfolio):
 
 
 def test_cashflow_linked_to_an_existing_event_takes_its_date(sample_portfolio):
-    sample_portfolio.add_event(Event(event_id="event_deb_retires", name="Debbie retires", year=2030, month=7))
+    sample_portfolio.add_event(Event(event_id="event_deb_retires", name="Sam retires", year=2030, month=7))
     result, _ = draft(sample_portfolio, [
-        {"record_type": "cashflow", "name": "Debbie CalPERS", "flow_type": "pension_income",
+        {"record_type": "cashflow", "name": "Sam CalPERS", "flow_type": "pension_income",
          "direction": "inflow", "amount": 1_700, "frequency": "monthly",
          "start_event_id": "event_deb_retires", "annual_growth_rate": 0.02, "taxable": True},
     ])

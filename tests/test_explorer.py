@@ -14,7 +14,7 @@ def plan(view="share"):
     return Portfolio(
         assumptions=Assumptions(start_year=2026, end_year=2027, inflation_rate=0.0, tax_method="flat",
                                 default_tax_rates={}),
-        people=[Person(person_id="phil", name="Phil", birth_year=1965)],
+        people=[Person(person_id="alex", name="Alex", birth_year=1965)],
         entities=[Entity(entity_id="us", name="Us", entity_type="joint"),
                   Entity(entity_id="llc", name="LLC", entity_type="llc"),
                   Entity(entity_id="trust", name="Trust", entity_type="trust"),
@@ -32,7 +32,7 @@ def plan(view="share"):
         cashflows=[Cashflow(flow_id="rent", name="Building rent", flow_type=FlowType.RENT_INCOME,
                             direction=CashflowDirection.INFLOW, amount=100_000, start_year=2026, asset_id="bldg"),
                    Cashflow(flow_id="salary", name="Salary", flow_type=FlowType.SALARY_INCOME,
-                            direction=CashflowDirection.INFLOW, amount=50_000, start_year=2026, person_id="phil"),
+                            direction=CashflowDirection.INFLOW, amount=50_000, start_year=2026, person_id="alex"),
                    Cashflow(flow_id="living", name="Living", flow_type=FlowType.LIVING_EXPENSE,
                             direction=CashflowDirection.OUTFLOW, amount=40_000, start_year=2026)],
         bundles=[Bundle(bundle_id="b", name="House bundle", entity_id="llc", asset_ids=["house"])],
@@ -50,8 +50,8 @@ def test_tree_follows_ownership_and_collections():
     house = next(n for n in nodes.values() if n.ref_id == "house")
     assert nodes[house.parent_id].kind == "Collection"         # bundled asset sits in its collection
     assert [nodes[c].label for c in house.children] == ["House loan"]
-    phil = next(n for n in nodes.values() if n.label == "Phil")
-    assert [nodes[c].label for c in phil.children] == ["Salary"]
+    alex = next(n for n in nodes.values() if n.label == "Alex")
+    assert [nodes[c].label for c in alex.children] == ["Salary"]
 
 
 @pytest.mark.parametrize("view", ["share", "full"])
@@ -105,7 +105,7 @@ def period_plan():
     p.events.append(Event(event_id="bonus", name="Bonus starts", year=2027, month=7))
     p.cashflows.append(Cashflow(flow_id="bonus", name="Bonus", flow_type=FlowType.SALARY_INCOME,
                                 direction=CashflowDirection.INFLOW, amount=2_000, frequency="monthly",
-                                start_year=2027, start_month=7, start_event_id="bonus", person_id="phil"))
+                                start_year=2027, start_month=7, start_event_id="bonus", person_id="alex"))
     p.apply_event_dates()
     return p
 
@@ -125,7 +125,7 @@ def test_period_view_rows_groups_flags_and_events():
     assert items["Living"]["values"][2026] == -40_000          # outflows negative
     assert items["House loan"]["values"][2026] == pytest.approx(88_000)
     groups = [r["label"] for r in pv["rows"] if r["type"] == "group"]
-    assert "House bundle" in groups and "Household: Phil" in groups
+    assert "House bundle" in groups and "Household: Alex" in groups
     totals = {r["label"]: r for r in pv["rows"] if r["type"] == "total"}
     sim = {r.year: r for r in res.annual_results}
     assert totals["Net worth"]["values"][2027] == pytest.approx(sim[2027].total_net_worth)
@@ -159,7 +159,7 @@ def test_export_has_period_view_sheet(tmp_path):
     wb = load_workbook(exports.export_to_excel(p, simulation.run_all_scenarios(p), tmp_path / "x.xlsx"))
     ws = wb["Period View"]
     assert ws["A4"].value == "Item" and ws["A5"].value == "Events"
-    assert any(ws.cell(row=r, column=1).value == "Household: Phil" for r in range(1, ws.max_row + 1))
+    assert any(ws.cell(row=r, column=1).value == "Household: Alex" for r in range(1, ws.max_row + 1))
 
 
 def test_explore_totals_include_unplanned_actuals():

@@ -22,23 +22,18 @@ Household-specific to-dos live next to each portfolio in `data/<file>_tasks.md`
 | 0.9+ | Per-person payroll and self-employment tax (each spouse's own wage base); Social Security earnings test |
 | 0.9+ | Explore tab: drill-down chart (entity > collection > asset > cashflow/loan) and 1-5 year period table with events; Period View export |
 | 0.9+ | Help tab and the user manual, built from one source: a generic edition (example household) and a private edition (your portfolio) |
+| 1.2 | Accounts: taxable / tax-deferred / Roth with an owner; required minimum distributions (SECURE 2.0 ages, Uniform Lifetime Table); shortfalls drawn taxable -> tax-deferred -> Roth; tax-deferred withdrawals taxed and grossed up |
+| 1.2 | Social Security class: PIA + claiming age by SSA's rules; spousal and survivor benefits; earnings-test months credited back at FRA; claiming-age comparison through the whole plan. Receivables: notes and fees owed to you, paid down monthly, interest and principal taxed separately |
 | 1.1 | Link tables (memberships, ownerships) get integer primary keys; the joined pair stays a unique constraint; edit in place |
 | 1.0 | Integer primary keys in every table (migration renumbers older files); actuals import links by key (cashflow_id), never by name, with a template listing each planned cashflow's key; unplanned actuals count once in their own year; re-link stored records |
 
 ## Next (in this order)
 
-1. **How each account is taxed** -- taxable / tax-deferred / Roth on assets;
-   withdrawal order by tax treatment; required minimum distributions.
-2. **Social Security class** -- benefit at full retirement age + claiming age
-   -> adjusted benefit; spousal and survivor rules; withheld months credited
-   back at full retirement age.
-3. **Spending policy** (lower priority) -- spending that adjusts to markets
+1. **Spending policy** (lower priority) -- spending that adjusts to markets
    (guardrails), used by Monte Carlo.
 
 ## Next after a portfolio is populated
 
-- **Receivables** -- a note or fee you're OWED (a note receivable, a fee paid
-  over time): a balance paid down over time, like a loan in reverse, counted in net worth.
 - **Allocated income vs. cash** -- partnership income allocated to you (K-1)
   can differ from the cash distributed; tax the allocation, count the cash.
 - **Notes and tasks** -- dated notes and tasks (status, due date) attached to
@@ -50,8 +45,11 @@ Household-specific to-dos live next to each portfolio in `data/<file>_tasks.md`
 
 ## Longer term
 
-- **Social Security claiming analysis** -- compare claiming ages (62-70) for
-  each spouse, including spousal/survivor effects, on lifetime income and net worth.
+- Accounts: cost basis and capital gains on taxable-account withdrawals; Roth conversions
+  (how much to convert each year to fill a tax bracket); inherited IRAs (10-year rule).
+
+- Social Security extras: benefits for a divorced spouse; a survivor claiming before
+  their own full retirement age; family maximum.
 - **Tax impact analysis** -- per-property breakdown and "what if" comparisons
   (e.g. sell before vs. after depreciation runs out), depreciation recapture on sale.
 - Tax engine extras: AMT, QBI deduction, IRMAA, CA exemption-credit phase-out,

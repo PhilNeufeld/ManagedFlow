@@ -5,8 +5,8 @@ Drill-down view of the plan: entity > sub-entities > collections (bundles) >
 assets, liabilities and cashflows, with each one's numbers over time.
 
 build_tree()      the hierarchy, following ownership %. An entity owned along
-                  several paths (LVM: via Neufeld Ventures directly, via NV's
-                  GP interest in NFLP, and via the trust's NFLP interest)
+                  several paths (Plaza: via Summit Ventures directly, via SV's
+                  GP interest in FLP, and via the trust's FLP interest)
                   appears once per path, each carrying that path's share,
                   so the paths add up to your total share.
 node_series()     one row per year for a node: assets, liabilities, net worth,

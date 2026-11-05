@@ -4,8 +4,8 @@ quick_add.py
 Describe something in plain English; Claude drafts the records; YOU review
 them; only then are they added.
 
-    "Debbie's CalPERS, $1,700 a month starting at Debbie retires, 2% COLA, taxable"
-    "4392 Brix rental worth $295k, Nation Star loan $194,613 at 4.25%, $1,150/mo rent"
+    "Sam's CalPERS, $1,700 a month starting at Sam retires, 2% COLA, taxable"
+    "12 Elm St rental worth $300k, Example Bank loan $180,000 at 4.5%, $1,150/mo rent"
 
 How it works
 ------------

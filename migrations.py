@@ -10,7 +10,7 @@ Every saved file records its schema in metadata.file_version. migrate()
 looks at that version and applies each upgrade step in order until the
 data is current -- like climbing a ladder one rung at a time:
 
-    "0.1" --(_v0_1_to_v0_2)--> "0.2" --(_v0_2_to_v0_3)--> "0.3" --(_v0_3_to_v0_4)--> "0.4" --(_v0_4_to_v0_5)--> "0.5" --(_v0_5_to_v0_6)--> "0.6" --(_v0_6_to_v0_7)--> "0.7" --(_v0_7_to_v0_8)--> "0.8" --(_v0_8_to_v0_9)--> "0.9" --(_v0_9_to_v1_0)--> "1.0" --(_v1_0_to_v1_1)--> "1.1"
+    "0.1" --(_v0_1_to_v0_2)--> "0.2" --(_v0_2_to_v0_3)--> "0.3" --(_v0_3_to_v0_4)--> "0.4" --(_v0_4_to_v0_5)--> "0.5" --(_v0_5_to_v0_6)--> "0.6" --(_v0_6_to_v0_7)--> "0.7" --(_v0_7_to_v0_8)--> "0.8" --(_v0_8_to_v0_9)--> "0.9" --(_v0_9_to_v1_0)--> "1.0" --(_v1_0_to_v1_1)--> "1.1" --(_v1_1_to_v1_2)--> "1.2"
 
 To change the model in the future:
   1. Bump CURRENT_SCHEMA_VERSION.
@@ -27,7 +27,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Callable, Dict
 
-CURRENT_SCHEMA_VERSION = "1.1"
+CURRENT_SCHEMA_VERSION = "1.2"
 
 
 class MigrationError(ValueError):
@@ -141,13 +141,13 @@ PK_FIELDS = {
     "entities": "entity_id", "people": "person_id", "events": "event_id", "assets": "asset_id",
     "cashflows": "flow_id", "liabilities": "liability_id", "actuals": "actual_id",
     "bundles": "bundle_id", "scenarios": "scenario_id",
-    "memberships": "membership_id", "ownerships": "ownership_id",
+    "memberships": "membership_id", "ownerships": "ownership_id", "social_security": "ss_id",
 }
 # Foreign keys: list name -> {field: table it points to}
 FK_FIELDS = {
     "events": {"person_id": "people"},
     "assets": {"entity_id": "entities", "start_event_id": "events", "end_event_id": "events",
-               "earner_person_id": "people"},
+               "earner_person_id": "people", "first_payment_event_id": "events", "owner_person_id": "people"},
     "cashflows": {"asset_id": "assets", "start_event_id": "events", "end_event_id": "events",
                   "person_id": "people"},
     "liabilities": {"entity_id": "entities", "secured_by_asset_id": "assets", "start_event_id": "events",
@@ -155,13 +155,15 @@ FK_FIELDS = {
     "memberships": {"entity_id": "entities", "person_id": "people"},
     "actuals": {"flow_id": "cashflows", "asset_id": "assets", "entity_id": "entities"},
     "bundles": {"entity_id": "entities"},
+    "social_security": {"person_id": "people"},
 }
 FK_LISTS = {   # list fields holding keys
     "bundles": {"asset_ids": "assets", "cashflow_ids": "cashflows", "liability_ids": "liabilities"},
     "scenarios": {"entity_ids": "entities", "bundle_ids": "bundles"},
 }
 FK_DICT_KEYS = {   # dicts keyed by another table's key
-    "scenarios": {"asset_overrides": "assets", "cashflow_overrides": "cashflows", "event_overrides": "events"},
+    "scenarios": {"asset_overrides": "assets", "cashflow_overrides": "cashflows", "event_overrides": "events",
+                  "ss_overrides": "social_security"},
 }
 
 
@@ -218,7 +220,7 @@ def _int_or(k):
 
 def _v0_9_to_v1_0(data: Dict[str, Any]) -> Dict[str, Any]:
     """v1.0: integer primary keys in every table (they used to be text made
-    from the name, like 'flow_phil_salary'); foreign keys point at them."""
+    from the name, like 'flow_alex_salary'); foreign keys point at them."""
     data = to_integer_keys(data)
     data.setdefault("metadata", {})["file_version"] = "1.0"
     return data
@@ -229,6 +231,13 @@ def _v1_0_to_v1_1(data: Dict[str, Any]) -> Dict[str, Any]:
     Their column pairs stay unique (enforced by the model)."""
     data = to_integer_keys(data)
     data.setdefault("metadata", {})["file_version"] = "1.1"
+    return data
+
+
+def _v1_1_to_v1_2(data: Dict[str, Any]) -> Dict[str, Any]:
+    """v1.2: Social Security records (one per person), worked out from SSA's rules."""
+    data.setdefault("social_security", [])
+    data.setdefault("metadata", {})["file_version"] = "1.2"
     return data
 
 
@@ -244,6 +253,7 @@ _STEPS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "0.8": _v0_8_to_v0_9,
     "0.9": _v0_9_to_v1_0,
     "1.0": _v1_0_to_v1_1,
+    "1.1": _v1_1_to_v1_2,
 }
 
 

@@ -30,7 +30,11 @@ from __future__ import annotations
 
 from typing import Callable, List, Optional
 
+import tax_tables as T
 from models import (
+    Cashflow,
+    FlowType,
+    TaxCategory,
     Asset,
     AnnualAssetResult,
     AnnualHouseholdResult,
@@ -121,6 +125,26 @@ def run_simulation(
                 f"would run to {person.final_year}. Consider extending the end year."
             )
 
+    # Tax-deferred accounts (traditional IRA / 401k): two cashflows on each, filled in year by
+    # year -- required minimum distributions (income) and withdrawals to cover a shortfall
+    # (taxable, but the cash is already counted as a withdrawal).
+    account_flows = {}
+    for a in scope_assets:
+        if getattr(a, "account_tax", "") == "tax_deferred":
+            common = dict(flow_type=FlowType.WITHDRAWAL, direction=CashflowDirection.INFLOW, amount=0.0,
+                          start_year=assumptions.start_year, asset_id=a.asset_id, taxable=True,
+                          tax_category=TaxCategory.ORDINARY_INCOME, person_id=a.owner_person_id)
+            rmd = Cashflow(flow_id=f"rmd:{a.asset_id}", name=f"{a.name} - required minimum distribution",
+                           line_item="rmd", **common)
+            wd = Cashflow(flow_id=f"wd:{a.asset_id}", name=f"{a.name} - withdrawal (taxable)",
+                          line_item="taxable_withdrawal", **common)
+            flows_by_asset.setdefault(a.asset_id, []).extend([rmd, wd])
+            working_portfolio.cashflows += [rmd, wd]
+            account_flows[a.asset_id] = (rmd, wd)
+            if a.owner_person_id is None:
+                scenario_warnings.append(f"'{a.name}' is tax-deferred but has no owner: no required "
+                                         "minimum distributions will be taken.")
+
     tax_state: dict = {}  # carried from year to year (e.g. suspended rental losses)
     # Benefits recorded as ACTUALS are what was really paid: the earnings test leaves them alone.
     actual_slots = ({(a.flow_id, a.year) for a in working_portfolio.actuals if a.kind == "actual" and a.flow_id}
@@ -131,7 +155,7 @@ def run_simulation(
         result = _simulate_year(
             year, scope_assets, scope_household_cashflows, flows_by_asset,
             scope_liabilities, balances, scenario, assumptions, year_warnings,
-            growth_rate_fn, tax_state, working_portfolio.people, actual_slots,
+            growth_rate_fn, tax_state, working_portfolio.people, actual_slots, account_flows,
         )
         result.ages = {p.name: p.age_in(year) for p in working_portfolio.people}
         annual_results.append(result)
@@ -154,8 +178,22 @@ def _simulate_year(
     tax_state: Optional[dict] = None,
     people: Optional[list] = None,
     actual_slots: Optional[set] = None,
+    account_flows: Optional[dict] = None,
 ) -> AnnualHouseholdResult:
     asset_results: List[AnnualAssetResult] = []
+    account_flows = account_flows or {}
+    people_by_id = {p.person_id: p for p in (people or [])}
+
+    # Required minimum distributions: last year-end balance / the IRS factor for the owner's age.
+    rmds = {}
+    for asset in assets:
+        flows = account_flows.get(asset.asset_id)
+        owner = people_by_id.get(asset.owner_person_id)
+        if flows and owner and asset.active and asset.current_value > 0:
+            age = owner.age_in(year)
+            if age >= T.rmd_start_age(owner.birth_year):
+                rmds[asset.asset_id] = asset.current_value / T.rmd_factor(age)
+                flows[0].year_overrides[year] = rmds[asset.asset_id]
     total_asset_income = 0.0
     total_asset_expense = 0.0
 
@@ -169,6 +207,11 @@ def _simulate_year(
         asset_results.append(asset_result)
         total_asset_income += asset_result.gross_income
         total_asset_expense += asset_result.gross_expense
+
+    for r in asset_results:                     # the RMD leaves the account (and arrives as income)
+        if r.asset_id in rmds:
+            r.ending_value -= rmds[r.asset_id]
+            next(a for a in assets if a.asset_id == r.asset_id).current_value = r.ending_value
 
     sold_asset_ids = {r.asset_id for r in asset_results if r.sold_this_year}
     sale_months = {a.asset_id: a.sale_month for a in assets if a.asset_id in sold_asset_ids}
@@ -210,6 +253,7 @@ def _simulate_year(
         )
         if _flow_active_in_year(cf, year)
     ]
+    state_before = dict(tax_context.carryforward)      # to re-estimate after taxable withdrawals
     tax_estimate = tax_engine.estimate_taxes_for_year(year, this_year_cashflows, assumptions, tax_context)
 
     net_cashflow = total_gross_income - total_expenses - tax_estimate.total_estimated_tax
@@ -224,8 +268,30 @@ def _simulate_year(
         withdrawal_breakdown = withdrawal_engine.withdraw_for_shortfall(
             shortfall, assets, scenario
         )
+        # Withdrawals from tax-deferred accounts are income: re-estimate the tax and withdraw
+        # more to pay it (grossing up), until it settles.
+        for _ in range(10):
+            taxable_out = {aid: amt for aid, amt in withdrawal_breakdown.items() if aid in account_flows}
+            if not taxable_out:
+                break
+            for aid, amt in taxable_out.items():
+                account_flows[aid][1].year_overrides[year] = amt
+            tax_context.carryforward.clear()
+            tax_context.carryforward.update(state_before)
+            flows_now = this_year_cashflows + [account_flows[aid][1] for aid in taxable_out
+                                               if account_flows[aid][1] not in this_year_cashflows]
+            new_estimate = tax_engine.estimate_taxes_for_year(year, flows_now, assumptions, tax_context)
+            extra = new_estimate.total_estimated_tax - tax_estimate.total_estimated_tax
+            tax_estimate = new_estimate
+            shortfall += extra
+            if extra < 0.5:
+                break
+            for aid, amt in withdrawal_engine.withdraw_for_shortfall(extra, assets, scenario).items():
+                withdrawal_breakdown[aid] = withdrawal_breakdown.get(aid, 0.0) + amt
+        net_cashflow = total_gross_income - total_expenses - tax_estimate.total_estimated_tax
+        surplus_or_deficit = net_cashflow
         withdrawal_amount = sum(withdrawal_breakdown.values())
-        if withdrawal_amount + 1e-6 < shortfall:
+        if withdrawal_amount + 0.5 < shortfall:
             warnings.append(
                 f"Year {year}: shortfall of ${shortfall:,.0f} could not be fully covered "
                 f"by available liquid/semi-liquid assets (covered ${withdrawal_amount:,.0f}). "
@@ -328,6 +394,9 @@ def _simulate_asset_year(
             net_cashflow_affecting_value += signed
 
     ending_value = value_after_growth + net_cashflow_affecting_value
+    if year in asset.value_overrides:            # a receivable: the balance still owed
+        growth_amount = 0.0
+        ending_value = asset.value_overrides[year]
 
     sold_this_year = asset.sale_year == year
     sale_proceeds = 0.0
