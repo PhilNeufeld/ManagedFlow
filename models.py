@@ -1530,6 +1530,10 @@ class AnnualHouseholdResult:
     liability_results: List[AnnualLiabilityResult] = field(default_factory=list)
     tax_estimate: Optional[TaxEstimate] = None
     warnings: List[str] = field(default_factory=list)
+    # Every amount behind the totals, for auditing (see audit.py): dicts with section
+    # ("income" / "expense"), flow_id, name, asset_id, flow_type, amount (positive).
+    line_items: List[Dict[str, Any]] = field(default_factory=list)
+    reinvestment_breakdown: Dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -1554,6 +1558,8 @@ class AnnualHouseholdResult:
             "liability_results": [r.to_dict() for r in self.liability_results],
             "tax_estimate": self.tax_estimate.to_dict() if self.tax_estimate else None,
             "warnings": self.warnings,
+            "line_items": [dict(li) for li in self.line_items],
+            "reinvestment_breakdown": dict(self.reinvestment_breakdown),
         }
 
     @classmethod

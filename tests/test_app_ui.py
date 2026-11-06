@@ -424,3 +424,14 @@ def test_social_security_editor_and_claiming_analysis(tmp_path):
     no_crash(at)
     df = table(at, "Lifetime Social Security")
     assert len(df) == 2 and "◀" in list(df["Your plan now"])
+
+
+# --- simulation sub-tabs and the Audit tab --------------------------------------------------------------------
+
+def test_audit_tab_shows_items_and_checks(tmp_path):
+    at = start(_depreciating_rental(), tmp_path)
+    at = click(at, label="Run simulation for all scenarios")
+    no_crash(at)
+    assert any("checks add up" in s.value for s in at.success)
+    assert any(t.label == "Audit" for t in at.tabs) and any(t.label.startswith("Warnings") for t in at.tabs)
+    assert at.number_input(key="sim_years_to_view").value == 3     # only 3 years in this plan

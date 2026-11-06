@@ -196,13 +196,14 @@ def _simulate_year(
                 flows[0].year_overrides[year] = rmds[asset.asset_id]
     total_asset_income = 0.0
     total_asset_expense = 0.0
+    lines: list = []                             # every amount behind the totals (audit trail)
 
     inflation_rate = assumptions.inflation_rate
 
     for asset in assets:
         growth_rate = growth_rate_fn(asset, year) if growth_rate_fn else asset.annual_growth_rate
         asset_result = _simulate_asset_year(
-            asset, flows_by_asset.get(asset.asset_id, []), year, inflation_rate, growth_rate
+            asset, flows_by_asset.get(asset.asset_id, []), year, inflation_rate, growth_rate, lines
         )
         asset_results.append(asset_result)
         total_asset_income += asset_result.gross_income
@@ -240,8 +241,12 @@ def _simulate_year(
         signed = cf.signed_amount_in_year(year, inflation_rate=inflation_rate)
         if cf.direction == CashflowDirection.INFLOW:
             household_income += signed
+            if signed:
+                lines.append(_line("income", cf, None, signed))
         elif cf.direction == CashflowDirection.OUTFLOW:
             household_expense += -signed  # store as positive expense magnitude
+            if signed:
+                lines.append(_line("expense", cf, None, -signed))
 
     total_gross_income = total_asset_income + household_income
     total_expenses = total_asset_expense + household_expense + total_debt_service
@@ -262,6 +267,7 @@ def _simulate_year(
     withdrawal_breakdown: dict[str, float] = {}
     withdrawal_amount = 0.0
     reinvestment_amount = 0.0
+    reinvest_breakdown: dict = {}
 
     if surplus_or_deficit < 0:
         shortfall = -surplus_or_deficit
@@ -330,12 +336,20 @@ def _simulate_year(
         liability_results=liability_results,
         tax_estimate=tax_estimate,
         warnings=warnings,
+        line_items=lines,
+        reinvestment_breakdown=reinvest_breakdown,
     )
+
+
+def _line(section: str, cf, asset_id, amount: float) -> dict:
+    """One audit line: an amount behind a total (see audit.py)."""
+    return {"section": section, "flow_id": cf.flow_id, "name": cf.name, "asset_id": asset_id,
+            "flow_type": getattr(cf.flow_type, "value", str(cf.flow_type)), "amount": amount}
 
 
 def _simulate_asset_year(
     asset: Asset, asset_flows: list, year: int, inflation_rate: float = 0.0,
-    growth_rate: Optional[float] = None,
+    growth_rate: Optional[float] = None, lines: Optional[list] = None,
 ) -> AnnualAssetResult:
     """Advance a single asset by one year: apply growth, then apply any
     cashflows flagged affects_asset_value, and report gross income/expense
@@ -387,8 +401,12 @@ def _simulate_asset_year(
 
         if cf.direction == CashflowDirection.INFLOW:
             gross_income += signed
+            if lines is not None and signed:
+                lines.append(_line("income", cf, asset.asset_id, signed))
         elif cf.direction == CashflowDirection.OUTFLOW:
             gross_expense += -signed
+            if lines is not None and signed:
+                lines.append(_line("expense", cf, asset.asset_id, -signed))
 
         if cf.affects_asset_value:
             net_cashflow_affecting_value += signed

@@ -149,6 +149,7 @@ def export_to_excel(
     _write_actuals_sheets(wb, portfolio)
     _write_rental_pro_forma_sheet(wb, portfolio)
     _write_period_view_sheet(wb, portfolio)
+    _write_audit_sheets(wb, portfolio, simulation_results)
     _write_notes_warnings_sheet(wb, simulation_results)
 
     wb.save(output_path)
@@ -389,7 +390,7 @@ def _format_overrides(overrides: Dict[str, Dict]) -> str:
 ANNUAL_RESULTS_HEADERS = [
     "Scenario", "Year", "Total Gross Income", "Total Expenses", "Estimated Tax",
     "Net Cashflow", "Surplus / (Deficit)", "Withdrawal Amount", "Reinvestment Amount",
-    "Total Net Worth", "Liquid Net Worth", "Illiquid Net Worth",
+    "Total Net Worth", "Liquid Assets", "Illiquid Assets",
     "Total Assets", "Total Liabilities", "Debt Service", "Interest Paid", "Ages",
 ]
 
@@ -797,6 +798,42 @@ def _write_charts_sheet(wb: Workbook, simulation_results: List[SimulationResult]
 # ---------------------------------------------------------------------------
 # 12. Notes / Warnings
 # ---------------------------------------------------------------------------
+
+def _write_audit_sheets(wb: Workbook, portfolio: Portfolio, simulation_results: List[SimulationResult]) -> None:
+    """Audit: every item behind each annual total (one row each, filter or pivot it).
+    Audit Checks: each total vs. the sum of its items, every year and scenario."""
+    import audit
+    names = {s.scenario_id: s.name for s in portfolio.scenarios}
+    ws = wb.create_sheet("Audit")
+    ws["A1"] = "Audit - the items behind each annual total"
+    ws["A1"].font = TITLE_FONT
+    ws["A2"] = ("One row per item. Sections: Gross income, Expenses (incl. each loan's payments), Debt service "
+                "(loan balances, interest, principal), Est. tax (the calculation step by step), Cash (surplus and "
+                "where it went), Assets (each asset's roll-forward). Filter by Scenario, Year, Section or Entity.")
+    ws["A2"].font = SUBTITLE_FONT
+    rows = []
+    for res in simulation_results:
+        for r in audit.audit_rows(res, portfolio, names.get(res.scenario_id, str(res.scenario_id))):
+            rows.append([r[c] for c in audit.COLUMNS])
+    _write_table(ws, 4, audit.COLUMNS, rows, currency_cols=[audit.COLUMNS.index("Amount")])
+    ws.column_dimensions["D"].width = 48
+    ws.column_dimensions["G"].width = 32
+
+    ws = wb.create_sheet("Audit Checks")
+    ws["A1"] = "Audit checks - each total vs. the sum of its items"
+    ws["A1"].font = TITLE_FONT
+    ws["A2"] = "OK means they agree within one cent (total assets: within $1, as each asset is rounded to the cent)."
+    ws["A2"].font = SUBTITLE_FONT
+    headers = ["Scenario", "Year", "Check", "Summary", "Sum of items", "Difference", "OK"]
+    rows = []
+    for res in simulation_results:
+        name = names.get(res.scenario_id, str(res.scenario_id))
+        for c in audit.checks(res) + audit.asset_total_check(res, portfolio):
+            rows.append([name, c["Year"], c["Check"], c["Summary"], c["Sum of items"], c["Difference"],
+                         "OK" if c["OK"] else "CHECK"])
+    rows.sort(key=lambda r: (r[0], r[1]))
+    _write_table(ws, 4, headers, rows, currency_cols=[3, 4, 5])
+
 
 def _write_notes_warnings_sheet(wb: Workbook, simulation_results: List[SimulationResult]) -> None:
     ws = wb.create_sheet("Notes - Warnings")

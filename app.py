@@ -19,6 +19,7 @@ import pandas as pd
 import streamlit as st
 
 import actuals as actuals_engine
+import audit
 import explorer
 import manual
 import exports
@@ -802,7 +803,7 @@ def render_cashflows_tab(portfolio: Portfolio) -> None:
             [
                 {
                     "Flow ID": cf.flow_id,
-                    "Asset": cf.asset_id or "(household)",
+                    "Asset": str(cf.asset_id) if cf.asset_id is not None else "(household)",
                     "Name": cf.name,
                     "Type": cf.flow_type.value,
                     "Direction": cf.direction.value,
@@ -2868,24 +2869,71 @@ def _parse_override_value(value_str: str):
 # Simulation tab
 # ---------------------------------------------------------------------------
 
-def render_simulation_tab(portfolio: Portfolio) -> None:
-    st.header("Run Simulation")
+def _scenario_label(portfolio: Portfolio, scenario_id) -> str:
+    sc = portfolio.get_scenario(scenario_id)
+    return sc.name if sc is not None else str(scenario_id)
 
-    if st.button("Run simulation for all scenarios", type="primary"):
+
+def _run_simulation_button(portfolio: Portfolio, key: str) -> None:
+    if st.button("Run simulation for all scenarios", type="primary", key=key):
         with st.spinner("Running year-by-year simulation..."):
             results = simulation.run_all_scenarios(portfolio)
             st.session_state["simulation_results"] = results
         st.success(f"Simulation complete: {len(results)} scenario(s).")
 
+
+def _pick_result(portfolio: Portfolio, key: str):
+    """Scenario picker (by name) over the last run's results; None if nothing has run."""
     results = st.session_state.get("simulation_results")
     if not results:
-        st.info("Run the simulation to see annual results.")
-        return
+        return None
+    ids = [r.scenario_id for r in results]
+    chosen_id = st.selectbox("View scenario", ids, format_func=lambda i: _scenario_label(portfolio, i), key=key)
+    return next(r for r in results if r.scenario_id == chosen_id)
 
-    scenario_ids = [r.scenario_id for r in results]
-    chosen_id = st.selectbox("View scenario", scenario_ids)
-    chosen = next(r for r in results if r.scenario_id == chosen_id)
 
+def render_simulation_tab(portfolio: Portfolio) -> None:
+    st.header("Simulation")
+    _run_simulation_button(portfolio, "sim_run_btn")
+    chosen = _pick_result(portfolio, "sim_view_scenario")
+    warnings_count = sum(len(r.warnings) for r in chosen.annual_results) if chosen else 0
+    labels = ["Results", "Taxes by year", "Rental pro forma", "Social Security claiming", "Monte Carlo",
+              f"Warnings ({warnings_count})"]
+    t_results, t_tax, t_rental, t_ss, t_mc, t_warn = st.tabs(labels)
+    with t_results:
+        if chosen is None:
+            st.info("Run the simulation to see annual results.")
+        else:
+            _render_results(chosen)
+    with t_tax:
+        if chosen is None:
+            st.info("Run the simulation to see taxes by year.")
+        else:
+            _render_taxes_by_year(chosen)
+    with t_rental:
+        scenario_id = chosen.scenario_id if chosen else next(
+            (s.scenario_id for s in portfolio.scenarios if s.is_base_case),
+            portfolio.scenarios[0].scenario_id if portfolio.scenarios else None)
+        if scenario_id is None:
+            st.info("Add a scenario to see rental pro formas.")
+        else:
+            render_rental_pro_forma(portfolio, scenario_id)
+    with t_ss:
+        render_claiming_analysis(portfolio)
+    with t_mc:
+        render_monte_carlo_section(portfolio)
+    with t_warn:
+        if chosen is None:
+            st.info("Run the simulation to see warnings.")
+        else:
+            all_warnings = [(r.year, w) for r in chosen.annual_results for w in r.warnings]
+            if not all_warnings:
+                st.success("No warnings for this scenario.")
+            for year, w in all_warnings:
+                st.warning(f"Year {year}: {w}")
+
+
+def _render_results(chosen) -> None:
     numeric_df = pd.DataFrame(
         [
             {
@@ -2901,51 +2949,138 @@ def render_simulation_tab(portfolio: Portfolio) -> None:
                 "Total Assets": r.total_assets,
                 "Total Liabilities": r.total_liabilities,
                 "Total Net Worth": r.total_net_worth,
-                "Liquid Net Worth": r.liquid_net_worth,
-                "Illiquid Net Worth": r.illiquid_net_worth,
+                "Liquid Assets": r.liquid_net_worth,
+                "Illiquid Assets": r.illiquid_net_worth,
             }
             for r in chosen.annual_results
         ]
     )
+    st.caption("Expenses include Debt Service. Surplus = Gross Income - Expenses - Est. Tax; a surplus is "
+               "reinvested in your liquid account, a deficit withdrawn from liquid then semi-liquid assets. "
+               "Liquid Assets = liquid + semi-liquid (e.g. brokerage, IRAs); Illiquid Assets = everything else. "
+               "Neither subtracts debt. The Audit tab shows the items behind every number.")
     currency_cols = [c for c in numeric_df.columns if c not in ("Year", "Ages")]
     display_df = numeric_df.copy()
     for col in currency_cols:
         display_df[col] = display_df[col].apply(format_currency)
     if not numeric_df["Ages"].any():  # no people defined yet
         display_df = display_df.drop(columns=["Ages"])
-    st.dataframe(display_df, use_container_width=True)
-    st.line_chart(numeric_df.set_index("Year")[["Total Assets", "Total Liabilities", "Total Net Worth"]])
+    st.dataframe(display_df, use_container_width=True, hide_index=True)
+    n_years = len(numeric_df)
+    years_to_view = st.number_input("Years to view (chart)", min_value=1, max_value=max(1, n_years),
+                                    value=min(10, max(1, n_years)), step=1, key="sim_years_to_view")
+    st.line_chart(numeric_df.head(int(years_to_view)).set_index("Year")[
+        ["Total Assets", "Total Liabilities", "Total Net Worth"]])
 
+
+def _render_taxes_by_year(chosen) -> None:
     details = [r for r in chosen.annual_results if r.tax_estimate and r.tax_estimate.details]
-    if details:
-        st.subheader("Taxes by year")
-        st.caption(
-            "Detailed tax method. Watch Depreciation: when a property's recovery period ends, its "
-            "deduction stops and taxable income steps up. Rental losses above the passive limits are "
-            "carried forward."
-        )
-        lines = ["Depreciation", "Rental net (allowed this year)", "Suspended rental losses carried forward",
-                 "Social Security taxable", "AGI", "Deduction used", "Senior deduction", "Taxable income",
-                 "Federal tax on ordinary income", "Federal tax on capital gains", "NIIT", "FICA",
-                 "Self-employment tax", "CA tax", "Total tax"]
-        tax_df = pd.DataFrame([{"Year": r.year, **{k: r.tax_estimate.details.get(k, 0.0) for k in lines},
-                                "Effective rate": r.tax_estimate.details.get("Effective rate on AGI", 0.0)}
-                               for r in details])
-        chart_cols = ["Depreciation", "Taxable income", "Total tax"]
-        st.line_chart(tax_df.set_index("Year")[chart_cols])
-        shown = tax_df.copy()
-        for col in lines:
-            shown[col] = shown[col].apply(format_currency)
-        shown["Effective rate"] = shown["Effective rate"].apply(lambda v: f"{v:.1%}")
-        st.dataframe(shown, hide_index=True, use_container_width=True)
+    if not details:
+        st.info("Taxes by year needs the detailed tax method (Assumptions tab).")
+        return
+    st.caption(
+        "Detailed tax method. Watch Depreciation: when a property's recovery period ends, its "
+        "deduction stops and taxable income steps up. Rental losses above the passive limits are "
+        "carried forward. The Audit tab's Est. tax section shows every step for any year."
+    )
+    lines = ["Depreciation", "Rental net (allowed this year)", "Suspended rental losses carried forward",
+             "Social Security taxable", "AGI", "Deduction used", "Senior deduction", "Taxable income",
+             "Federal tax on ordinary income", "Federal tax on capital gains", "NIIT", "FICA",
+             "Self-employment tax", "CA tax", "Total tax"]
+    tax_df = pd.DataFrame([{"Year": r.year, **{k: r.tax_estimate.details.get(k, 0.0) for k in lines},
+                            "Effective rate": r.tax_estimate.details.get("Effective rate on AGI", 0.0)}
+                           for r in details])
+    chart_cols = ["Depreciation", "Taxable income", "Total tax"]
+    st.line_chart(tax_df.set_index("Year")[chart_cols])
+    shown = tax_df.copy()
+    for col in lines:
+        shown[col] = shown[col].apply(format_currency)
+    shown["Effective rate"] = shown["Effective rate"].apply(lambda v: f"{v:.1%}")
+    st.dataframe(shown, hide_index=True, use_container_width=True)
 
-    render_rental_pro_forma(portfolio, chosen_id)
 
-    all_warnings = [(r.year, w) for r in chosen.annual_results for w in r.warnings]
-    if all_warnings:
-        st.subheader("Warnings")
-        for year, w in all_warnings:
-            st.warning(f"Year {year}: {w}")
+# ---------------------------------------------------------------------------
+# Audit tab
+# ---------------------------------------------------------------------------
+
+def render_audit_tab(portfolio: Portfolio) -> None:
+    """The items behind each annual total, for a year or a range of years, with checks."""
+    st.header("Audit")
+    st.caption("Every number in the Simulation results, broken into the items that make it up -- each with "
+               "its source ID (cashflow, loan or asset key) -- and checks that the items add back to the totals.")
+    if not st.session_state.get("simulation_results"):
+        st.info("Run the simulation first.")
+        _run_simulation_button(portfolio, "audit_run_btn")
+        return
+    chosen = _pick_result(portfolio, "audit_scenario")
+    years = [r.year for r in chosen.annual_results]
+    c1, c2, c3 = st.columns(3)
+    y_from = c1.selectbox("From year", years, index=0, key="audit_from")
+    y_to = c2.selectbox("To year", [y for y in years if y >= y_from], index=0, key="audit_to")
+    picked_years = [y for y in years if y_from <= y <= y_to]
+    rows = audit.audit_rows(chosen, portfolio, _scenario_label(portfolio, chosen.scenario_id), picked_years)
+    entities = sorted({r["Entity"] for r in rows if r["Entity"]})
+    entity = c3.selectbox("Entity", ["All"] + entities, key="audit_entity")
+    entity_filter = None if entity == "All" else entity
+
+    checks = audit.checks(chosen, picked_years) + audit.asset_total_check(chosen, portfolio, picked_years)
+    failed = [c for c in checks if not c["OK"]]
+    if failed:
+        st.error(f"{len(failed)} of {len(checks)} checks don't add up -- see Summary & checks.")
+    else:
+        st.success(f"All {len(checks)} checks add up for {y_from}" + (f"-{y_to}" if y_to != y_from else "") + ".")
+
+    tabs = st.tabs(["Summary & checks"] + audit.SECTIONS)
+    with tabs[0]:
+        by_year = {r.year: r for r in chosen.annual_results}
+        summary = {
+            "Gross income": "total_gross_income", "Expenses (incl. debt service)": "total_expenses",
+            "Est. tax": "total_estimated_tax", "Surplus/(deficit)": "surplus_or_deficit",
+            "Withdrawal": "withdrawal_amount", "Reinvestment": "reinvestment_amount",
+            "Debt service": "total_debt_service", "Total assets": "total_assets",
+            "Total liabilities": "total_liabilities", "Total net worth": "total_net_worth"}
+        table = pd.DataFrame({str(y): {k: format_currency(getattr(by_year[y], attr)) for k, attr in summary.items()}
+                              for y in picked_years})
+        st.dataframe(table, use_container_width=True)
+        check_df = pd.DataFrame(checks)
+        check_df["OK"] = check_df["OK"].map({True: "OK", False: "CHECK"})
+        for col in ("Summary", "Sum of items", "Difference"):
+            check_df[col] = check_df[col].apply(format_currency)
+        st.dataframe(check_df, hide_index=True, use_container_width=True)
+    notes = {
+        "Gross income": "Each inflow: household cashflows and each asset's income (rent, distributions, RMDs...).",
+        "Expenses": "Each outflow, plus each loan's payments -- debt service is part of Expenses.",
+        "Debt service": "Each loan's beginning balance, interest, principal and ending balance.",
+        "Est. tax": "The tax calculation step by step (federal, payroll per person, California). Not filtered by entity.",
+        "Cash": "Surplus/(deficit) and where it went: reinvested or withdrawn, by asset. Not filtered by entity.",
+        "Assets": "Each asset's roll-forward: beginning value + growth + value-changing cashflows + other "
+                  "changes - withdrawn + reinvested = ending value.",
+    }
+    for tab, section in zip(tabs[1:], audit.SECTIONS):
+        with tab:
+            st.caption(notes[section])
+            ent = None if section in ("Est. tax", "Cash") else entity_filter
+            df = audit.pivot(rows, section, picked_years, ent)
+            if df.empty:
+                st.info("Nothing in this section for the years and entity chosen.")
+                continue
+            value_cols = [c for c in df.columns if c in [str(y) for y in picked_years] or c == "Total"]
+            is_rate = df["Detail"].eq("rate") | df["Line"].str.contains("rate", case=False)
+            if section in audit.FLOW_SECTIONS and section != "Est. tax":
+                totals = {c: df[c].sum() for c in value_cols}
+            else:
+                totals = None
+            shown = df.copy()
+            for c in value_cols:
+                shown[c] = [f"{v:.1%}" if r else format_currency(v) for v, r in zip(df[c], is_rate)]
+            if section in ("Debt service", "Assets"):
+                shown = shown.drop(columns=["Entity"]) if entity_filter else shown
+            st.dataframe(shown, hide_index=True, use_container_width=True)
+            if totals is not None:
+                st.markdown("**Total:** " + " | ".join(f"{c}: {format_currency(v)}" for c, v in totals.items()))
+    st.download_button("Download these items (CSV)", pd.DataFrame(rows, columns=audit.COLUMNS).to_csv(index=False),
+                       file_name=f"audit_{_scenario_label(portfolio, chosen.scenario_id)}_{y_from}-{y_to}.csv",
+                       mime="text/csv", key="audit_csv")
 
 
 def render_rental_pro_forma(portfolio: Portfolio, scenario_id: str) -> None:
@@ -3351,7 +3486,7 @@ def render_claiming_analysis(portfolio: Portfolio) -> None:
 
 def render_monte_carlo_section(portfolio: Portfolio) -> None:
     st.divider()
-    st.header("Monte Carlo")
+    st.subheader("Monte Carlo")
     st.caption(
         "Runs one scenario many times with random market years (each asset's growth swings "
         "around your rate by its volatility) and a random long-run inflation rate. "
@@ -3531,8 +3666,8 @@ def main() -> None:
         ("Events", render_events_tab),
         ("Assumptions", render_assumptions_tab),
         ("Scenarios", render_scenarios_tab),
-        ("Simulation", lambda p: (render_simulation_tab(p), render_claiming_analysis(p),
-                                  render_monte_carlo_section(p))),
+        ("Simulation", render_simulation_tab),
+        ("Audit", render_audit_tab),
         ("Explore", render_explore_tab),
         ("Help", render_help_tab),
         ("Export", render_export_tab),

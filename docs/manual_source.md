@@ -28,7 +28,8 @@ Python does the calculations, your data is stored in a JSON file in the data fol
 | Events | Dated moments (retire, claim, buy, sell, close) that start and stop other records |
 | Assumptions | Plan years, inflation, tax method, filing status, state |
 | Scenarios | What-ifs: overrides to assumptions, assets, cashflows and event dates |
-| Simulation | Year-by-year results, taxes by year, rental pro forma, Monte Carlo |
+| Simulation | Run the plan. Sub-tabs: Results (table + chart, Years to view), Taxes by year, Rental pro forma, Social Security claiming, Monte Carlo, Warnings |
+| Audit | The items behind every number in the results, for a year or a range, with checks that they add up |
 | Explore | Drill down by entity > collection > asset > cashflow/loan, as a chart or a 1-5 year table |
 | Help | This manual, on screen |
 | Export | The full Excel workbook |
@@ -190,7 +191,7 @@ To restore: under **Restore**, pick a backup, look at **What's inside**, tick th
 3. Enter each operating expense per year: property tax, insurance, repairs, management, utilities, HOA, other.
 4. Enter the depreciable basis (building and improvements, not land) and the year placed in service.
 5. Mortgage: either A, the original terms (amount, years, first payment month and year), or B, the current balance and years left. Enter the principal-and-interest payment from your statement if it differs. Leave both blank for no mortgage.
-6. Click **Add rental**, then **Save portfolio**. Simulation tab > Rental pro forma shows GOI, NOI, debt service and cash flow by year.
+6. Click **Add rental**, then **Save portfolio**. Simulation tab > Rental pro forma sub-tab shows GOI, NOI, debt service and cash flow by year.
 
 > Put escrowed property tax and insurance in the expense lines, not in the mortgage payment, or they'll be counted twice.
 
@@ -226,7 +227,7 @@ To restore: under **Restore**, pick a backup, look at **What's inside**, tick th
 
 ## Decide when to claim Social Security?
 
-1. Simulation tab > "Social Security claiming analysis": pick the ages to compare (e.g. 62, 67, 70) and click **Compare**.
+1. Simulation tab > Social Security claiming sub-tab: pick the ages to compare (e.g. 62, 67, 70) and click **Compare**.
 2. The whole plan runs once for every combination of both spouses' ages. Each row shows lifetime benefits, how much the earnings test withheld, total tax and net worth at the end of the plan; ◀ marks your current choice.
 3. The chart shows cumulative benefits by year for the options you pick: where the lines cross is the break-even age.
 4. To keep a choice, change the claiming age in the person's Social Security settings -- or make a scenario for it.
@@ -299,6 +300,26 @@ Yes, item by item and year by year: **actual beats forecast, and forecast beats 
 
 Every table -- entities, people, events, assets, liabilities, cashflows, actuals, collections, scenarios -- has an integer primary key (1, 2, 3... per table). Links between records always use these keys (a cashflow's asset_id is the asset's key), never names, so renaming a record never breaks a link. Keys are assigned automatically and never change. The link tables have their own integer keys too (membership_id, ownership_id), and the pair of records each one joins must be unique: one ownership link per owner and owned item; one membership per entity, person and role.
 
+## Read the Simulation results?
+
+- **Expenses** include **Debt Service** (the Debt Service column is shown for information; it isn't subtracted twice).
+- **Surplus/(Deficit)** = Gross Income - Expenses - Est. Tax. A surplus is reinvested in the first liquid asset (e.g. your brokerage account) and grows at that asset's rate; a deficit is withdrawn from liquid, then semi-liquid assets (taxable accounts first, Roth last).
+- **Liquid Assets** = liquid + semi-liquid assets (brokerage, IRAs); **Illiquid Assets** = everything else (real estate, businesses, trusts, receivables). Neither subtracts debt; Total Net Worth does.
+- **Years to view** (under the table) limits the chart to the first N years (10 by default), so early changes aren't flattened by the scale of later decades.
+
+## Audit a number (where does a total come from)?
+
+1. Simulation tab > **Run simulation for all scenarios**.
+2. Audit tab: pick the scenario, **From year** and **To year** (one year or a range), and optionally an **Entity**.
+3. The banner says whether every check adds up. **Summary & checks** lists each total from the results next to the sum of its items.
+4. The section tabs show the items, one row each with its **Source ID** (cashflow key, loan:<key> or asset:<key>) and a column per year:
+   - **Gross income** and **Expenses** -- every inflow and outflow; Expenses also lists each loan's payments.
+   - **Debt service** -- each loan's beginning balance, interest, principal and ending balance.
+   - **Est. tax** -- the calculation step by step: income by category, AGI, deductions, federal, payroll per person, California, total.
+   - **Cash** -- surplus/(deficit) and where it went (reinvested or withdrawn, by asset).
+   - **Assets** -- each asset's roll-forward: beginning value + growth + value-changing cashflows + other changes (RMD, receivable paydown, sale) - withdrawn + reinvested = ending value.
+5. **Download these items (CSV)** saves the rows. The Excel export has the same items for every year and scenario on the **Audit** sheet, and the checks on **Audit Checks**.
+
 ## Run a what-if?
 
 1. Scenarios tab > add a scenario. Override inflation, an asset's growth or sale, a cashflow's amount, or an event's date (e.g. claim Social Security at 67).
@@ -307,7 +328,7 @@ Every table -- entities, people, events, assets, liabilities, cashflows, actuals
 
 ## Test the plan against market swings (Monte Carlo)?
 
-1. Simulation tab > Monte Carlo: choose the number of runs and press Run.
+1. Simulation tab > Monte Carlo sub-tab: choose the number of runs and press Run.
 2. Read the success rate (runs that never run short) and the percentile bands of net worth.
 
 ## Use Quick add?
