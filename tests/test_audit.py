@@ -86,3 +86,44 @@ def test_excel_has_audit_sheets(example, tmp_path):
     assert "Audit" in wb.sheetnames and "Audit Checks" in wb.sheetnames
     checks = list(wb["Audit Checks"].iter_rows(min_row=5, values_only=True))
     assert checks and all(row[-1] == "OK" for row in checks)
+
+
+def test_audit_tab_download_is_a_workbook_with_a_sheet_per_section(example):
+    import io
+    from openpyxl import load_workbook
+    p, results = example
+    res = results[0]
+    years = [r.year for r in res.annual_results][:2]
+    wb = load_workbook(io.BytesIO(exports.audit_workbook_bytes(res, p, years, None, "Base")))
+    assert wb.sheetnames == ["Summary & Checks", "Gross income", "Expenses", "Debt service", "Est tax", "Cash",
+                             "Assets", "By Asset", "All Items"]
+    gi = wb["Gross income"]
+    total_row = max(r for r in range(1, gi.max_row + 1) if gi.cell(r, 1).value == "Total")
+    assert str(gi.cell(total_row, 6).value).startswith("=SUM(")
+
+
+
+def test_by_asset_statements_add_up_to_the_year(example):
+    p, results = example
+    for res in results:
+        years = [r.year for r in res.annual_results]
+        stmts = audit.asset_statements(res, p)
+        assert [c for c in audit.by_group_check(res, stmts, years) if not c["OK"]] == []
+        for grouping in audit.GROUPINGS:
+            table = audit.by_group(stmts, audit.group_of(p, res, grouping), years[:1])
+            total = table[-1]
+            y = res.annual_results[0]
+            assert total["Name"] == "Total"
+            assert total["Gross income"] == pytest.approx(y.total_gross_income, abs=0.1)
+            assert total["Net after tax"] == pytest.approx(y.surplus_or_deficit, abs=0.1)
+
+
+def test_a_rental_statement_reads_like_a_pro_forma(example):
+    p, results = example
+    res = results[0]
+    stmts = audit.asset_statements(res, p)
+    rental = next(a for a in p.assets if a.tax_category.value == "rental_income")
+    r = next(v for (yr, aid), v in stmts.items() if aid == rental.asset_id and v["Gross income"])
+    assert r["Net operating income"] == pytest.approx(r["Gross income"] - r["Expenses"])
+    assert r["Cash flow before tax"] == pytest.approx(r["Net operating income"] - r["Interest"] - r["Principal"])
+    assert r["Taxable net"] <= r["Gross income"] - r["Expenses"] - r["Interest"] + 0.01

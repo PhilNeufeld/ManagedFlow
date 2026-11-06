@@ -3030,14 +3030,18 @@ def render_audit_tab(portfolio: Portfolio) -> None:
     entity = c3.selectbox("Entity", ["All"] + entities, key="audit_entity")
     entity_filter = None if entity == "All" else entity
 
-    checks = audit.checks(chosen, picked_years) + audit.asset_total_check(chosen, portfolio, picked_years)
+    statements = audit.asset_statements(chosen, portfolio, picked_years)
+    checks = (audit.checks(chosen, picked_years) + audit.asset_total_check(chosen, portfolio, picked_years)
+              + audit.by_group_check(chosen, statements, picked_years))
     failed = [c for c in checks if not c["OK"]]
     if failed:
         st.error(f"{len(failed)} of {len(checks)} checks don't add up -- see Summary & checks.")
     else:
         st.success(f"All {len(checks)} checks add up for {y_from}" + (f"-{y_to}" if y_to != y_from else "") + ".")
 
-    tabs = st.tabs(["Summary & checks"] + audit.SECTIONS)
+    tabs = st.tabs(["Summary & checks", "By asset"] + audit.SECTIONS)
+    with tabs[1]:
+        _render_audit_by_asset(chosen, portfolio, rows, statements, picked_years)
     with tabs[0]:
         by_year = {r.year: r for r in chosen.annual_results}
         summary = {
@@ -3063,7 +3067,7 @@ def render_audit_tab(portfolio: Portfolio) -> None:
         "Assets": "Each asset's roll-forward: beginning value + growth + value-changing cashflows + other "
                   "changes - withdrawn + reinvested = ending value.",
     }
-    for tab, section in zip(tabs[1:], audit.SECTIONS):
+    for tab, section in zip(tabs[2:], audit.SECTIONS):
         with tab:
             st.caption(notes[section])
             ent = None if section in ("Est. tax", "Cash") else entity_filter
@@ -3085,9 +3089,59 @@ def render_audit_tab(portfolio: Portfolio) -> None:
             st.dataframe(shown, hide_index=True, use_container_width=True)
             if totals is not None:
                 st.markdown("**Total:** " + " | ".join(f"{c}: {format_currency(v)}" for c, v in totals.items()))
-    st.download_button("Download these items (CSV)", pd.DataFrame(rows, columns=audit.COLUMNS).to_csv(index=False),
-                       file_name=f"audit_{_scenario_label(portfolio, chosen.scenario_id)}_{y_from}-{y_to}.csv",
-                       mime="text/csv", key="audit_csv")
+    stem = f"Audit_{_scenario_label(portfolio, chosen.scenario_id)}_{y_from}" + (f"-{y_to}" if y_to != y_from else "")
+    if entity_filter:
+        stem += "_" + "".join(ch if ch.isalnum() else "_" for ch in entity_filter)
+    st.download_button(
+        "Download to Excel (a sheet per section)",
+        exports.audit_workbook_bytes(chosen, portfolio, picked_years, entity_filter,
+                                     _scenario_label(portfolio, chosen.scenario_id)),
+        file_name=f"{stem}.xlsx", key="audit_xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+def _render_audit_by_asset(chosen, portfolio: Portfolio, rows, statements, years) -> None:
+    """A small income statement per asset (or bundle, or entity), then one in detail."""
+    st.caption("Gross income - Expenses = Net operating income; - Debt service (interest + principal) = Cash flow "
+               "before tax; - Est. tax = Net after tax. Tax is figured for the whole household, so each asset's "
+               "share is ALLOCATED: its taxable net (rentals and businesses: income - expenses - interest - "
+               "depreciation) x the household's average rate that year; a tax loss shows as a saving. The "
+               "Household row has salaries, Social Security, household spending and the rest of the tax, so the "
+               "Total matches the year's results. Amounts are your share; summed over the years chosen.")
+    grouping = st.radio("Group by", audit.GROUPINGS, horizontal=True, key="audit_group_by")
+    label_fn = audit.group_of(portfolio, chosen, grouping)
+    table = audit.by_group(statements, label_fn, years)
+    if not table:
+        st.info("Nothing to show for these years.")
+        return
+    df = pd.DataFrame(table)
+    shown = df.copy()
+    for c in audit.STATEMENT_LINES:
+        shown[c] = shown[c].apply(format_currency)
+    st.dataframe(shown, hide_index=True, use_container_width=True)
+
+    names = [r["Name"] for r in table if r["Name"] != "Total"]
+    pick = st.selectbox(f"Look at one {grouping.lower()} year by year", names, key=f"audit_pick_{grouping}")
+    stmt = pd.DataFrame(audit.group_statement(statements, label_fn, pick, years)).set_index("Line")
+    st.dataframe(stmt.map(format_currency), use_container_width=True)
+    # Its items: everything whose asset is in this group
+    working = getattr(chosen, "working_portfolio", None) or portfolio
+    in_group = {a.name for a in working.assets if label_fn(a.asset_id) == pick}
+    if pick == audit.HOUSEHOLD:
+        mine = [r for r in rows if r["Section"] in ("Gross income", "Expenses", "Debt service") and not r["Asset"]]
+    else:
+        mine = [r for r in rows if r["Asset"] in in_group and r["Section"] != "Cash"]
+    if mine:
+        st.markdown(f"**Items for {pick}**")
+        for section in ("Gross income", "Expenses", "Debt service", "Assets"):
+            part = audit.pivot(mine, section, years)
+            if part.empty:
+                continue
+            st.caption(section)
+            value_cols = [c for c in part.columns if c in [str(y) for y in years] or c == "Total"]
+            for c in value_cols:
+                part[c] = part[c].apply(format_currency)
+            st.dataframe(part.drop(columns=["Entity"]), hide_index=True, use_container_width=True)
 
 
 def render_rental_pro_forma(portfolio: Portfolio, scenario_id: str) -> None:

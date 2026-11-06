@@ -312,13 +312,14 @@ Every table -- entities, people, events, assets, liabilities, cashflows, actuals
 1. Simulation tab > **Run simulation for all scenarios**.
 2. Audit tab: pick the scenario, **From year** and **To year** (one year or a range), and optionally an **Entity**.
 3. The banner says whether every check adds up. **Summary & checks** lists each total from the results next to the sum of its items.
-4. The section tabs show the items, one row each with its **Source ID** (cashflow key, loan:<key> or asset:<key>) and a column per year:
+4. **By asset** puts each asset (or bundle, or entity -- **Group by**) side by side: gross income, expenses, net operating income, interest, principal, cash flow before tax, depreciation, taxable net, est. tax and net after tax, summed over the years chosen. Tax is figured for the whole household, so each asset's share is **allocated**: its taxable net (rentals and businesses: income - expenses - interest - depreciation) x the household's average rate that year; a tax loss shows as a saving. A Household row carries salaries, Social Security, household spending and the rest of the tax, so the Total matches the results. Pick one under **Look at one ... year by year** to see its statement by year and every item behind it -- e.g. a rental, or the whole pistachio crop.
+5. The section tabs show the items, one row each with its **Source ID** (cashflow key, loan:<key> or asset:<key>) and a column per year:
    - **Gross income** and **Expenses** -- every inflow and outflow; Expenses also lists each loan's payments.
    - **Debt service** -- each loan's beginning balance, interest, principal and ending balance.
    - **Est. tax** -- the calculation step by step: income by category, AGI, deductions, federal, payroll per person, California, total.
    - **Cash** -- surplus/(deficit) and where it went (reinvested or withdrawn, by asset).
    - **Assets** -- each asset's roll-forward: beginning value + growth + value-changing cashflows + other changes (RMD, receivable paydown, sale) - withdrawn + reinvested = ending value.
-5. **Download these items (CSV)** saves the rows. The Excel export has the same items for every year and scenario on the **Audit** sheet, and the checks on **Audit Checks**.
+6. **Download to Excel** saves what you're looking at as a workbook: Summary & Checks, a sheet per section (with Total rows as SUM formulas), By Asset (the side-by-side table, then each asset year by year) and All Items (one row per item, for filters and pivots). The Excel export has the same items for every year and scenario on the **Audit** sheet, and the checks on **Audit Checks**.
 
 ## Run a what-if?
 

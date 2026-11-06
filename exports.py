@@ -852,3 +852,135 @@ def _write_notes_warnings_sheet(wb: Workbook, simulation_results: List[Simulatio
     for r_idx in range(5, last_row):
         ws.cell(row=r_idx, column=3).fill = WARNING_FILL
     ws.column_dimensions["C"].width = 90
+
+
+# ---------------------------------------------------------------------------
+# Audit workbook (the Audit tab's download)
+# ---------------------------------------------------------------------------
+
+AUDIT_CURRENCY_FORMAT = '$#,##0.00;[RED]($#,##0.00)'
+
+
+def audit_workbook_bytes(result: SimulationResult, portfolio: Portfolio, years: List[int],
+                         entity: str | None = None, scenario_name: str = "") -> bytes:
+    """The Audit tab as an Excel workbook: Summary & Checks, one sheet per section
+    (items as rows, a column per year, plus Total for flow sections), and All Items
+    (one row per item, for filtering and pivots). Amounts to the cent."""
+    import io
+    import audit
+
+    scenario_name = scenario_name or str(result.scenario_id)
+    span = f"{years[0]}" + (f"-{years[-1]}" if len(years) > 1 else "")
+    rows = audit.audit_rows(result, portfolio, scenario_name, years)
+    wb = Workbook()
+    wb.remove(wb.active)
+
+    def title(ws, text, note):
+        ws["A1"] = text
+        ws["A1"].font = TITLE_FONT
+        ws["A2"] = note
+        ws["A2"].font = SUBTITLE_FONT
+
+    # Summary & Checks
+    ws = wb.create_sheet("Summary & Checks")
+    title(ws, f"Audit - {scenario_name}, {span}" + (f", {entity}" if entity else ""),
+          "Each total from the Simulation results, then each check: the total vs. the sum of its items.")
+    by_year = {r.year: r for r in result.annual_results}
+    summary = [("Gross income", "total_gross_income"), ("Expenses (incl. debt service)", "total_expenses"),
+               ("Est. tax", "total_estimated_tax"), ("Surplus/(deficit)", "surplus_or_deficit"),
+               ("Withdrawal", "withdrawal_amount"), ("Reinvestment", "reinvestment_amount"),
+               ("Debt service", "total_debt_service"), ("Total assets", "total_assets"),
+               ("Total liabilities", "total_liabilities"), ("Total net worth", "total_net_worth")]
+    next_row = _write_table(ws, 4, ["Total"] + [str(y) for y in years],
+                            [[label] + [getattr(by_year[y], attr) for y in years] for label, attr in summary],
+                            currency_cols=list(range(1, len(years) + 1)))
+    checks = (audit.checks(result, years) + audit.asset_total_check(result, portfolio, years)
+              + audit.by_group_check(result, audit.asset_statements(result, portfolio, years), years))
+    checks.sort(key=lambda c: c["Year"])
+    _write_table(ws, next_row + 1, ["Year", "Check", "Summary", "Sum of items", "Difference", "OK"],
+                 [[c["Year"], c["Check"], c["Summary"], c["Sum of items"], c["Difference"],
+                   "OK" if c["OK"] else "CHECK"] for c in checks], currency_cols=[2, 3, 4])
+    ws.freeze_panes = "B5"
+    ws.column_dimensions["A"].width = 30
+    ws.column_dimensions["B"].width = 26
+
+    notes = {
+        "Gross income": "Each inflow: household cashflows and each asset's income.",
+        "Expenses": "Each outflow, plus each loan's payments (debt service is part of Expenses).",
+        "Debt service": "Each loan: beginning balance, interest, principal, ending balance.",
+        "Est. tax": "The tax calculation step by step (federal, payroll per person, California).",
+        "Cash": "Surplus/(deficit) and where it went: reinvested or withdrawn, by asset.",
+        "Assets": "Each asset: beginning value + growth + value-changing cashflows + other changes "
+                  "- withdrawn + reinvested = ending value.",
+    }
+    for section in audit.SECTIONS:
+        ent = None if section in ("Est. tax", "Cash") else entity
+        df = audit.pivot(rows, section, years, ent)
+        ws = wb.create_sheet(section.replace(".", ""))
+        title(ws, f"{section} - {scenario_name}, {span}" + (f", {ent}" if ent else ""), notes[section])
+        if df.empty:
+            ws["A4"] = "Nothing in this section for the years and entity chosen."
+            continue
+        headers = list(df.columns)
+        value_idx = [i for i, c in enumerate(headers) if c in [str(y) for y in years] or c == "Total"]
+        data = df.values.tolist()
+        last = _write_table(ws, 4, headers, data, currency_cols=value_idx)
+        # Rates (e.g. effective tax rate) as percentages, not dollars
+        for r_off, row in enumerate(data):
+            if row[headers.index("Detail")] == "rate" or "rate" in str(row[headers.index("Line")]).lower():
+                for i in value_idx:
+                    ws.cell(row=5 + r_off, column=i + 1).number_format = PERCENT_FORMAT
+            else:
+                for i in value_idx:
+                    ws.cell(row=5 + r_off, column=i + 1).number_format = AUDIT_CURRENCY_FORMAT
+        if section in audit.FLOW_SECTIONS and section != "Est. tax":
+            ws.cell(row=last, column=1, value="Total").font = Font(name=FONT_NAME, bold=True)
+            for i in value_idx:
+                col = get_column_letter(i + 1)
+                cell = ws.cell(row=last, column=i + 1, value=f"=SUM({col}5:{col}{last - 1})")
+                cell.number_format = AUDIT_CURRENCY_FORMAT
+                cell.font = Font(name=FONT_NAME, bold=True)
+        ws.column_dimensions["A"].width = 50
+        ws.column_dimensions["C"].width = 32
+        ws.freeze_panes = "F5"
+
+    # By Asset: one statement per asset over the years chosen, then each asset year by year
+    statements = audit.asset_statements(result, portfolio, years)
+    label_fn = audit.group_of(portfolio, result, "Asset")
+    ws = wb.create_sheet("By Asset")
+    title(ws, f"By asset - {scenario_name}, {span}",
+          "Summed over the years chosen. Est. tax is ALLOCATED: each asset's taxable net x the household's average "
+          "rate that year; the Household row has the rest, so the Total matches the results.")
+    table = audit.by_group(statements, label_fn, years)
+    headers = ["Name"] + audit.STATEMENT_LINES
+    last = _write_table(ws, 4, headers, [[r[h] for h in headers] for r in table],
+                        currency_cols=list(range(1, len(headers))))
+    ws.column_dimensions["A"].width = 36
+    row = last + 1
+    ws.cell(row=row, column=1, value="Each asset, year by year").font = TITLE_FONT
+    row += 2
+    for r in table:
+        if r["Name"] == "Total":
+            continue
+        ws.cell(row=row, column=1, value=r["Name"]).font = Font(name=FONT_NAME, bold=True)
+        stmt = audit.group_statement(statements, label_fn, r["Name"], years)
+        row = _write_table(ws, row + 1, ["Line"] + [str(y) for y in years],
+                           [[s["Line"]] + [s[str(y)] for y in years] for s in stmt],
+                           currency_cols=list(range(1, len(years) + 1))) + 1
+    ws.freeze_panes = "B5"
+    ws.auto_filter.ref = None
+
+    ws = wb.create_sheet("All Items")
+    title(ws, f"All items - {scenario_name}, {span}",
+          "One row per item, every section. Filter by Year, Section or Entity, or build a pivot table.")
+    _write_table(ws, 4, audit.COLUMNS, [[r[c] for c in audit.COLUMNS] for r in rows],
+                 currency_cols=[audit.COLUMNS.index("Amount")])
+    for row in ws.iter_rows(min_row=5, min_col=audit.COLUMNS.index("Amount") + 1,
+                            max_col=audit.COLUMNS.index("Amount") + 1):
+        row[0].number_format = AUDIT_CURRENCY_FORMAT
+    ws.column_dimensions["D"].width = 48
+    ws.column_dimensions["G"].width = 32
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()

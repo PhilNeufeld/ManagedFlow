@@ -25,6 +25,7 @@ from __future__ import annotations
 from typing import Dict, Iterable, List, Optional
 
 SECTIONS = ["Gross income", "Expenses", "Debt service", "Est. tax", "Cash", "Assets"]
+# (plus the By asset view: asset_statements / by_group, below)
 # Flow sections add up across years; balance sections (Debt service, Assets) don't.
 FLOW_SECTIONS = {"Gross income", "Expenses", "Est. tax", "Cash"}
 COLUMNS = ["Scenario", "Year", "Section", "Line", "Detail", "Source ID", "Asset", "Entity", "Amount"]
@@ -44,10 +45,17 @@ def _names(portfolio, result=None):
     return asset_names, loans, active
 
 
+def _secured(portfolio, result=None) -> Dict:
+    """liability_id -> the asset it's secured by (or None)."""
+    working = getattr(result, "working_portfolio", None) or portfolio
+    return {li.liability_id: getattr(li, "secured_by_asset_id", None) for li in working.liabilities}
+
+
 def audit_rows(result, portfolio, scenario_name: Optional[str] = None,
                years: Optional[Iterable[int]] = None) -> List[dict]:
     """All audit rows for one scenario's SimulationResult (optionally only some years)."""
     asset_names, loans, active = _names(portfolio, result)
+    secured = _secured(portfolio, result)
     scen = scenario_name or str(result.scenario_id)
     wanted = set(years) if years is not None else None
     rows: List[dict] = []
@@ -73,14 +81,15 @@ def audit_rows(result, portfolio, scenario_name: Optional[str] = None,
             name, ent = loans.get(lr.liability_id, (str(lr.liability_id), ""))
             if lr.debt_service:
                 add(yr, "Expenses", f"{name} - payments", lr.debt_service, "debt service", f"loan:{lr.liability_id}",
-                    entity=ent)
+                    secured.get(lr.liability_id), entity=ent)
         for lr in y.liability_results:
             name, ent = loans.get(lr.liability_id, (str(lr.liability_id), ""))
             if not (lr.beginning_balance or lr.ending_balance or lr.debt_service):
                 continue
             for detail, amount in (("Beginning balance", lr.beginning_balance), ("Interest", lr.interest_paid),
                                    ("Principal", lr.principal_paid), ("Ending balance", lr.ending_balance)):
-                add(yr, "Debt service", name, amount, detail, f"loan:{lr.liability_id}", entity=ent)
+                add(yr, "Debt service", name, amount, detail, f"loan:{lr.liability_id}", secured.get(lr.liability_id),
+                    entity=ent)
         te = y.tax_estimate
         if te is not None:
             if te.details:
@@ -185,3 +194,152 @@ def pivot(rows: List[dict], section: str, years: List[int], entity: Optional[str
     if section in FLOW_SECTIONS and len(years) > 1 and section != "Est. tax":
         table["Total"] = table.sum(axis=1)
     return table.reset_index()
+
+
+# ---------------------------------------------------------------------------
+# By asset (or bundle, or entity): a small income statement for each
+# ---------------------------------------------------------------------------
+
+GROUPINGS = ("Asset", "Bundle", "Entity")
+HOUSEHOLD = "Household (not tied to an asset)"
+STATEMENT_LINES = ["Gross income", "Expenses", "Net operating income", "Interest", "Principal", "Debt service",
+                   "Cash flow before tax", "Depreciation", "Taxable net", "Est. tax (allocated)", "Net after tax"]
+
+
+def _tax_rate(y) -> float:
+    """The household's average tax rate that year: total tax / AGI (falls back to gross income)."""
+    te = y.tax_estimate
+    if te is None or not te.total_estimated_tax:
+        return 0.0
+    agi = (te.details or {}).get("AGI") or y.total_gross_income
+    return te.total_estimated_tax / agi if agi else 0.0
+
+
+def asset_statements(result, portfolio, years: Optional[Iterable[int]] = None) -> Dict:
+    """{(year, asset_id or None): {line: amount}} -- None is the household (salaries, Social
+    Security, household spending, unsecured loans, and the rest of the tax).
+
+    Tax is figured for the whole household, so an asset's 'Est. tax (allocated)' is its taxable
+    net (taxable income - expenses - interest - depreciation) x the household's average rate
+    that year; a loss shows as a saving. The household row gets the rest, so every column
+    adds up to the year's totals."""
+    working = getattr(result, "working_portfolio", None) or portfolio
+    assets = {a.asset_id: a for a in working.assets}
+    flows = {cf.flow_id: cf for cf in working.cashflows}
+    secured = _secured(portfolio, result)
+    wanted = set(years) if years is not None else None
+    out: Dict = {}
+    for y in result.annual_results:
+        if wanted is not None and y.year not in wanted:
+            continue
+        rows: Dict = {}
+        get = lambda aid: rows.setdefault(aid, {k: 0.0 for k in STATEMENT_LINES + ["_taxable_income"]})
+        for li in y.line_items:
+            aid = li.get("asset_id")
+            r = get(aid)
+            if li["section"] == "income":
+                r["Gross income"] += li["amount"]
+                cf = flows.get(li["flow_id"])
+                if cf is None or cf.taxable:
+                    r["_taxable_income"] += li["amount"]
+            else:
+                r["Expenses"] += li["amount"]
+        for lr in y.liability_results:
+            r = get(secured.get(lr.liability_id))
+            r["Interest"] += lr.interest_paid
+            r["Principal"] += lr.principal_paid
+        rate = _tax_rate(y)
+        for aid in list(rows) + [a for a in assets if a not in rows]:
+            if aid is None or aid not in assets:
+                continue
+            dep = assets[aid].depreciation_in_year(y.year) if assets[aid].active else 0.0
+            if aid not in rows and not dep:
+                continue
+            r = get(aid)
+            r["Depreciation"] = dep
+            # Rentals and businesses deduct their expenses, interest and depreciation; for other
+            # assets (a home, a trust) only the taxable income counts -- e.g. home mortgage
+            # interest is an itemized deduction of the household, not of the house.
+            kind = getattr(assets[aid].tax_category, "value", str(assets[aid].tax_category))
+            if kind in ("rental_income", "business_income"):
+                r["Taxable net"] = r["_taxable_income"] - r["Expenses"] - r["Interest"] - dep
+            else:
+                r["Taxable net"] = r["_taxable_income"]
+            r["Est. tax (allocated)"] = r["Taxable net"] * rate
+        house = get(None)
+        house["Est. tax (allocated)"] = y.total_estimated_tax - sum(
+            r["Est. tax (allocated)"] for aid, r in rows.items() if aid is not None)
+        for aid, r in rows.items():
+            r["Net operating income"] = r["Gross income"] - r["Expenses"]
+            r["Debt service"] = r["Interest"] + r["Principal"]
+            r["Cash flow before tax"] = r["Net operating income"] - r["Debt service"]
+            r["Net after tax"] = r["Cash flow before tax"] - r["Est. tax (allocated)"]
+            r.pop("_taxable_income", None)
+            out[(y.year, aid)] = r
+    return out
+
+
+def group_of(portfolio, result=None, grouping: str = "Asset"):
+    """A function asset_id (None = household) -> group label."""
+    working = getattr(result, "working_portfolio", None) or portfolio
+    assets = {a.asset_id: a for a in working.assets}
+    entity = {e.entity_id: e.name for e in working.entities}
+    bundle_of = {}
+    for b in getattr(working, "bundles", []):
+        for aid in getattr(b, "asset_ids", []) or []:
+            bundle_of.setdefault(aid, b.name)
+
+    def label(aid):
+        if aid is None or aid not in assets:
+            return HOUSEHOLD
+        if grouping == "Entity":
+            return entity.get(assets[aid].entity_id, "(no entity)")
+        if grouping == "Bundle":
+            return bundle_of.get(aid, f"(not in a bundle) {assets[aid].name}")
+        return assets[aid].name
+    return label
+
+
+def by_group(statements: Dict, label_fn, years: Iterable[int]) -> List[dict]:
+    """Rows: one per group, each statement line summed over `years`, then a Total row."""
+    totals: Dict[str, Dict[str, float]] = {}
+    for (year, aid), r in statements.items():
+        if year not in set(years):
+            continue
+        g = totals.setdefault(label_fn(aid), {k: 0.0 for k in STATEMENT_LINES})
+        for k in STATEMENT_LINES:
+            g[k] += r[k]
+    names = sorted((n for n in totals if n != HOUSEHOLD)) + ([HOUSEHOLD] if HOUSEHOLD in totals else [])
+    rows = [{"Name": n, **{k: round(totals[n][k], 2) for k in STATEMENT_LINES}} for n in names]
+    if rows:
+        rows.append({"Name": "Total", **{k: round(sum(r[k] for r in rows), 2) for k in STATEMENT_LINES}})
+    return rows
+
+
+def group_statement(statements: Dict, label_fn, name: str, years: List[int]) -> List[dict]:
+    """One group's statement year by year: a row per line, a column per year."""
+    out = []
+    for k in STATEMENT_LINES:
+        row = {"Line": k}
+        for y in years:
+            row[str(y)] = round(sum(r[k] for (yr, aid), r in statements.items() if yr == y and label_fn(aid) == name), 2)
+        out.append(row)
+    return out
+
+
+def by_group_check(result, statements: Dict, years: Iterable[int]) -> List[dict]:
+    """The by-asset columns add back to the year's totals."""
+    out = []
+    for y in result.annual_results:
+        if y.year not in set(years):
+            continue
+        rs = [r for (yr, _), r in statements.items() if yr == y.year]
+        pairs = [("By asset: gross income", y.total_gross_income, sum(r["Gross income"] for r in rs)),
+                 ("By asset: expenses + debt service", y.total_expenses,
+                  sum(r["Expenses"] + r["Debt service"] for r in rs)),
+                 ("By asset: est. tax", y.total_estimated_tax, sum(r["Est. tax (allocated)"] for r in rs)),
+                 ("By asset: net after tax = surplus", y.surplus_or_deficit, sum(r["Net after tax"] for r in rs))]
+        for name, summary, items in pairs:
+            out.append({"Year": y.year, "Check": name, "Summary": round(summary, 2), "Sum of items": round(items, 2),
+                        "Difference": round(summary - items, 2), "OK": abs(summary - items) <= TOLERANCE})
+    return out
