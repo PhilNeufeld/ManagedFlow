@@ -27,6 +27,7 @@ import quick_add
 import rentals
 import scenarios as scenario_engine
 import simulation
+import backup
 import storage
 from models import (
     Asset,
@@ -231,7 +232,7 @@ def render_sidebar() -> None:
     st.sidebar.title("Portfolio File")
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    existing_files = sorted(DATA_DIR.glob("*.json"))
+    existing_files = sorted(p for p in DATA_DIR.glob("*.json") if ".backup_" not in p.name)
     file_labels = [f.name for f in existing_files]
 
     chosen = st.sidebar.selectbox(
@@ -280,12 +281,79 @@ def render_sidebar() -> None:
                 st.sidebar.success("Saved.")
             except storage.StorageError as exc:
                 st.sidebar.error(str(exc))
+            else:
+                _auto_backup()
         if st.sidebar.button("Save backup copy now"):
             try:
                 backup_path = storage.backup_file(path)
                 st.sidebar.success(f"Backup written: {backup_path.name}")
             except storage.StorageError as exc:
                 st.sidebar.error(str(exc))
+
+    render_backup_sidebar()
+
+
+def _auto_backup() -> None:
+    """After a save: the day's automatic off-machine backup, if one is due."""
+    settings = backup.load_settings()
+    try:
+        zip_path = backup.auto_backup_if_due(settings)
+    except backup.BackupError as exc:
+        st.sidebar.warning(f"Saved, but today's automatic backup didn't run: {exc}")
+        return
+    if zip_path is not None:
+        st.sidebar.success(f"Today's backup written: {zip_path.name}")
+
+
+def render_backup_sidebar() -> None:
+    """Backup: zip the private files (portfolios, actuals, builder scripts, outputs)
+    into a folder a sync service backs up, and restore from those zips."""
+    st.sidebar.markdown("---")
+    settings = backup.load_settings()
+    zips = backup.list_backups(settings.folder)
+    title = "Backup" + (f" (last: {zips[0].stem.removeprefix(backup.ZIP_PREFIX)})" if zips
+                        else " (not set up)" if not settings.folder else "")
+    with st.sidebar.expander(title, expanded=not settings.folder):
+        st.caption("Zips your private files -- portfolios, actuals, builder scripts and the outputs "
+                   "folder -- into one dated file. Pick a folder that Google Drive, OneDrive or "
+                   "Dropbox syncs so the copy leaves this computer. The code is on GitHub.")
+        folder = st.text_input("Backup folder", value=settings.folder, key="backup_folder",
+                               placeholder=r"e.g. G:\My Drive\Backups\ManagedFlow")
+        keep = st.number_input("Backups to keep", min_value=1, max_value=365, value=int(settings.keep),
+                               step=1, key="backup_keep")
+        auto = st.checkbox("Back up automatically on the first save each day", value=settings.auto_daily,
+                           key="backup_auto")
+        col_save, col_now = st.columns(2)
+        if col_save.button("Save settings", key="backup_save_settings"):
+            settings.folder, settings.keep, settings.auto_daily = folder.strip(), int(keep), auto
+            backup.save_settings(settings)
+            st.success("Backup settings saved.")
+        if col_now.button("Back up now", key="backup_now"):
+            try:
+                zip_path = backup.make_backup(folder.strip() or settings.folder, keep=int(keep))
+                st.success(f"Backup written: {zip_path.name}")
+            except backup.BackupError as exc:
+                st.error(str(exc))
+        zips = backup.list_backups(folder.strip() or settings.folder)
+        if zips:
+            st.markdown("**Restore**")
+            chosen = st.selectbox("Backup to restore", [z.name for z in zips], key="backup_restore_pick")
+            zip_path = next(z for z in zips if z.name == chosen)
+            with st.popover("What's inside"):
+                st.write("\n".join(f"- `{n}`" for n in backup.backup_contents(zip_path)))
+            sure = st.checkbox("Replace my current files with this backup (they're copied to "
+                               "data/Archive first)", key="backup_restore_sure")
+            if st.button("Restore", key="backup_restore", disabled=not sure):
+                try:
+                    aside = backup.restore_backup(zip_path)
+                    st.success(f"Restored {chosen}. Your previous files are in data/Archive/{aside.name}. "
+                               "Load the portfolio file again to see it.")
+                except (backup.BackupError, OSError) as exc:
+                    st.error(str(exc))
+        local = sorted(DATA_DIR.glob("*.backup_*.json"))
+        if local and st.button(f"Move {len(local)} save copies from data/ to data/Archive",
+                               key="backup_tidy"):
+            st.success(f"Moved {backup.tidy_local_backups()} files to data/Archive.")
 
 
 # ---------------------------------------------------------------------------

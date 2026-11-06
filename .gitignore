@@ -23,3 +23,8 @@ Thumbs.db
 data/build_*.py
 # Private data tasks next to each portfolio
 data/*_tasks.md
+
+# Per-computer settings (backup folder, etc.)
+.managedflow/
+# Archived snapshots and pre-restore copies (real household data)
+data/Archive/

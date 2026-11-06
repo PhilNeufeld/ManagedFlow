@@ -209,15 +209,29 @@ If someone claims before full retirement age (FRA: 67 for anyone born 1960 or la
 
 - **Save portfolio** (sidebar) writes your file, e.g. data\MyPlan.json. Before overwriting, it copies the old version to a timestamped backup in the same folder: MyPlan.backup_20261104_153012.json.
 - **Save backup copy now** (sidebar) makes a timestamped backup on demand, without saving changes.
-- Household files are kept off GitHub: .gitignore covers your portfolio, data\*.csv, backups, data\*_tasks.md, data\build_*.py and outputs\. Back them up yourself (e.g. to OneDrive).
+- Household files are kept off GitHub: .gitignore covers your portfolio, data\*.csv, backups, data\*_tasks.md, data\build_*.py and outputs\. Back them up off this computer (next section).
+- **Move save copies to data\Archive** (sidebar, under Backup) clears the timestamped copies out of the data folder; they stay in data\Archive.
+
+## Backing up off this computer
+
+The timestamped copies sit on the same disk as your file, so a failed drive takes them too. The sidebar's **Backup** section zips every private file -- portfolios, actuals CSVs, builder scripts, task lists and the outputs folder -- into one dated file, e.g. ManagedFlow_backup_2026-11-06_083000.zip, in a folder you choose. The code itself is on GitHub.
+
+1. Pick a folder that Google Drive, OneDrive or Dropbox syncs, e.g. G:\My Drive\Backups\ManagedFlow, type it under **Backup folder**, and click **Save settings**. The setting is stored in .managedflow\settings.json on this computer only.
+2. Click **Back up now** to make the first backup.
+3. With **Back up automatically on the first save each day** on, the first **Save portfolio** of each day also makes a backup. Only the newest backups are kept (30 by default); the sync service keeps older versions too.
+4. If the drive isn't there (for example Google Drive isn't running), you get a message instead of a backup -- start the sync app and click **Back up now**.
+
+To restore: under **Restore**, pick a backup, look at **What's inside**, tick the confirmation and click **Restore**. Your current files are copied to data\Archive\pre_restore_<time> first, so a restore can be undone. Then load the portfolio file again.
+
+> Backups hold your full financial picture. Keep the sync account protected with two-step verification.
 
 ## Archiving a data set (e.g. a year-end snapshot)
 
 1. Click **Save portfolio** so the file on disk is current.
-2. In File Explorer, create a folder data\archive inside the ManagedFlow folder (once).
+2. In File Explorer, create a folder data\Archive inside the ManagedFlow folder (once).
 3. Copy your portfolio file into it and rename the copy with its date and purpose, e.g. MyPlan_2026-12-31_year-end.json.
 4. Optionally export to Excel (Export tab) and save the workbook next to it as a read-only record of the results.
-5. Copy the archive folder to your backup location.
+5. The next backup (sidebar, Backup) includes it: snapshots in data\Archive are zipped along with everything else (the automatic save copies are not).
 
 > The sidebar lists only files directly in the data folder, so archived files stay out of the list. Older files load fine: ManagedFlow upgrades the schema as it opens them.
 
@@ -400,6 +414,7 @@ Household-specific to-dos live next to each portfolio in `data/<file>_tasks.md` 
 | 1.2 | Accounts: taxable / tax-deferred / Roth with an owner; required minimum distributions (SECURE 2.0 ages, Uniform Lifetime Table); shortfalls drawn taxable -> tax-deferred -> Roth; tax-deferred withdrawals taxed and grossed up |
 | 1.2 | Social Security class: PIA + claiming age by SSA's rules; spousal and survivor benefits; earnings-test months credited back at FRA; claiming-age comparison through the whole plan. Receivables: notes and fees owed to you, paid down monthly, interest and principal taxed separately |
 | 1.1 | Link tables (memberships, ownerships) get integer primary keys; the joined pair stays a unique constraint; edit in place |
+| 1.2 | Off-machine backups: one dated zip of all private files (portfolios, actuals, builder scripts, outputs) to a synced folder; daily automatic backup on save; keep the newest N; restore with the current files set aside; tidy save copies into data/Archive |
 | 1.0 | Integer primary keys in every table (migration renumbers older files); actuals import links by key (cashflow_id), never by name, with a template listing each planned cashflow's key; unplanned actuals count once in their own year; re-link stored records |
 
 ## Next (in this order)
