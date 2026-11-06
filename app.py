@@ -2875,11 +2875,18 @@ def _scenario_label(portfolio: Portfolio, scenario_id) -> str:
 
 
 def _run_simulation_button(portfolio: Portfolio, key: str) -> None:
+    """Run every scenario, then redraw the page: tabs are drawn top to bottom, so ones
+    drawn before this button (e.g. Simulation, when clicked on Audit) would otherwise
+    still show the old results until the next click."""
     if st.button("Run simulation for all scenarios", type="primary", key=key):
         with st.spinner("Running year-by-year simulation..."):
             results = simulation.run_all_scenarios(portfolio)
             st.session_state["simulation_results"] = results
-        st.success(f"Simulation complete: {len(results)} scenario(s).")
+        st.session_state["simulation_just_ran"] = len(results)
+        st.rerun()
+    ran = st.session_state.pop("simulation_just_ran", None)
+    if ran is not None:
+        st.success(f"Simulation complete: {ran} scenario(s).")
 
 
 def _pick_result(portfolio: Portfolio, key: str):

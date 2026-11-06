@@ -435,3 +435,11 @@ def test_audit_tab_shows_items_and_checks(tmp_path):
     assert any("checks add up" in s.value for s in at.success)
     assert any(t.label == "Audit" for t in at.tabs) and any(t.label.startswith("Warnings") for t in at.tabs)
     assert at.number_input(key="sim_years_to_view").value == 3     # only 3 years in this plan
+
+
+def test_running_from_the_audit_tab_fills_every_tab(tmp_path):
+    at = start(_depreciating_rental(), tmp_path)
+    at = next(b for b in at.button if b.key == "audit_run_btn").click().run()
+    no_crash(at)
+    assert any("checks add up" in s.value for s in at.success)         # Audit tab shows its tables
+    assert at.number_input(key="sim_years_to_view").value == 3          # and the Simulation tab its results
