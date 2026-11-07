@@ -25,6 +25,7 @@ Household-specific to-dos live next to each portfolio in `data/<file>_tasks.md`
 | 1.2 | Accounts: taxable / tax-deferred / Roth with an owner; required minimum distributions (SECURE 2.0 ages, Uniform Lifetime Table); shortfalls drawn taxable -> tax-deferred -> Roth; tax-deferred withdrawals taxed and grossed up |
 | 1.2 | Social Security class: PIA + claiming age by SSA's rules; spousal and survivor benefits; earnings-test months credited back at FRA; claiming-age comparison through the whole plan. Receivables: notes and fees owed to you, paid down monthly, interest and principal taxed separately |
 | 1.1 | Link tables (memberships, ownerships) get integer primary keys; the joined pair stays a unique constraint; edit in place |
+| 1.2 | Spending policy: guardrails on living expenses (draw-rate cuts/restores, floor/ceiling, skip inflation after a loss), used by Monte Carlo; highest steady spending (deterministic or Monte Carlo success target, optional cash reserve); rental pro forma shows est. tax and cash flow after tax |
 | 1.2 | Save safeguard: warns when the file changed on disk since it was loaded (reload or overwrite); rates shown and entered as percentages |
 | 1.2 | Assets in another currency (value and cashflows converted to USD at Assumptions exchange rates); interest taxed yearly on bank/CD accounts |
 | 1.2 | Credit lines that convert to an amortizing loan after a draw period (HELOC: interest-only, then repaid over N years) |
@@ -34,8 +35,7 @@ Household-specific to-dos live next to each portfolio in `data/<file>_tasks.md`
 
 ## Next (in this order)
 
-1. **Spending policy** (lower priority) -- spending that adjusts to markets
-   (guardrails), used by Monte Carlo.
+1. **Allocated income vs. cash** -- see below.
 
 ## Next after a portfolio is populated
 
@@ -59,8 +59,6 @@ Household-specific to-dos live next to each portfolio in `data/<file>_tasks.md`
   (e.g. sell before vs. after depreciation runs out), depreciation recapture on sale.
 - Tax engine extras: AMT, QBI deduction, IRMAA, CA exemption-credit phase-out,
   filing status change after a spouse's death.
-- **Highest steady spending** -- solve for the largest inflation-adjusted
-  spending level the plan can sustain for life.
 - Monte Carlo upgrades: correlated asset swings; historical-sequence mode.
 - Unitrust and pension valuation (present value of payments).
 - Survivor rules built into pension and Social Security classes.

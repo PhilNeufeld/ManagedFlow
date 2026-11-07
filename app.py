@@ -2687,6 +2687,8 @@ def render_scenarios_tab(portfolio: Portfolio) -> None:
                     "Scope": _scope_label(s),
                     "Inflation override": ("" if s.inflation_rate_override is None
                                            else f"{s.inflation_rate_override:.2%}"),
+                    "Spending": ("fixed" if getattr(s, "spending_policy", "fixed") == "fixed" else
+                                 f"guardrails {s.guardrail_lower:.0%}-{s.guardrail_upper:.0%}, floor {s.spending_floor:.0%}"),
                     "Asset overrides": len(s.asset_overrides),
                     "Cashflow overrides": len(s.cashflow_overrides),
                     "Event moves": len(s.event_overrides),
@@ -2847,6 +2849,36 @@ def _render_scenario_editor(portfolio: Portfolio, editor: dict) -> None:
             value=getattr(existing, "count_unplanned_actuals", True) if existing else True,
             key=field("count_unplanned"),
         )
+        st.markdown("**Spending policy** (living expenses)")
+        policies = {"fixed": "Fixed -- spend the plan every year",
+                    "guardrails": "Guardrails -- cut when the draw on savings is high, restore when it's low"}
+        sp1, sp2, sp3 = st.columns(3)
+        with sp1:
+            spending_policy = st.selectbox("Policy", list(policies), format_func=policies.get,
+                                           index=list(policies).index(getattr(existing, "spending_policy", "fixed"))
+                                           if existing else 0, key=field("spending_policy"))
+            skip_infl = st.checkbox("Skip the inflation raise after a losing year",
+                                    value=getattr(existing, "skip_inflation_after_loss", True) if existing else True,
+                                    key=field("skip_infl"))
+        with sp2:
+            g_upper = st.number_input("Cut when the draw rate is above (%)", min_value=0.5, max_value=50.0, step=0.5,
+                                      value=float(getattr(existing, "guardrail_upper", 0.06) * 100) if existing else 6.0,
+                                      key=field("g_upper"))
+            g_lower = st.number_input("Restore when it is below (%)", min_value=0.0, max_value=49.0, step=0.5,
+                                      value=float(getattr(existing, "guardrail_lower", 0.03) * 100) if existing else 3.0,
+                                      key=field("g_lower"))
+        with sp3:
+            g_step = st.number_input("Adjust by (%)", min_value=1.0, max_value=50.0, step=1.0,
+                                     value=float(getattr(existing, "guardrail_step", 0.10) * 100) if existing else 10.0,
+                                     key=field("g_step"))
+            s_floor = st.number_input("Floor (% of plan)", min_value=10.0, max_value=100.0, step=5.0,
+                                      value=float(getattr(existing, "spending_floor", 0.8) * 100) if existing else 80.0,
+                                      key=field("s_floor"))
+            s_ceiling = st.number_input("Ceiling (% of plan)", min_value=100.0, max_value=300.0, step=5.0,
+                                        value=float(getattr(existing, "spending_ceiling", 1.0) * 100) if existing else 100.0,
+                                        key=field("s_ceiling"))
+        st.caption("Draw rate = last year's withdrawals from liquid savings (less any surplus reinvested) / liquid "
+                   "assets. A ceiling of 100% only restores earlier cuts. Years with recorded actuals aren't changed.")
         full_view = st.checkbox(
             "100% view: ignore ownership % (show every asset, loan and cashflow at full size)",
             value=(existing.ownership_view == "full") if existing else False, key=field("full_view"),
@@ -2934,6 +2966,13 @@ def _render_scenario_editor(portfolio: Portfolio, editor: dict) -> None:
                     expense_growth_rate_override=existing.expense_growth_rate_override if existing else None,
                     withdrawal_order_override=existing.withdrawal_order_override if existing else None,
                     notes=existing.notes if existing else "",
+                    spending_policy=spending_policy,
+                    guardrail_upper=g_upper / 100,
+                    guardrail_lower=g_lower / 100,
+                    guardrail_step=g_step / 100,
+                    spending_floor=s_floor / 100,
+                    spending_ceiling=s_ceiling / 100,
+                    skip_inflation_after_loss=skip_infl,
                 )
 
                 if mode == "new":
@@ -3026,9 +3065,11 @@ def render_simulation_tab(portfolio: Portfolio) -> None:
     _run_simulation_button(portfolio, "sim_run_btn")
     chosen = _pick_result(portfolio, "sim_view_scenario")
     warnings_count = sum(len(r.warnings) for r in chosen.annual_results) if chosen else 0
-    labels = ["Results", "Taxes by year", "Rental pro forma", "Social Security claiming", "Monte Carlo",
+    labels = ["Results", "Taxes by year", "Rental pro forma", "Spending", "Social Security claiming", "Monte Carlo",
               f"Warnings ({warnings_count})"]
-    t_results, t_tax, t_rental, t_ss, t_mc, t_warn = st.tabs(labels)
+    t_results, t_tax, t_rental, t_spend, t_ss, t_mc, t_warn = st.tabs(labels)
+    with t_spend:
+        _render_spending(portfolio, chosen)
     with t_results:
         if chosen is None:
             st.info("Run the simulation to see annual results.")
@@ -3100,6 +3141,73 @@ def _render_results(chosen) -> None:
                                     value=min(10, max(1, n_years)), step=1, key="sim_years_to_view")
     st.line_chart(numeric_df.head(int(years_to_view)).set_index("Year")[
         ["Total Assets", "Total Liabilities", "Total Net Worth"]])
+
+
+def _render_spending(portfolio: Portfolio, chosen) -> None:
+    """Living expenses under the scenario's spending policy, and the highest steady spending."""
+    import spending as spending_engine
+    st.subheader("Living expenses by year")
+    if chosen is None:
+        st.info("Run the simulation to see spending by year.")
+    else:
+        sc = portfolio.get_scenario(chosen.scenario_id)
+        policy = getattr(sc, "spending_policy", "fixed") if sc else "fixed"
+        st.caption(f"Spending policy for this scenario: **{policy}** (set it on the Scenarios tab). "
+                   + ("Spending is cut when the draw on liquid savings is above the upper guardrail and restored when "
+                      "it falls below the lower one." if policy == "guardrails" else "Living expenses follow the plan."))
+        df = pd.DataFrame([{"Year": r.year, "Living expenses": r.living_expenses,
+                            "x Plan": r.spending_multiplier,
+                            "Draw rate": spending_engine.draw_rate(r) if r.liquid_net_worth else 0.0,
+                            "What changed": r.spending_action} for r in chosen.annual_results])
+        st.line_chart(df.set_index("Year")[["Living expenses"]])
+        shown = df.copy()
+        shown["Living expenses"] = shown["Living expenses"].apply(format_currency)
+        shown["x Plan"] = shown["x Plan"].apply(lambda v: f"{v:.0%}")
+        shown["Draw rate"] = shown["Draw rate"].apply(lambda v: "" if v in (float("inf"),) else f"{v:.1%}")
+        st.dataframe(shown, hide_index=True, use_container_width=True)
+
+    st.subheader("Highest steady spending")
+    st.caption("The largest living-expense level (first-year dollars, growing as your living expenses do) the plan "
+               "can sustain through its last year: no year with a shortfall the liquid assets can't cover, and liquid "
+               "assets never below the reserve. Uses fixed spending. The Monte Carlo option finds the level that "
+               "succeeds in the chosen share of random-market runs (slower).")
+    ids = [s.scenario_id for s in portfolio.scenarios]
+    if not ids:
+        st.info("Add a scenario first.")
+        return
+    c1, c2, c3, c4 = st.columns(4)
+    sid = c1.selectbox("Scenario", ids, format_func=lambda i: _scenario_label(portfolio, i), key="hss_scenario")
+    reserve = c2.number_input("Keep at least ($, today's dollars, liquid)", min_value=0.0, step=10_000.0,
+                              value=0.0, key="hss_reserve")
+    mc_runs = c3.number_input("Monte Carlo runs (0 = off)", min_value=0, max_value=2_000, step=50, value=0,
+                              key="hss_runs")
+    target = c4.number_input("Success target (%)", min_value=50.0, max_value=99.0, step=5.0, value=90.0,
+                             key="hss_target")
+    if st.button("Find the highest steady spending", key="hss_go"):
+        bar = st.progress(0.0)
+        try:
+            res = spending_engine.highest_steady_spending(
+                portfolio, portfolio.get_scenario(sid), min_liquid_today=reserve, monte_carlo_runs=int(mc_runs),
+                target_success=target / 100, progress=lambda f: bar.progress(f))
+            st.session_state["hss_result"] = res
+        except ValueError as exc:
+            st.error(str(exc))
+        bar.empty()
+    res = st.session_state.get("hss_result")
+    if res is not None:
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Highest steady spending (first year)", format_currency(res.amount))
+        m2.metric("Planned living expenses", format_currency(res.planned),
+                  delta=format_currency(res.headroom) + (" headroom" if res.headroom >= 0 else " over"))
+        if res.success_rate is not None:
+            m3.metric("Monte Carlo success at that level", f"{res.success_rate:.0%}")
+        if res.binding_year:
+            st.caption(f"Just above this level, the plan first fails in {res.binding_year}: {res.reason}.")
+        elif res.reason:
+            st.caption(res.reason.capitalize() + ".")
+        if res.years:
+            st.line_chart(pd.DataFrame({"Year": res.years, "Liquid assets at this spending": res.liquid_path})
+                          .set_index("Year"))
 
 
 def _render_taxes_by_year(chosen) -> None:
@@ -3294,7 +3402,10 @@ def render_rental_pro_forma(portfolio: Portfolio, scenario_id: str) -> None:
         table[line] = cells
     df = pd.DataFrame.from_dict(table, orient="index")
     view = "your share" if scenario.ownership_view != "full" else "100% of the property"
-    st.caption(f"{names[asset_id]} -- {view}. Debt coverage under 1.0x means rent doesn't cover the mortgage.")
+    st.caption(f"{names[asset_id]} -- {view}. NOI is the property's EBITDA (before interest, taxes, depreciation). "
+               "Debt coverage under 1.0x means rent doesn't cover the mortgage. Est. income tax = taxable net x your "
+               "household's average tax rate that year (tax is figured for the whole household; a loss shows as a "
+               "saving), so Cash flow after tax = cash flow before tax - that tax.")
     st.dataframe(df, use_container_width=True)
 
 
@@ -3726,6 +3837,10 @@ def render_monte_carlo_section(portfolio: Portfolio) -> None:
         ["Net worth, 10th pct", "Net worth, median", "Net worth, 90th pct"]
     ]
     st.line_chart(chart_df)
+    if getattr(result, "spending_varies", False):
+        st.markdown(f"**Spending under the guardrails policy** -- {result.share_of_runs_with_a_cut():.0%} of runs "
+                    "cut spending at least once.")
+        st.line_chart(pd.DataFrame(rows).set_index("Year")[["Spending, 10th pct", "Spending, median"]])
     display = pd.DataFrame(rows)
     for col in display.columns[1:]:
         display[col] = display[col].apply(format_currency)

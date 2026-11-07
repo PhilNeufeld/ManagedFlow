@@ -506,3 +506,25 @@ def test_unchanged_file_saves_normally(tmp_path):
     at, path = _loaded_from_disk(tmp_path)
     at = click(at, label="Save portfolio")
     assert any(s.value == "Saved." for s in at.sidebar.success)
+
+
+# --- spending ------------------------------------------------------------------------------------------------
+
+def test_spending_tab_finds_the_highest_steady_spending(tmp_path):
+    from test_spending import retiree
+    at = start(retiree(), tmp_path)
+    at = click(at, label="Run simulation for all scenarios")
+    no_crash(at)
+    assert any(t.label == "Spending" for t in at.tabs)
+    at = click(at, label="Find the highest steady spending")
+    no_crash(at)
+    assert any(m.label.startswith("Highest steady spending") and m.value == "$50,000" for m in at.metric)
+
+
+def test_spending_tab_shows_guardrail_cuts(tmp_path):
+    from test_spending import retiree
+    at = start(retiree(spending_policy="guardrails"), tmp_path)
+    at = click(at, label="Run simulation for all scenarios")
+    no_crash(at)
+    table = next(d.value for d in at.dataframe if "What changed" in d.value.columns)
+    assert table["What changed"].str.contains("cut 10%").any()

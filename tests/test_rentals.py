@@ -161,3 +161,18 @@ def test_export_has_rental_pro_forma_sheet(tmp_path):
     assert "Rental Pro Forma" in wb.sheetnames
     ws = wb["Rental Pro Forma"]
     assert ws["A4"].value == "12 Elm St" and ws["A5"].value == "Line"
+
+
+
+def test_pro_forma_shows_tax_and_cash_flow_after_tax(household_with_rental=None):
+    import example_data
+    import rentals as R
+    p = example_data.build_example_portfolio()
+    sc = next(s for s in p.scenarios if s.is_base_case)
+    rental = next(a for a in R.rental_assets(p))
+    rows = R.rental_pro_forma(p, sc, rental.asset_id)
+    for row in rows:
+        tax = row["Est. income tax (taxable net x household average rate)"]
+        assert row["Cash flow after tax"] == pytest.approx(row["Cash flow before tax"] - tax)
+        # tax has the sign of the taxable net (a loss is a saving)
+        assert tax * row["Taxable net (NOI - interest - depreciation)"] >= 0

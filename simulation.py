@@ -30,6 +30,7 @@ from __future__ import annotations
 
 from typing import Callable, List, Optional
 
+import spending
 import tax_tables as T
 from models import (
     Cashflow,
@@ -150,15 +151,32 @@ def run_simulation(
     actual_slots = ({(a.flow_id, a.year) for a in working_portfolio.actuals if a.kind == "actual" and a.flow_id}
                     if scenario.use_actuals else set())
 
+    # Spending policy (spending.py): a multiplier on living expenses, set each year from last year.
+    living = spending.living_flows(scope_household_cashflows)
+    recorded_years = {id(cf): set(cf.year_overrides) for cf in living}   # actuals: never adjusted
+    assets_by_id = {a.asset_id: a for a in scope_assets}
+    multiplier, prev = 1.0, None
+
     for year in range(assumptions.start_year, assumptions.end_year + 1):
         year_warnings = list(scenario_warnings) if year == assumptions.start_year else []
+        multiplier, action = spending.guardrail_step(scenario, multiplier, prev, assets_by_id,
+                                                     assumptions.inflation_rate)
+        if multiplier != 1.0:
+            for cf in living:
+                if year not in recorded_years[id(cf)]:
+                    cf.year_overrides.pop(year, None)
+                    cf.year_overrides[year] = cf.annual_amount_in_year(year, assumptions.inflation_rate) * multiplier
         result = _simulate_year(
             year, scope_assets, scope_household_cashflows, flows_by_asset,
             scope_liabilities, balances, scenario, assumptions, year_warnings,
             growth_rate_fn, tax_state, working_portfolio.people, actual_slots, account_flows,
         )
         result.ages = {p.name: p.age_in(year) for p in working_portfolio.people}
+        result.living_expenses = sum(cf.annual_amount_in_year(year, assumptions.inflation_rate)
+                                     for cf in living if _flow_active_in_year(cf, year))
+        result.spending_multiplier, result.spending_action = multiplier, action
         annual_results.append(result)
+        prev = result
 
     return SimulationResult(scenario_id=scenario.scenario_id, annual_results=annual_results,
                             working_portfolio=working_portfolio)

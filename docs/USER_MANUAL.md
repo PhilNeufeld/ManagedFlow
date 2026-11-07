@@ -23,7 +23,7 @@ Python does the calculations, your data is stored in a JSON file in the data fol
 | Events | Dated moments (retire, claim, buy, sell, close) that start and stop other records |
 | Assumptions | Plan years, inflation, tax method, filing status, state, exchange rates |
 | Scenarios | What-ifs: overrides to assumptions, assets, cashflows and event dates |
-| Simulation | Run the plan. Sub-tabs: Results (table + chart, Years to view), Taxes by year, Rental pro forma, Social Security claiming, Monte Carlo, Warnings |
+| Simulation | Run the plan. Sub-tabs: Results (table + chart, Years to view), Taxes by year, Rental pro forma, Spending (spending policy, highest steady spending), Social Security claiming, Monte Carlo, Warnings |
 | Audit | The items behind every number in the results, for a year or a range, with checks that they add up |
 | Explore | Drill down by entity > collection > asset > cashflow/loan, as a chart or a 1-5 year table |
 | Help | This manual, on screen |
@@ -397,6 +397,28 @@ Every table -- entities, people, events, assets, liabilities, cashflows, actuals
 
 1. **Download to Excel** saves what you're looking at as a workbook: Summary & Checks, a sheet per section (with Total rows as SUM formulas), By Asset (the side-by-side table, then each asset year by year) and All Items (one row per item, for filters and pivots). The Excel export has the same items for every year and scenario on the **Audit** sheet, and the checks on **Audit Checks**.
 
+## Let spending adjust to markets (guardrails)?
+
+1. Scenarios tab: edit (or add) a scenario and set **Spending policy** to **Guardrails**.
+2. Set the guardrails (defaults: cut 10% when the draw rate is above 6%; restore when it is below 3%; floor 80% of the plan; ceiling 100%) and whether to **skip the inflation raise after a losing year**.
+3. The **draw rate** is last year's withdrawals from liquid savings (less any surplus reinvested) divided by liquid assets. It only applies to living expenses (cashflows of type living_expense); years with recorded actuals are never changed.
+4. Simulation > **Spending** shows living expenses each year, the multiplier on the plan and what changed. Monte Carlo then shows the spread of spending and the share of runs that cut at least once.
+
+If your income covers your spending (the draw rate is zero or negative), guardrails never cut. Set the ceiling above 100% to let spending rise in good years.
+
+## Find the most I can spend (highest steady spending)?
+
+1. Simulation > **Spending** > **Highest steady spending**: pick the scenario and, optionally, a cash reserve to keep (today's dollars).
+2. **Find the highest steady spending** solves for the largest first-year living-expense level, growing as your living expenses do, that the plan sustains through its last year: no year with a shortfall the liquid assets can't cover, and liquid assets never below the reserve. It shows the headroom over your plan and the year that would fail first just above it.
+3. For a market-tested answer, set **Monte Carlo runs** (e.g. 100-200) and a **success target** (e.g. 90%): it finds the level that succeeds in that share of random-market runs. Expect a lower number, and about 30 seconds per 100 runs.
+
+## Read the rental pro forma's bottom lines?
+
+- **NOI** is the property's EBITDA: rent less operating expenses, before interest, taxes and depreciation.
+- **Cash flow before tax** = NOI - interest - principal.
+- **Taxable net** = NOI - interest - depreciation: what the IRS taxes (depreciation isn't cash).
+- **Est. income tax** = taxable net x your household's average tax rate that year (a loss shows as a saving), so **Cash flow after tax** = cash flow before tax - that tax.
+
 ## Run a what-if?
 
 1. Scenarios tab > add a scenario. Override inflation, an asset's growth or sale, a cashflow's amount, or an event's date (e.g. claim Social Security at 67).
@@ -452,6 +474,7 @@ Household-specific to-dos live next to each portfolio in `data/<file>_tasks.md` 
 | 1.2 | Accounts: taxable / tax-deferred / Roth with an owner; required minimum distributions (SECURE 2.0 ages, Uniform Lifetime Table); shortfalls drawn taxable -> tax-deferred -> Roth; tax-deferred withdrawals taxed and grossed up |
 | 1.2 | Social Security class: PIA + claiming age by SSA's rules; spousal and survivor benefits; earnings-test months credited back at FRA; claiming-age comparison through the whole plan. Receivables: notes and fees owed to you, paid down monthly, interest and principal taxed separately |
 | 1.1 | Link tables (memberships, ownerships) get integer primary keys; the joined pair stays a unique constraint; edit in place |
+| 1.2 | Spending policy: guardrails on living expenses (draw-rate cuts/restores, floor/ceiling, skip inflation after a loss), used by Monte Carlo; highest steady spending (deterministic or Monte Carlo success target, optional cash reserve); rental pro forma shows est. tax and cash flow after tax |
 | 1.2 | Save safeguard: warns when the file changed on disk since it was loaded (reload or overwrite); rates shown and entered as percentages |
 | 1.2 | Assets in another currency (value and cashflows converted to USD at Assumptions exchange rates); interest taxed yearly on bank/CD accounts |
 | 1.2 | Credit lines that convert to an amortizing loan after a draw period (HELOC: interest-only, then repaid over N years) |
@@ -461,7 +484,7 @@ Household-specific to-dos live next to each portfolio in `data/<file>_tasks.md` 
 
 ## Next (in this order)
 
-1. **Spending policy** (lower priority) -- spending that adjusts to markets (guardrails), used by Monte Carlo.
+1. **Allocated income vs. cash** -- see below.
 
 ## Next after a portfolio is populated
 
@@ -477,7 +500,6 @@ Household-specific to-dos live next to each portfolio in `data/<file>_tasks.md` 
 - Social Security extras: benefits for a divorced spouse; a survivor claiming before their own full retirement age; family maximum.
 - **Tax impact analysis** -- per-property breakdown and "what if" comparisons (e.g. sell before vs. after depreciation runs out), depreciation recapture on sale.
 - Tax engine extras: AMT, QBI deduction, IRMAA, CA exemption-credit phase-out, filing status change after a spouse's death.
-- **Highest steady spending** -- solve for the largest inflation-adjusted spending level the plan can sustain for life.
 - Monte Carlo upgrades: correlated asset swings; historical-sequence mode.
 - Unitrust and pension valuation (present value of payments).
 - Survivor rules built into pension and Social Security classes.

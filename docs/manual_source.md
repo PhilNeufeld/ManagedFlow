@@ -28,7 +28,7 @@ Python does the calculations, your data is stored in a JSON file in the data fol
 | Events | Dated moments (retire, claim, buy, sell, close) that start and stop other records |
 | Assumptions | Plan years, inflation, tax method, filing status, state, exchange rates |
 | Scenarios | What-ifs: overrides to assumptions, assets, cashflows and event dates |
-| Simulation | Run the plan. Sub-tabs: Results (table + chart, Years to view), Taxes by year, Rental pro forma, Social Security claiming, Monte Carlo, Warnings |
+| Simulation | Run the plan. Sub-tabs: Results (table + chart, Years to view), Taxes by year, Rental pro forma, Spending (spending policy, highest steady spending), Social Security claiming, Monte Carlo, Warnings |
 | Audit | The items behind every number in the results, for a year or a range, with checks that they add up |
 | Explore | Drill down by entity > collection > asset > cashflow/loan, as a chart or a 1-5 year table |
 | Help | This manual, on screen |
@@ -334,6 +334,28 @@ Every table -- entities, people, events, assets, liabilities, cashflows, actuals
    - **Cash** -- surplus/(deficit) and where it went (reinvested or withdrawn, by asset).
    - **Assets** -- each asset's roll-forward: beginning value + growth + value-changing cashflows + other changes (RMD, receivable paydown, sale) - withdrawn + reinvested = ending value.
 6. **Download to Excel** saves what you're looking at as a workbook: Summary & Checks, a sheet per section (with Total rows as SUM formulas), By Asset (the side-by-side table, then each asset year by year) and All Items (one row per item, for filters and pivots). The Excel export has the same items for every year and scenario on the **Audit** sheet, and the checks on **Audit Checks**.
+
+## Let spending adjust to markets (guardrails)?
+
+1. Scenarios tab: edit (or add) a scenario and set **Spending policy** to **Guardrails**.
+2. Set the guardrails (defaults: cut 10% when the draw rate is above 6%; restore when it is below 3%; floor 80% of the plan; ceiling 100%) and whether to **skip the inflation raise after a losing year**.
+3. The **draw rate** is last year's withdrawals from liquid savings (less any surplus reinvested) divided by liquid assets. It only applies to living expenses (cashflows of type living_expense); years with recorded actuals are never changed.
+4. Simulation > **Spending** shows living expenses each year, the multiplier on the plan and what changed. Monte Carlo then shows the spread of spending and the share of runs that cut at least once.
+
+If your income covers your spending (the draw rate is zero or negative), guardrails never cut. Set the ceiling above 100% to let spending rise in good years.
+
+## Find the most I can spend (highest steady spending)?
+
+1. Simulation > **Spending** > **Highest steady spending**: pick the scenario and, optionally, a cash reserve to keep (today's dollars).
+2. **Find the highest steady spending** solves for the largest first-year living-expense level, growing as your living expenses do, that the plan sustains through its last year: no year with a shortfall the liquid assets can't cover, and liquid assets never below the reserve. It shows the headroom over your plan and the year that would fail first just above it.
+3. For a market-tested answer, set **Monte Carlo runs** (e.g. 100-200) and a **success target** (e.g. 90%): it finds the level that succeeds in that share of random-market runs. Expect a lower number, and about 30 seconds per 100 runs.
+
+## Read the rental pro forma's bottom lines?
+
+- **NOI** is the property's EBITDA: rent less operating expenses, before interest, taxes and depreciation.
+- **Cash flow before tax** = NOI - interest - principal.
+- **Taxable net** = NOI - interest - depreciation: what the IRS taxes (depreciation isn't cash).
+- **Est. income tax** = taxable net x your household's average tax rate that year (a loss shows as a saving), so **Cash flow after tax** = cash flow before tax - that tax.
 
 ## Run a what-if?
 

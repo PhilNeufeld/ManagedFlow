@@ -72,6 +72,8 @@ class MonteCarloResult:
     liquid_net_worth: np.ndarray   # shape (n_runs, n_years)
     first_failure_year: List[Optional[int]]  # per run; None = never ran short
     inflation_rates: np.ndarray    # the inflation rate drawn for each run
+    living_expenses: Optional[np.ndarray] = None      # shape (n_runs, n_years): spending after the policy
+    spending_multiplier: Optional[np.ndarray] = None  # shape (n_runs, n_years): x the plan
 
     @property
     def success_rate(self) -> float:
@@ -88,11 +90,22 @@ class MonteCarloResult:
                 counts[y] = counts.get(y, 0) + 1
         return dict(sorted(counts.items()))
 
+    @property
+    def spending_varies(self) -> bool:
+        return self.spending_multiplier is not None and bool(np.any(np.abs(self.spending_multiplier - 1.0) > 1e-9))
+
+    def share_of_runs_with_a_cut(self) -> float:
+        if self.spending_multiplier is None:
+            return 0.0
+        return float(np.mean(np.any(self.spending_multiplier < 1.0 - 1e-9, axis=1)))
+
     def summary_rows(self) -> List[dict]:
         nw = self.percentiles("net_worth")
         liquid = self.percentiles("liquid_net_worth")
-        return [
-            {
+        spend = self.percentiles("living_expenses") if self.spending_varies else None
+        rows = []
+        for i, year in enumerate(self.years):
+            row = {
                 "Year": year,
                 "Net worth, 10th pct": nw[10][i],
                 "Net worth, median": nw[50][i],
@@ -100,8 +113,11 @@ class MonteCarloResult:
                 "Liquid, 10th pct": liquid[10][i],
                 "Liquid, median": liquid[50][i],
             }
-            for i, year in enumerate(self.years)
-        ]
+            if spend is not None:
+                row["Spending, 10th pct"] = spend[10][i]
+                row["Spending, median"] = spend[50][i]
+            rows.append(row)
+        return rows
 
 
 def _ran_short(year_result) -> bool:
@@ -143,6 +159,8 @@ def run_monte_carlo(
     rng = np.random.default_rng(seed)
     net_worth = np.zeros((n_runs, len(years)))
     liquid = np.zeros((n_runs, len(years)))
+    spend = np.zeros((n_runs, len(years)))
+    multiplier = np.ones((n_runs, len(years)))
     inflation_rates = np.zeros(n_runs)
     first_failure: List[Optional[int]] = []
 
@@ -163,6 +181,8 @@ def run_monte_carlo(
 
         net_worth[run] = [r.total_net_worth for r in result.annual_results]
         liquid[run] = [r.liquid_net_worth for r in result.annual_results]
+        spend[run] = [r.living_expenses for r in result.annual_results]
+        multiplier[run] = [r.spending_multiplier for r in result.annual_results]
         first_failure.append(next((r.year for r in result.annual_results if _ran_short(r)), None))
         if progress:
             progress(run + 1, n_runs)
@@ -171,4 +191,5 @@ def run_monte_carlo(
         scenario_id=scenario.scenario_id, n_runs=n_runs, seed=seed, years=years,
         net_worth=net_worth, liquid_net_worth=liquid,
         first_failure_year=first_failure, inflation_rates=inflation_rates,
+        living_expenses=spend, spending_multiplier=multiplier,
     )

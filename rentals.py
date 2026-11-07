@@ -21,8 +21,10 @@ tracked and forecast.
    = Net operating income (NOI)
    - Debt service (interest + principal)
    = Cash flow before tax
+   - Est. income tax (taxable net x the household's average rate that year)
+   = Cash flow after tax
    Loan balance, debt-service coverage (NOI / debt service), depreciation and
-   taxable net (NOI - interest - depreciation).
+   taxable net (NOI - interest - depreciation). NOI is the property's EBITDA.
 
 Amounts are YOUR share in the scenario's ownership view (100% view shows the whole property).
 """
@@ -196,6 +198,15 @@ def _expense_label(cf: Cashflow) -> str:
     return cf.name.split(" - ", 1)[-1] if " - " in cf.name else cf.name
 
 
+def _household_tax_rate(year_result) -> float:
+    """The household's average tax rate that year: total tax / AGI (gross income if no AGI)."""
+    te = year_result.tax_estimate
+    if te is None or not te.total_estimated_tax:
+        return 0.0
+    agi = (te.details or {}).get("AGI") or year_result.total_gross_income
+    return te.total_estimated_tax / agi if agi else 0.0
+
+
 def rental_pro_forma(portfolio: Portfolio, scenario: Scenario, asset_id: str,
                      years: Optional[List[int]] = None) -> List[dict]:
     """One row per year for one rental, in the scenario's ownership view."""
@@ -253,7 +264,13 @@ def rental_pro_forma(portfolio: Portfolio, scenario: Scenario, asset_id: str,
         row["Debt coverage (NOI / debt service)"] = (noi / (interest + principal)) if interest + principal else None
         dep = asset.depreciation_in_year(r.year)
         row["Depreciation"] = dep
-        row["Taxable net (NOI - interest - depreciation)"] = noi - interest - dep
+        taxable = noi - interest - dep
+        row["Taxable net (NOI - interest - depreciation)"] = taxable
+        # Tax is figured for the whole household; this property's share is its taxable net at the
+        # household's average rate that year (a tax loss shows as a saving) -- as in the Audit tab.
+        tax = taxable * _household_tax_rate(r)
+        row["Est. income tax (taxable net x household average rate)"] = tax
+        row["Cash flow after tax"] = noi - interest - principal - tax
         ar = next((x for x in r.asset_results if x.asset_id == asset_id), None)
         row["Property value (end of year)"] = ar.ending_value if ar else 0.0
         rows.append(row)

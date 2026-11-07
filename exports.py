@@ -542,7 +542,8 @@ def _write_rental_pro_forma_sheet(wb: Workbook, portfolio: Portfolio) -> None:
             for c, v in enumerate(values, start=1):
                 cell = ws.cell(row=row + i, column=c, value=v)
                 cell.font = Font(name=FONT_NAME, bold=values[0] in (
-                    "Gross operating income (GOI)", "Net operating income (NOI)", "Cash flow before tax"))
+                    "Gross operating income (GOI)", "Net operating income (NOI)", "Cash flow before tax",
+                    "Cash flow after tax"))
                 if c > 1:
                     cell.number_format = '0.00"x"' if values[0].startswith("Debt coverage") else CURRENCY_FORMAT
         row += len(body) + 2

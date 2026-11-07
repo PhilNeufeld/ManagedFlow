@@ -1481,9 +1481,31 @@ class Scenario:
 
     notes: str = ""
 
+    # Spending policy for living expenses (see spending.py):
+    #   "fixed"      -- spend the plan, whatever happens (the default)
+    #   "guardrails" -- each year, cut spending by guardrail_step when the plan's draw on liquid
+    #                   savings (withdrawals / liquid assets) is above guardrail_upper; restore it
+    #                   when the draw is below guardrail_lower; never below spending_floor or above
+    #                   spending_ceiling (x the plan); optionally skip the inflation raise after a
+    #                   year in which liquid assets lost money.
+    spending_policy: str = "fixed"
+    guardrail_upper: float = 0.06
+    guardrail_lower: float = 0.03
+    guardrail_step: float = 0.10
+    spending_floor: float = 0.80
+    spending_ceiling: float = 1.00
+    skip_inflation_after_loss: bool = True
+
     def __post_init__(self) -> None:
         _require(bool(self.scenario_id), "Scenario.scenario_id is required")
         _require(bool(self.name), "Scenario.name is required")
+        _require(self.spending_policy in ("fixed", "guardrails"),
+                 "Scenario.spending_policy must be 'fixed' or 'guardrails'")
+        _require(0 <= self.guardrail_lower < self.guardrail_upper,
+                 "Scenario: the lower guardrail must be below the upper guardrail")
+        _require(0 < self.guardrail_step < 1, "Scenario.guardrail_step is a fraction (0.10 for 10%)")
+        _require(0 < self.spending_floor <= 1 <= self.spending_ceiling,
+                 "Scenario: spending floor must be at most 100% of the plan and the ceiling at least 100%")
         # Saved JSON turns integer dict keys into text ("12"): turn them back into keys.
         for name in ("asset_overrides", "cashflow_overrides", "event_overrides", "ss_overrides"):
             setattr(self, name, {_key(k): v for k, v in (getattr(self, name) or {}).items()})
@@ -1603,6 +1625,10 @@ class AnnualHouseholdResult:
     # ("income" / "expense"), flow_id, name, asset_id, flow_type, amount (positive).
     line_items: List[Dict[str, Any]] = field(default_factory=list)
     reinvestment_breakdown: Dict[str, float] = field(default_factory=dict)
+    # Spending policy (spending.py): living expenses this year, the multiplier on the plan, what changed.
+    living_expenses: float = 0.0
+    spending_multiplier: float = 1.0
+    spending_action: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -1629,6 +1655,9 @@ class AnnualHouseholdResult:
             "warnings": self.warnings,
             "line_items": [dict(li) for li in self.line_items],
             "reinvestment_breakdown": dict(self.reinvestment_breakdown),
+            "living_expenses": self.living_expenses,
+            "spending_multiplier": self.spending_multiplier,
+            "spending_action": self.spending_action,
         }
 
     @classmethod
