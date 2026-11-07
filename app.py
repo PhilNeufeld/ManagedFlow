@@ -81,9 +81,51 @@ def _get_portfolio() -> Portfolio | None:
     return portfolio
 
 
+def _file_fingerprint(path: Path | None):
+    """(size, sha256) of the file on disk, or None if there's no file."""
+    import hashlib
+    try:
+        data = Path(path).read_bytes()
+    except (OSError, TypeError):
+        return None
+    return (len(data), hashlib.sha256(data).hexdigest())
+
+
 def _set_portfolio(portfolio: Portfolio, path: Path) -> None:
     st.session_state["portfolio"] = portfolio
     st.session_state["portfolio_path"] = path
+    # What the file looked like when we loaded/saved it -- Save checks it hasn't changed since.
+    st.session_state["portfolio_fingerprint"] = _file_fingerprint(path)
+    st.session_state.pop("save_conflict", None)
+
+
+def _changed_on_disk(path: Path | None) -> bool:
+    """True when the file was changed outside the app (a script, another window) since we
+    loaded or saved it. False for a file we never read (e.g. a brand-new one)."""
+    loaded = st.session_state.get("portfolio_fingerprint")
+    return loaded is not None and _file_fingerprint(path) != loaded
+
+
+def _reload_from_disk(path: Path) -> None:
+    try:
+        _set_portfolio(storage.load_portfolio(path), path)
+        _clear_simulation_cache()
+        st.session_state["sidebar_notice"] = f"Reloaded {path.name} from disk."
+    except storage.StorageError as exc:
+        st.session_state["sidebar_notice"] = f"Couldn't reload: {exc}"
+
+
+def _save_now(portfolio: Portfolio, path: Path) -> bool:
+    try:
+        storage.save_portfolio(portfolio, path)
+    except storage.StorageError as exc:
+        st.sidebar.error(str(exc))
+        return False
+    st.session_state["portfolio_fingerprint"] = _file_fingerprint(path)
+    st.session_state.pop("save_conflict", None)
+    st.sidebar.success("Saved.")
+    _auto_backup()
+    return True
 
 
 def _get_portfolio_path() -> Path | None:
@@ -276,14 +318,32 @@ def render_sidebar() -> None:
     if portfolio is not None and path is not None:
         st.sidebar.markdown("---")
         st.sidebar.write(f"**Current file:** `{path.name}`")
+        notice = st.session_state.pop("sidebar_notice", None)
+        if notice:
+            st.sidebar.info(notice)
+        changed = _changed_on_disk(path)
+        if changed and not st.session_state.get("save_conflict"):
+            st.sidebar.warning(f"{path.name} was changed outside the app since you loaded it. Reload to see "
+                               "those changes; saving now would overwrite them.")
+            if st.sidebar.button("Reload from disk", key="reload_changed"):
+                _reload_from_disk(path)
+                st.rerun()
         if st.sidebar.button("Save portfolio"):
-            try:
-                storage.save_portfolio(portfolio, path)
-                st.sidebar.success("Saved.")
-            except storage.StorageError as exc:
-                st.sidebar.error(str(exc))
+            if changed:
+                st.session_state["save_conflict"] = True
             else:
-                _auto_backup()
+                _save_now(portfolio, path)
+        if st.session_state.get("save_conflict"):
+            st.sidebar.error(f"Not saved: {path.name} changed on disk since you loaded it (a script or another "
+                             "window). Saving would overwrite those changes.")
+            if st.sidebar.button("Reload from disk (discard my unsaved changes)", key="conflict_reload"):
+                _reload_from_disk(path)
+                st.rerun()
+            if st.sidebar.button("Overwrite anyway", key="conflict_overwrite"):
+                _save_now(portfolio, path)
+            if st.sidebar.button("Cancel", key="conflict_cancel"):
+                st.session_state.pop("save_conflict", None)
+                st.rerun()
         if st.sidebar.button("Save backup copy now"):
             try:
                 backup_path = storage.backup_file(path)
@@ -380,7 +440,7 @@ def render_assets_tab(portfolio: Portfolio) -> None:
                                       f"{a.currency} {a.current_value:,.0f}"
                                       + (f" (~{format_currency(a.current_value * portfolio.assumptions.fx_rates[a.currency])})"
                                          if a.currency in portfolio.assumptions.fx_rates else "")),
-                    "Growth Rate": a.annual_growth_rate,
+                    "Growth Rate": f"{a.annual_growth_rate:.2%}",
                     "Liquidity": a.liquidity_category.value,
                     "Account": {"taxable": "taxable", "tax_deferred": "tax-deferred", "roth": "Roth"}.get(
                         a.account_tax, ""),
@@ -594,9 +654,9 @@ def _render_asset_editor(portfolio: Portfolio, editor: dict) -> None:
                 "Start year", value=int(defaults["start_year"]), step=1, key=field("start_year"),
             )
             growth_rate = st.number_input(
-                "Annual growth rate", value=float(defaults["growth_rate"]), step=0.005, format="%.3f",
+                "Annual growth rate (%)", value=float(defaults["growth_rate"]) * 100, step=0.5, format="%.2f",
                 key=field("growth_rate"),
-            )
+            ) / 100
             liquidity = st.selectbox(
                 "Liquidity category", [c.value for c in LiquidityCategory],
                 index=[c.value for c in LiquidityCategory].index(defaults["liquidity"]), key=field("liquidity"),
@@ -956,9 +1016,9 @@ def _render_cashflow_editor(portfolio: Portfolio, editor: dict) -> None:
         col4, col5, col6 = st.columns(3)
         with col4:
             growth_rate = st.number_input(
-                "Annual growth rate", value=float(defaults["growth_rate"]), step=0.005, format="%.3f",
+                "Annual growth rate (%)", value=float(defaults["growth_rate"]) * 100, step=0.5, format="%.2f",
                 key=field("growth_rate"),
-            )
+            ) / 100
         with col5:
             taxable = st.checkbox("Taxable", value=defaults["taxable"], key=field("taxable"))
             tax_category = st.selectbox(
@@ -2521,7 +2581,8 @@ def render_assumptions_tab(portfolio: Portfolio) -> None:
     with col2:
         end_year = st.number_input("End year", value=a.end_year, step=1)
     with col3:
-        inflation_rate = st.number_input("Inflation rate", value=a.inflation_rate, step=0.005, format="%.3f")
+        inflation_rate = st.number_input("Inflation rate (%)", value=a.inflation_rate * 100, step=0.25,
+                                         format="%.2f") / 100
 
     st.subheader("Taxes")
     col4, col5, col6 = st.columns(3)
@@ -2584,12 +2645,12 @@ def render_assumptions_tab(portfolio: Portfolio) -> None:
 
     st.subheader("Flat tax rates by category (used only by the flat method)")
     rate_df = pd.DataFrame(
-        [{"Tax category": k, "Rate": v} for k, v in sorted(portfolio.assumptions.default_tax_rates.items())]
+        [{"Tax category": k, "Rate (%)": v * 100} for k, v in sorted(portfolio.assumptions.default_tax_rates.items())]
     )
     edited = st.data_editor(rate_df, use_container_width=True, num_rows="fixed", key="tax_rate_editor")
     if st.button("Save tax rates"):
         for _, row in edited.iterrows():
-            portfolio.assumptions.default_tax_rates[row["Tax category"]] = float(row["Rate"])
+            portfolio.assumptions.default_tax_rates[row["Tax category"]] = float(row["Rate (%)"]) / 100
         _clear_simulation_cache()
         st.success("Tax rates updated.")
 
@@ -2624,7 +2685,8 @@ def render_scenarios_tab(portfolio: Portfolio) -> None:
                     "Name": s.name,
                     "Base case?": s.is_base_case,
                     "Scope": _scope_label(s),
-                    "Inflation override": s.inflation_rate_override,
+                    "Inflation override": ("" if s.inflation_rate_override is None
+                                           else f"{s.inflation_rate_override:.2%}"),
                     "Asset overrides": len(s.asset_overrides),
                     "Cashflow overrides": len(s.cashflow_overrides),
                     "Event moves": len(s.event_overrides),
@@ -2756,7 +2818,7 @@ def _render_scenario_editor(portfolio: Portfolio, editor: dict) -> None:
         "description": existing.description if existing else "",
         "inflation_override": (
             "" if not existing or existing.inflation_rate_override is None
-            else str(existing.inflation_rate_override)
+            else f"{existing.inflation_rate_override * 100:g}"
         ),
         "allow_illiquid": existing.allow_illiquid_withdrawals if existing else False,
         "reinvest": existing.reinvest_surplus if existing else True,
@@ -2768,7 +2830,7 @@ def _render_scenario_editor(portfolio: Portfolio, editor: dict) -> None:
         name = st.text_input("Name", value=defaults["name"], key=field("name"))
         description = st.text_area("Description", value=defaults["description"], key=field("description"))
         inflation_override = st.text_input(
-            "Inflation rate override, e.g. 0.05 for 5% (blank = use base assumption)",
+            "Inflation rate override (%), e.g. 5 for 5% (blank = use base assumption)",
             value=defaults["inflation_override"], key=field("inflation_override"),
         )
         allow_illiquid = st.checkbox(
@@ -2829,10 +2891,10 @@ def _render_scenario_editor(portfolio: Portfolio, editor: dict) -> None:
             st.error("Name is required.")
         elif inflation_str:
             try:
-                parsed_inflation = float(inflation_str)
+                parsed_inflation = float(inflation_str.rstrip("%").strip()) / 100
             except ValueError:
                 st.error(
-                    f"Inflation rate override must be a number like '0.05', not '{inflation_str}'. "
+                    f"Inflation rate override must be a percent like '5', not '{inflation_str}'. "
                     "Leave it blank to use the base assumption."
                 )
                 parsed_inflation = "__invalid__"

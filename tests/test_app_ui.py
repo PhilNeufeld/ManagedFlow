@@ -443,3 +443,66 @@ def test_running_from_the_audit_tab_fills_every_tab(tmp_path):
     no_crash(at)
     assert any("checks add up" in s.value for s in at.success)         # Audit tab shows its tables
     assert at.number_input(key="sim_years_to_view").value == 3          # and the Simulation tab its results
+
+
+# --- save safeguard: the file changed on disk since it was loaded --------------------------------------------
+
+@pytest.fixture(autouse=True)
+def _no_real_backups(tmp_path, monkeypatch):
+    """Screen tests never read your backup settings or write backups to your folder."""
+    monkeypatch.setenv("MANAGEDFLOW_SETTINGS", str(tmp_path / "test_settings.json"))
+
+
+def _loaded_from_disk(tmp_path):
+    import storage
+    from models import Assumptions
+    path = tmp_path / "plan.json"
+    storage.save_portfolio(Portfolio(assumptions=Assumptions(start_year=2026, end_year=2028)), path, make_backup=False)
+    at = AppTest.from_file(APP, default_timeout=60)
+    at.session_state["portfolio"] = storage.load_portfolio(path)
+    at.session_state["portfolio_path"] = path
+    import hashlib
+    data = path.read_bytes()
+    at.session_state["portfolio_fingerprint"] = (len(data), hashlib.sha256(data).hexdigest())
+    return at.run(), path
+
+
+def _change_on_disk(path):
+    import storage
+    p = storage.load_portfolio(path)
+    p.household.name = "Changed by a script"
+    storage.save_portfolio(p, path, make_backup=False)
+
+
+def test_save_refuses_to_overwrite_a_file_changed_on_disk(tmp_path):
+    at, path = _loaded_from_disk(tmp_path)
+    _change_on_disk(path)
+    at = at.run()
+    assert any("changed outside the app" in w.value for w in at.sidebar.warning)
+    at = click(at, label="Save portfolio")
+    assert any("Not saved" in e.value for e in at.sidebar.error)
+    import storage
+    assert storage.load_portfolio(path).household.name == "Changed by a script"      # untouched
+
+
+def test_overwrite_anyway_saves(tmp_path):
+    at, path = _loaded_from_disk(tmp_path)
+    _change_on_disk(path)
+    at = click(at.run(), label="Save portfolio")
+    at = click(at, label="Overwrite anyway")
+    import storage
+    assert storage.load_portfolio(path).household.name != "Changed by a script"
+
+
+def test_reload_from_disk_picks_up_the_change(tmp_path):
+    at, path = _loaded_from_disk(tmp_path)
+    _change_on_disk(path)
+    at = click(at.run(), label="Reload from disk")
+    assert at.session_state["portfolio"].household.name == "Changed by a script"
+    assert not any("changed outside the app" in w.value for w in at.sidebar.warning)
+
+
+def test_unchanged_file_saves_normally(tmp_path):
+    at, path = _loaded_from_disk(tmp_path)
+    at = click(at, label="Save portfolio")
+    assert any(s.value == "Saved." for s in at.sidebar.success)

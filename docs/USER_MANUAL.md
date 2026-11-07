@@ -210,6 +210,7 @@ If someone claims before full retirement age (FRA: 67 for anyone born 1960 or la
 
 - **Save portfolio** (sidebar) writes your file, e.g. data\MyPlan.json. Before overwriting, it copies the old version to a timestamped backup in the same folder: MyPlan.backup_20261104_153012.json.
 - **Save backup copy now** (sidebar) makes a timestamped backup on demand, without saving changes.
+- **If the file changed on disk** since you loaded it (a script or another window updated it), the sidebar says so and offers **Reload from disk**. **Save portfolio** then stops and asks: **Reload from disk** (drops your unsaved changes), **Overwrite anyway**, or **Cancel** -- so a save never silently undoes someone else's changes.
 - Household files are kept off GitHub: .gitignore covers your portfolio, data\*.csv, backups, data\*_tasks.md, data\build_*.py and outputs\. Back them up off this computer (next section).
 - **Move save copies to data\Archive** (sidebar, under Backup) clears the timestamped copies out of the data folder; they stay in data\Archive.
 
@@ -451,6 +452,7 @@ Household-specific to-dos live next to each portfolio in `data/<file>_tasks.md` 
 | 1.2 | Accounts: taxable / tax-deferred / Roth with an owner; required minimum distributions (SECURE 2.0 ages, Uniform Lifetime Table); shortfalls drawn taxable -> tax-deferred -> Roth; tax-deferred withdrawals taxed and grossed up |
 | 1.2 | Social Security class: PIA + claiming age by SSA's rules; spousal and survivor benefits; earnings-test months credited back at FRA; claiming-age comparison through the whole plan. Receivables: notes and fees owed to you, paid down monthly, interest and principal taxed separately |
 | 1.1 | Link tables (memberships, ownerships) get integer primary keys; the joined pair stays a unique constraint; edit in place |
+| 1.2 | Save safeguard: warns when the file changed on disk since it was loaded (reload or overwrite); rates shown and entered as percentages |
 | 1.2 | Assets in another currency (value and cashflows converted to USD at Assumptions exchange rates); interest taxed yearly on bank/CD accounts |
 | 1.2 | Credit lines that convert to an amortizing loan after a draw period (HELOC: interest-only, then repaid over N years) |
 | 1.2 | Audit: the simulation records every item behind each annual total; Audit tab (year or range, by entity, with checks that items add back to the totals) and Audit / Audit Checks sheets in the Excel export. Simulation tab split into sub-tabs; chart Years to view; Liquid/Illiquid Assets labels |

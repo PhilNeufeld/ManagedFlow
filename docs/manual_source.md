@@ -150,6 +150,7 @@ If someone claims before full retirement age (FRA: 67 for anyone born 1960 or la
 
 - **Save portfolio** (sidebar) writes your file, e.g. data\MyPlan.json. Before overwriting, it copies the old version to a timestamped backup in the same folder: MyPlan.backup_20261104_153012.json.
 - **Save backup copy now** (sidebar) makes a timestamped backup on demand, without saving changes.
+- **If the file changed on disk** since you loaded it (a script or another window updated it), the sidebar says so and offers **Reload from disk**. **Save portfolio** then stops and asks: **Reload from disk** (drops your unsaved changes), **Overwrite anyway**, or **Cancel** -- so a save never silently undoes someone else's changes.
 - Household files are kept off GitHub: .gitignore covers your portfolio, data\*.csv, backups, data\*_tasks.md, data\build_*.py and outputs\. Back them up off this computer (next section).
 - **Move save copies to data\Archive** (sidebar, under Backup) clears the timestamped copies out of the data folder; they stay in data\Archive.
 

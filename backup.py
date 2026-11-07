@@ -53,7 +53,14 @@ class BackupSettings:
     last_auto_backup: str = ""       # ISO date of the last automatic backup
 
 
-def load_settings(path: Path = SETTINGS_PATH) -> BackupSettings:
+def _settings_path() -> Path:
+    """.managedflow/settings.json, or MANAGEDFLOW_SETTINGS (tests point it at a temp file)."""
+    import os
+    return Path(os.environ.get("MANAGEDFLOW_SETTINGS") or SETTINGS_PATH)
+
+
+def load_settings(path: Optional[Path] = None) -> BackupSettings:
+    path = path or _settings_path()
     try:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -62,8 +69,8 @@ def load_settings(path: Path = SETTINGS_PATH) -> BackupSettings:
     return BackupSettings(**known)
 
 
-def save_settings(settings: BackupSettings, path: Path = SETTINGS_PATH) -> None:
-    path = Path(path)
+def save_settings(settings: BackupSettings, path: Optional[Path] = None) -> None:
+    path = Path(path or _settings_path())
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(asdict(settings), indent=2) + "\n", encoding="utf-8")
 
@@ -93,6 +100,10 @@ def files_to_back_up(root: Path = ROOT) -> List[Path]:
 def _check_folder(folder: str | Path) -> Path:
     if not str(folder).strip():
         raise BackupError("No backup folder is set. Choose one in the sidebar under Backup.")
+    import os
+    import re
+    if os.name != "nt" and re.match(r"^[A-Za-z]:[\\/]", str(folder)):
+        raise BackupError(f"{folder} is a Windows drive path, and this computer isn't Windows -- not creating it here.")
     folder = Path(folder)
     anchor = Path(folder.anchor) if folder.anchor else None
     if anchor is not None and not anchor.exists():
@@ -144,7 +155,7 @@ def make_backup(folder: str | Path, root: Path = ROOT, keep: int = DEFAULT_KEEP,
 
 
 def auto_backup_if_due(settings: BackupSettings, root: Path = ROOT, today: Optional[date] = None,
-                       settings_path: Path = SETTINGS_PATH) -> Optional[Path]:
+                       settings_path: Optional[Path] = None) -> Optional[Path]:
     """Back up once per day when automatic backups are on and a folder is set.
     Returns the zip written, or None when not due. Raises BackupError on failure."""
     today = today or date.today()

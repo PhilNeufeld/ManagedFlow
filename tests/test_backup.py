@@ -99,3 +99,13 @@ def test_tidy_moves_save_copies_to_archive(project):
     assert backup.tidy_local_backups(project) == 1
     assert (project / "data" / "Archive" / "household.backup_20260101_000000.json").exists()
     assert not list((project / "data").glob("*.backup_*.json"))
+
+
+def test_a_windows_drive_path_is_never_created_elsewhere(project, tmp_path, monkeypatch):
+    import os
+    if os.name == "nt":
+        pytest.skip("on Windows the drive is real")
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(backup.BackupError, match="Windows drive path"):
+        backup.make_backup(r"G:\My Drive\Backups", root=project)
+    assert not any(p.name.startswith("G:") for p in tmp_path.iterdir())
