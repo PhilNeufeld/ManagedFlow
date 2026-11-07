@@ -17,11 +17,11 @@ Python does the calculations, your data is stored in a JSON file in the data fol
 | Entities | Entities (you, trusts, LLCs, partnerships), Ownership %, People and who belongs to each entity |
 | Bundles | Collections: optional groups of assets, cashflows and loans under one entity |
 | Assets | What you own; the "Add a rental property" form |
-| Liabilities | Loans (amortizing) and credit lines (interest-only) |
+| Liabilities | Loans (amortizing) and credit lines (interest-only, or converting to a loan after a draw period, like a HELOC) |
 | Cashflows | Income and expenses, each optionally tied to an asset and a person |
 | Actuals | Import what really happened (and near-term forecasts) from CSV; plan vs. actual; trend breaks |
 | Events | Dated moments (retire, claim, buy, sell, close) that start and stop other records |
-| Assumptions | Plan years, inflation, tax method, filing status, state |
+| Assumptions | Plan years, inflation, tax method, filing status, state, exchange rates |
 | Scenarios | What-ifs: overrides to assumptions, assets, cashflows and event dates |
 | Simulation | Run the plan. Sub-tabs: Results (table + chart, Years to view), Taxes by year, Rental pro forma, Social Security claiming, Monte Carlo, Warnings |
 | Audit | The items behind every number in the results, for a year or a range, with checks that they add up |
@@ -255,6 +255,19 @@ To restore: under **Restore**, pick a backup, look at **What's inside**, tick th
 
 > Put escrowed property tax and insurance in the expense lines, not in the mortgage payment, or they'll be counted twice.
 
+## Enter a HELOC that becomes a loan after its draw period?
+
+1. Liabilities tab > add a **credit line** with today's balance and rate (and the credit limit, if you like).
+2. Under **Draw period end**, set **Becomes a loan in** (year and month of the first amortizing payment) and **Repaid over** (years), e.g. 2035, Apr, 15 for a 10-year draw period followed by a 15-year repayment.
+3. Until then it's interest-only; from that month the same balance is repaid in equal monthly payments, so it reaches $0 on schedule with no lump sum. The Liabilities table shows both payments and the last payment date.
+
+## Track an account in another currency (e.g. a Canadian bank account)?
+
+1. Assumptions tab > **Exchange rates**: add the currency and its rate in US dollars per 1 unit (e.g. CAD 0.72), then **Save exchange rates**.
+2. Assets tab: add the account with **Currency** = CAD and its balance in CAD. Cashflows linked to it are also entered in CAD.
+3. For a bank account, CD or money market, tick **Growth is interest, taxed every year**: the balance compounds, and each year's interest is taxed (ordinary income and NIIT) without counting as spendable cash.
+4. Every run converts it to US dollars at the rate on the Assumptions tab; all totals, taxes and net worth are in USD. The Assets table shows the balance in CAD with its USD equivalent. Change the rate (or try another in a scenario) to see the effect of the exchange rate.
+
 ## Enter a loan from the original note?
 
 1. Liabilities tab > Add new liability > Loan.
@@ -438,6 +451,8 @@ Household-specific to-dos live next to each portfolio in `data/<file>_tasks.md` 
 | 1.2 | Accounts: taxable / tax-deferred / Roth with an owner; required minimum distributions (SECURE 2.0 ages, Uniform Lifetime Table); shortfalls drawn taxable -> tax-deferred -> Roth; tax-deferred withdrawals taxed and grossed up |
 | 1.2 | Social Security class: PIA + claiming age by SSA's rules; spousal and survivor benefits; earnings-test months credited back at FRA; claiming-age comparison through the whole plan. Receivables: notes and fees owed to you, paid down monthly, interest and principal taxed separately |
 | 1.1 | Link tables (memberships, ownerships) get integer primary keys; the joined pair stays a unique constraint; edit in place |
+| 1.2 | Assets in another currency (value and cashflows converted to USD at Assumptions exchange rates); interest taxed yearly on bank/CD accounts |
+| 1.2 | Credit lines that convert to an amortizing loan after a draw period (HELOC: interest-only, then repaid over N years) |
 | 1.2 | Audit: the simulation records every item behind each annual total; Audit tab (year or range, by entity, with checks that items add back to the totals) and Audit / Audit Checks sheets in the Excel export. Simulation tab split into sub-tabs; chart Years to view; Liquid/Illiquid Assets labels |
 | 1.2 | Off-machine backups: one dated zip of all private files (portfolios, actuals, builder scripts, outputs) to a synced folder; daily automatic backup on save; keep the newest N; restore with the current files set aside; tidy save copies into data/Archive |
 | 1.0 | Integer primary keys in every table (migration renumbers older files); actuals import links by key (cashflow_id), never by name, with a template listing each planned cashflow's key; unplanned actuals count once in their own year; re-link stored records |

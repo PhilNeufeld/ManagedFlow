@@ -90,6 +90,8 @@ def apply_scenario(portfolio: Portfolio, scenario: Scenario) -> Tuple[Portfolio,
     social_security.apply_benefits(working)
 
     # Receivables: each year's interest and principal received, and the balance still owed.
+    # Amounts entered in another currency (e.g. a CAD bank account) -> USD, before shares.
+    warnings.extend(working.apply_currency())
     working.apply_receivables()
 
     # Last: scale to your ownership % unless this scenario asks for the 100% view.

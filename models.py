@@ -729,6 +729,12 @@ class Asset:
     account_tax: str = ""
     # Whose account it is (a Person): their age sets required minimum distributions.
     owner_person_id: Optional[str] = None
+    # Currency the value AND this asset's own cashflows are entered in (e.g. "CAD" for a
+    # Canadian bank account). Each run converts them to USD at Assumptions.fx_rates.
+    currency: str = "USD"
+    # Growth is interest taxed every year (bank account, CD, money market): the year's growth
+    # is reported as taxable interest without being counted as spendable cash.
+    interest_taxed_yearly: bool = False
 
     # --- Receivable terms (asset_type "receivable"): a balance owed TO you, paid
     # down by monthly payments -- a loan in reverse. initial_value is the balance
@@ -752,6 +758,9 @@ class Asset:
     def __post_init__(self) -> None:
         self.asset_type = _enum_value(self.asset_type, AssetType)
         self.liquidity_category = _enum_value(self.liquidity_category, LiquidityCategory)
+        self.currency = (self.currency or "USD").strip().upper()
+        _require(len(self.currency) == 3 and self.currency.isalpha(),
+                 f"Asset '{self.asset_id}': currency must be a 3-letter code like USD or CAD")
         self.tax_category = _enum_value(self.tax_category, TaxCategory)
         self.principal_tax_category = _enum_value(self.principal_tax_category, TaxCategory)
         _require(self.account_tax in ACCOUNT_TAX_TYPES,
@@ -828,6 +837,8 @@ class Asset:
             "principal_tax_category": self.principal_tax_category.value,
             "account_tax": self.account_tax,
             "owner_person_id": self.owner_person_id,
+            "currency": self.currency,
+            "interest_taxed_yearly": self.interest_taxed_yearly,
         }
 
     @property
@@ -978,6 +989,11 @@ class Liability:
         Each subclass defines this."""
         raise NotImplementedError
 
+    def year_activity_for(self, year: int, beginning_balance: float, months: int = 12) -> Tuple[float, float, float]:
+        """year_activity() for a given calendar year. The simulation calls this; a debt whose
+        terms change over time (a HELOC that converts to a loan) overrides it."""
+        return self.year_activity(beginning_balance, months)
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "kind": self.kind,
@@ -1116,6 +1132,12 @@ class CreditLine(Liability):
     Each year you pay the interest; the balance stays the same."""
 
     credit_limit: Optional[float] = None
+    # End of the draw period: from this month the balance is repaid like a loan over
+    # amortization_months (e.g. a HELOC that becomes a 15-year amortizing loan after a
+    # 10-year draw period). None = interest-only for good.
+    amortize_from_year: Optional[int] = None
+    amortize_from_month: int = 1
+    amortization_months: Optional[int] = None
 
     kind: ClassVar[str] = "credit_line"
 
@@ -1127,13 +1149,54 @@ class CreditLine(Liability):
                 f"Credit line '{self.liability_id}': balance ${self.balance:,.0f} is over "
                 f"the ${self.credit_limit:,.0f} limit",
             )
+        if self.amortize_from_year is not None:
+            _require(1 <= int(self.amortize_from_month) <= 12,
+                     f"Credit line '{self.liability_id}': amortize_from_month must be 1-12")
+            _require(bool(self.amortization_months) and int(self.amortization_months) > 0,
+                     f"Credit line '{self.liability_id}': give the repayment term (amortization_months) "
+                     "when it converts to a loan")
+
+    @property
+    def converts(self) -> bool:
+        return self.amortize_from_year is not None and bool(self.amortization_months)
+
+    def amortizing_payment(self) -> Optional[float]:
+        """The monthly payment once the draw period ends (the balance repaid over amortization_months)."""
+        if not self.converts:
+            return None
+        return amortized_monthly_payment(self.balance, self.annual_interest_rate, int(self.amortization_months))
+
+    def payoff_date(self) -> Optional[Tuple[int, int]]:
+        """(year, month) of the last payment once it converts; None if interest-only for good."""
+        if not self.converts:
+            return None
+        last = self.amortize_from_year * 12 + (self.amortize_from_month - 1) + int(self.amortization_months) - 1
+        return (last // 12, last % 12 + 1)
 
     def year_activity(self, beginning_balance: float, months: int = 12) -> Tuple[float, float, float]:
         return beginning_balance * self.annual_interest_rate * months / 12, 0.0, beginning_balance
 
+    def year_activity_for(self, year: int, beginning_balance: float, months: int = 12) -> Tuple[float, float, float]:
+        if not self.converts or year < self.amortize_from_year:
+            return self.year_activity(beginning_balance, months)
+        interest_only = min(months, self.amortize_from_month - 1) if year == self.amortize_from_year else 0
+        interest = beginning_balance * self.annual_interest_rate * interest_only / 12
+        principal, balance = 0.0, beginning_balance
+        payment, r = self.amortizing_payment(), self.annual_interest_rate / 12
+        for _ in range(months - interest_only):
+            if balance <= 0.005:
+                break
+            i = balance * r
+            p = min(payment - i, balance)
+            interest, principal, balance = interest + i, principal + p, balance - p
+        return interest, principal, max(balance, 0.0)
+
     def to_dict(self) -> Dict[str, Any]:
         data = super().to_dict()
         data["credit_limit"] = self.credit_limit
+        data["amortize_from_year"] = self.amortize_from_year
+        data["amortize_from_month"] = self.amortize_from_month
+        data["amortization_months"] = self.amortization_months
         return data
 
 
@@ -1316,6 +1379,9 @@ class Assumptions:
     tax_method: str = "detailed"
     filing_status: str = "married_joint"   # or "single"
     state: str = "CA"                      # "CA" or "none"
+    # Exchange rates: USD per 1 unit of each other currency, e.g. {"CAD": 0.72}. Assets entered
+    # in that currency (and their cashflows) are converted at this rate in every run.
+    fx_rates: Dict[str, float] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         _require(self.end_year >= self.start_year, "Assumptions.end_year must be >= start_year")
@@ -1324,6 +1390,9 @@ class Assumptions:
                  "Assumptions.filing_status must be 'married_joint' or 'single'")
         _require(self.state in ("CA", "none"), "Assumptions.state must be 'CA' or 'none'")
         _require(-0.5 < self.inflation_rate < 1.0, "Assumptions.inflation_rate looks out of range")
+        self.fx_rates = {str(k).upper(): float(v) for k, v in (self.fx_rates or {}).items()}
+        for cur, rate in self.fx_rates.items():
+            _require(rate > 0, f"Assumptions.fx_rates['{cur}'] must be > 0 (USD per 1 {cur})")
 
         defaults = {
             TaxCategory.ORDINARY_INCOME.value: 0.24,
@@ -2213,6 +2282,35 @@ class Portfolio:
             interest.year_overrides = {y: s[0] for y, s in sched.items() if s[0]}
             principal.year_overrides = {y: s[1] for y, s in sched.items() if s[1]}
             self.cashflows += [interest, principal]
+
+    def apply_currency(self) -> List[str]:
+        """Convert assets entered in another currency (and their own cashflows) to USD,
+        IN PLACE, at assumptions.fx_rates. Only ever called on a scenario's working copy.
+        Returns warnings (a currency with no rate is left unconverted)."""
+        rates = self.assumptions.fx_rates or {}
+        warnings: List[str] = []
+        factors = {}
+        for a in self.assets:
+            if a.currency == "USD":
+                continue
+            rate = rates.get(a.currency)
+            if rate is None:
+                warnings.append(f"'{a.name}' is in {a.currency} but Assumptions has no {a.currency} exchange rate: "
+                                "its amounts are treated as USD.")
+                continue
+            factors[a.asset_id] = rate
+            a.initial_value *= rate
+            a.current_value = (a.current_value if a.current_value is not None else a.initial_value / rate) * rate
+            a.depreciable_basis *= rate
+            a.value_overrides = {y: v * rate for y, v in a.value_overrides.items()}
+            if a.receivable_payment:
+                a.receivable_payment *= rate
+        for cf in self.cashflows:
+            f = factors.get(cf.asset_id)
+            if f:
+                cf.amount *= f
+                cf.year_overrides = {y: v * f for y, v in cf.year_overrides.items()}
+        return warnings
 
     def apply_ownership_shares(self) -> None:
         """Scale every asset, its cashflows and its loans by your share, IN

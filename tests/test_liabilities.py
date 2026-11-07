@@ -156,3 +156,65 @@ def test_mortgage_travels_with_its_house_into_scoped_runs(sample_portfolio):
 
     assert llc.annual_results[0].total_liabilities > 0     # rental LLC scope includes the house
     assert salary.annual_results[0].total_liabilities == 0  # salary-only scope doesn't
+
+
+# --- a HELOC that becomes an amortizing loan after its draw period ---------------------------
+
+def _converting_heloc(**overrides):
+    fields = dict(liability_id="heloc", name="HELOC", balance=100_000, annual_interest_rate=0.06,
+                  start_year=2026, amortize_from_year=2028, amortize_from_month=4, amortization_months=180)
+    fields.update(overrides)
+    return CreditLine(**fields)
+
+
+def test_heloc_is_interest_only_during_the_draw_period():
+    h = _converting_heloc()
+    assert h.year_activity_for(2027, 100_000) == pytest.approx((6_000, 0.0, 100_000))
+
+
+def test_heloc_payment_after_conversion_matches_a_15_year_loan():
+    # $100,000 at 6% over 15 years -> $843.86/month (any loan calculator)
+    assert _converting_heloc().amortizing_payment() == pytest.approx(843.86, abs=0.005)
+
+
+def test_conversion_year_is_part_interest_only_part_amortizing():
+    h = _converting_heloc()
+    interest, principal, ending = h.year_activity_for(2028, 100_000)
+    # Jan-Mar interest-only ($1,500), then 9 amortizing payments of $843.86
+    assert interest + principal == pytest.approx(1_500 + 9 * 843.86, abs=0.05)
+    assert ending == pytest.approx(100_000 - principal)
+    assert principal > 0
+
+
+def test_heloc_is_paid_off_after_the_amortization_term():
+    h = _converting_heloc()
+    balance = 100_000.0
+    for year in range(2026, 2044):
+        _, _, balance = h.year_activity_for(year, balance)
+    assert balance == pytest.approx(0, abs=0.01)
+    assert h.payoff_date() == (2043, 3)       # 180 payments from Apr 2028
+
+
+def test_converting_heloc_needs_a_term():
+    with pytest.raises(ValidationError):
+        CreditLine(liability_id="x", name="x", balance=1_000, annual_interest_rate=0.08, start_year=2026,
+                   amortize_from_year=2030)
+
+
+def test_converting_heloc_survives_save_and_load():
+    from models import liability_from_dict
+    again = liability_from_dict(_converting_heloc().to_dict())
+    assert (again.amortize_from_year, again.amortize_from_month, again.amortization_months) == (2028, 4, 180)
+
+
+def test_simulation_pays_the_heloc_down_with_no_lump_sum(sample_portfolio):
+    sample_portfolio.add_liability(_converting_heloc(balance=50_000))
+    results = {r.year: r for r in simulation.run_simulation(sample_portfolio, sample_portfolio.scenarios[0]).annual_results}
+    first = min(results)
+    heloc = lambda y: next(lr for lr in results[y].liability_results if lr.liability_id == "heloc")
+    if 2027 in results:
+        assert heloc(2027).principal_paid == 0
+    if 2029 in results:
+        assert 0 < heloc(2029).principal_paid < 5_000          # monthly amortization, not a $50K payoff
+        assert heloc(2029).ending_balance < heloc(2029).beginning_balance
+    assert heloc(first).beginning_balance == pytest.approx(50_000)

@@ -67,6 +67,8 @@ class TaxContext:
     people: list = field(default_factory=list)
     sold_asset_ids: set = field(default_factory=set)
     carryforward: Dict[str, float] = field(default_factory=dict)  # state across years
+    # Interest that accrues inside accounts (Asset.interest_taxed_yearly): asset_id -> this year's growth.
+    accrued_interest: Dict[str, float] = field(default_factory=dict)
 
 
 def estimate_taxes_for_year(
@@ -187,6 +189,9 @@ def estimate_detailed(year: int, assumptions: Assumptions, ctx: TaxContext) -> T
                 classify_income(cf, value)
         elif cf.direction == CashflowDirection.OUTFLOW and cf.flow_type == FlowType.PROPERTY_TAX:
             personal_property_tax += value
+
+    # Interest earned inside accounts (bank, CD): taxed as it accrues, though it stays in the account.
+    interest += sum(v for v in (ctx.accrued_interest or {}).values() if v > 0)
 
     # --- interest paid on each asset's loans ----------------------------------------
     interest_by_asset: Dict[Optional[str], float] = {}

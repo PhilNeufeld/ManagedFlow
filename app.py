@@ -376,7 +376,10 @@ def render_assets_tab(portfolio: Portfolio) -> None:
                     "Type": a.asset_type.value,
                     "Owner": a.owner,
                     "Entity": entity_name_by_id.get(a.entity_id, a.entity_id or ""),
-                    "Current Value": format_currency(a.current_value),
+                    "Current Value": (format_currency(a.current_value) if a.currency == "USD" else
+                                      f"{a.currency} {a.current_value:,.0f}"
+                                      + (f" (~{format_currency(a.current_value * portfolio.assumptions.fx_rates[a.currency])})"
+                                         if a.currency in portfolio.assumptions.fx_rates else "")),
                     "Growth Rate": a.annual_growth_rate,
                     "Liquidity": a.liquidity_category.value,
                     "Account": {"taxable": "taxable", "tax_deferred": "tax-deferred", "roth": "Roth"}.get(
@@ -573,8 +576,15 @@ def _render_asset_editor(portfolio: Portfolio, editor: dict) -> None:
                 index=entity_options.index(defaults["entity_choice"]) if defaults["entity_choice"] in entity_options else 0,
                 format_func=lambda eid: entity_labels.get(eid, eid), key=field("entity_choice"),
             )
+            currencies = ["USD"] + sorted(set(portfolio.assumptions.fx_rates) - {"USD"})
+            if existing and existing.currency not in currencies:
+                currencies.append(existing.currency)
+            currency = st.selectbox(
+                "Currency (value and this asset's cashflows)", currencies,
+                index=currencies.index(existing.currency) if existing else 0, key=field("currency"),
+                help="Add exchange rates for other currencies on the Assumptions tab.")
             initial_value = st.number_input(
-                "Initial value ($) -- the simulation's starting point",
+                f"Initial value ({currency}) -- the simulation's starting point",
                 min_value=0.0, step=1000.0, value=float(defaults["initial_value"]), key=field("initial_value"),
             )
             if mode == "edit":
@@ -639,6 +649,10 @@ def _render_asset_editor(portfolio: Portfolio, editor: dict) -> None:
         with ac2:
             owner_person = _person_picker("Account owner (sets RMD age)", portfolio,
                                           existing.owner_person_id if existing else None, field("owner_person"))
+            interest_taxed = st.checkbox(
+                "Growth is interest, taxed every year (bank account, CD, money market)",
+                value=bool(getattr(existing, "interest_taxed_yearly", False)) if existing else False,
+                key=field("interest_taxed"))
         st.markdown("**Receivable terms** -- only for type *receivable* (a note or fee owed to you, paid "
                     "down monthly). Value above = the balance owed when payments start.")
         rc1, rc2, rc3, rc4 = st.columns(4)
@@ -732,6 +746,8 @@ def _render_asset_editor(portfolio: Portfolio, editor: dict) -> None:
                     principal_tax_category=rcv_principal_cat if rcv_principal_taxable else "none",
                     account_tax=account_tax,
                     owner_person_id=owner_person,
+                    currency=currency,
+                    interest_taxed_yearly=interest_taxed,
                 )
 
                 if mode == "new":
@@ -1805,12 +1821,20 @@ _KIND_LABELS = {"loan": "Loan (amortizing)", "credit_line": "Credit line (intere
 def _monthly_payment_label(li) -> str:
     if isinstance(li, Loan):
         return format_currency(li.scheduled_monthly_payment())
-    return format_currency(li.balance * li.annual_interest_rate / 12) + " (interest)"
+    label = format_currency(li.balance * li.annual_interest_rate / 12) + " (interest)"
+    if getattr(li, "converts", False):
+        label += (f", then {format_currency(li.amortizing_payment())} from "
+                  f"{MONTH_NAMES[li.amortize_from_month - 1]} {li.amortize_from_year}")
+    return label
 
 
 def _payments_left_label(li) -> str:
     if not isinstance(li, Loan):
-        return ""
+        done = li.payoff_date() if getattr(li, "converts", False) else None
+        if done is None:
+            return "interest-only"
+        return (f"interest-only until {MONTH_NAMES[li.amortize_from_month - 1]} {li.amortize_from_year}; "
+                f"then {li.amortization_months} payments (last {MONTH_NAMES[done[1] - 1]} {done[0]})")
     left, done = li.months_left(), li.payoff_date()
     if left is None or done is None:
         return "never (payment too small)"
@@ -1954,6 +1978,21 @@ def _render_liability_editor(portfolio: Portfolio, editor: dict) -> None:
                     value=float(getattr(existing, "credit_limit", None) or 0.0) if existing else 0.0,
                     key=field("credit_limit"),
                 )
+                st.caption("Draw period end (e.g. a HELOC): from then on the balance is repaid like a loan. "
+                           "Leave the year at 0 for interest-only.")
+                c_y, c_m, c_t = st.columns(3)
+                amortize_year = c_y.number_input(
+                    "Becomes a loan in (year)", min_value=0, step=1,
+                    value=int(getattr(existing, "amortize_from_year", None) or 0) if existing else 0,
+                    key=field("amortize_year"))
+                amortize_month = c_m.selectbox(
+                    "Month", list(range(1, 13)), format_func=lambda m: MONTH_NAMES[m - 1],
+                    index=int(getattr(existing, "amortize_from_month", 1) or 1) - 1 if existing else 0,
+                    key=field("amortize_month"))
+                amortize_years = c_t.number_input(
+                    "Repaid over (years)", min_value=0, step=1,
+                    value=int((getattr(existing, "amortization_months", None) or 0) / 12) if existing else 0,
+                    key=field("amortize_years"))
             secured_by = st.selectbox(
                 "Secured by asset", asset_options,
                 index=asset_options.index(existing.secured_by_asset_id)
@@ -2055,7 +2094,10 @@ def _render_liability_editor(portfolio: Portfolio, editor: dict) -> None:
                         **originals,
                     )
             else:
-                liability = CreditLine(**common, credit_limit=credit_limit or None)
+                liability = CreditLine(**common, credit_limit=credit_limit or None,
+                                       amortize_from_year=int(amortize_year) or None,
+                                       amortize_from_month=int(amortize_month),
+                                       amortization_months=int(amortize_years) * 12 or None)
 
             if mode == "new":
                 portfolio.add_liability(liability)
@@ -2515,12 +2557,30 @@ def render_assumptions_tab(portfolio: Portfolio) -> None:
                 tax_method=tax_method,
                 filing_status=filing_status,
                 state=state,
+                fx_rates=dict(a.fx_rates),
             )
             portfolio.assumptions = updated
             _clear_simulation_cache()
             st.success("Assumptions updated.")
         except ValidationError as exc:
             st.error(str(exc))
+
+    st.subheader("Exchange rates")
+    st.caption("Everything is in US dollars except assets you enter in another currency (Assets tab). Their value "
+               "and their own cashflows are converted at these rates -- USD per 1 unit -- in every run. Add a row "
+               "for a new currency; clear the rate to remove it.")
+    fx_df = pd.DataFrame([{"Currency": k, "USD per 1 unit": v} for k, v in sorted(portfolio.assumptions.fx_rates.items())]
+                         or [{"Currency": "CAD", "USD per 1 unit": None}])
+    fx_edit = st.data_editor(fx_df, num_rows="dynamic", key="fx_rate_editor", hide_index=True)
+    if st.button("Save exchange rates"):
+        rates = {}
+        for _, row in fx_edit.iterrows():
+            cur = str(row["Currency"] or "").strip().upper()
+            if len(cur) == 3 and pd.notna(row["USD per 1 unit"]) and float(row["USD per 1 unit"]) > 0:
+                rates[cur] = float(row["USD per 1 unit"])
+        portfolio.assumptions.fx_rates = rates
+        _clear_simulation_cache()
+        st.success("Exchange rates saved: " + (", ".join(f"1 {k} = ${v:.4f}" for k, v in rates.items()) or "none"))
 
     st.subheader("Flat tax rates by category (used only by the flat method)")
     rate_df = pd.DataFrame(

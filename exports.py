@@ -275,7 +275,7 @@ def _write_bundles_sheet(wb: Workbook, portfolio: Portfolio) -> None:
 ASSET_HEADERS = [
     "Asset ID", "Name", "Type", "Owner", "Entity", "Initial Value", "Current Value",
     "Start Year", "Annual Growth Rate", "Liquidity Category", "Tax Category",
-    "Active", "Do Not Sell", "Sale Year", "Notes",
+    "Active", "Do Not Sell", "Sale Year", "Currency", "Notes",
 ]
 
 
@@ -285,7 +285,7 @@ def _asset_row(asset, entity_name_by_id: Dict[str, str]) -> list:
         asset.asset_id, asset.name, asset.asset_type.value, asset.owner, entity_label,
         asset.initial_value, asset.current_value, asset.start_year, asset.annual_growth_rate,
         asset.liquidity_category.value, asset.tax_category.value, asset.active,
-        asset.do_not_sell, asset.sale_year, asset.notes,
+        asset.do_not_sell, asset.sale_year, getattr(asset, "currency", "USD"), asset.notes,
     ]
 
 

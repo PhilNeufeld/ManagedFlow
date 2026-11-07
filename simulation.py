@@ -228,6 +228,9 @@ def _simulate_year(
         liability_results=liability_results, liabilities={li.liability_id: li for li in liabilities},
         people=people or [], sold_asset_ids=sold_asset_ids,
         carryforward=tax_state if tax_state is not None else {},
+        accrued_interest={r.asset_id: r.growth_amount for r in asset_results
+                          if getattr(next((a for a in assets if a.asset_id == r.asset_id), None),
+                                     "interest_taxed_yearly", False)},
     )
     # Social Security earnings test (per person) -- before income is totalled and taxed.
     if people:
@@ -460,7 +463,8 @@ def _simulate_liability_year(
 
     - Before its start_year (or if inactive) the debt doesn't exist yet: $0.
     - Otherwise the subclass's year_activity() decides interest and
-      principal (Loan amortizes; CreditLine pays interest only).
+      principal (Loan amortizes; CreditLine pays interest only, or amortizes
+      once its draw period ends).
     - If the asset securing it was sold this year, the remaining balance is
       paid off from the sale.
     """
@@ -481,7 +485,7 @@ def _simulate_liability_year(
         months = sale_months[liability.secured_by_asset_id] - 1
     if payoff and year == liability.payoff_year and liability.payoff_month:
         months = min(months, liability.payoff_month - 1)
-    interest, principal, ending = liability.year_activity(beginning, months)
+    interest, principal, ending = liability.year_activity_for(year, beginning, months)
 
     if (sold or payoff) and ending > 0:
         principal += ending  # pay off the rest: asset sold, or scheduled payoff/refinance
