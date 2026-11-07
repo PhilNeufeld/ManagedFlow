@@ -139,6 +139,7 @@ def export_to_excel(
     _write_bundles_sheet(wb, portfolio)
     _write_scenario_settings_sheet(wb, portfolio)
     _write_annual_results_sheet(wb, simulation_results)
+    _write_cashflow_summary_sheet(wb, portfolio, simulation_results)
     _write_asset_detail_sheet(wb, simulation_results)
     _write_liability_detail_sheet(wb, simulation_results)
     _write_cashflow_detail_sheet(wb, portfolio, simulation_results)
@@ -982,6 +983,91 @@ def audit_workbook_bytes(result: SimulationResult, portfolio: Portfolio, years: 
     ws.column_dimensions["D"].width = 48
     ws.column_dimensions["G"].width = 32
 
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Cash flow summary: categories as rows, years as columns
+# ---------------------------------------------------------------------------
+
+SUMMARY_FILL = PatternFill("solid", start_color="DDEBF7", end_color="DDEBF7")
+
+
+def _fill_cashflow_summary(ws: Worksheet, result: SimulationResult, portfolio: Portfolio, years: List[int],
+                           start_row: int, heading: str, show_detail: bool = True) -> int:
+    """Write one scenario's summary at start_row; returns the next free row."""
+    import cashflow_summary
+    ws.cell(row=start_row, column=1, value=heading).font = Font(name=FONT_NAME, bold=True, size=12)
+    rows = cashflow_summary.build(result, portfolio, years)
+    if not show_detail:
+        rows = [r for r in rows if r["Kind"] != "detail"]
+    hdr = start_row + 1
+    for c, h in enumerate(["Line"] + [str(y) for y in years], start=1):
+        ws.cell(row=hdr, column=c, value=h)
+    _style_header_row(ws, hdr, len(years) + 1)
+    r_no = hdr + 1
+    section = None
+    for row in rows:
+        if row["Section"] != section and row["Section"] in ("Income", "Expenses", "Debt service"):
+            section = row["Section"]
+            ws.cell(row=r_no, column=1, value=section.upper()).font = Font(name=FONT_NAME, bold=True,
+                                                                             color="1F4E78")
+            r_no += 1
+        section = row["Section"]
+        kind = row["Kind"]
+        label = ("      " + row["Line"]) if kind == "detail" else ("   " + row["Line"]) if kind == "item" else row["Line"]
+        ws.cell(row=r_no, column=1, value=label)
+        for c, y in enumerate(years, start=2):
+            cell = ws.cell(row=r_no, column=c, value=round(row[y], 2))
+            cell.number_format = CURRENCY_FORMAT
+        bold = kind in ("total", "net")
+        italic = kind in ("detail", "memo")
+        color = "777777" if kind == "detail" else None
+        for c in range(1, len(years) + 2):
+            cell = ws.cell(row=r_no, column=c)
+            cell.font = Font(name=FONT_NAME, bold=bold, italic=italic, color=color)
+            if kind == "net":
+                cell.fill = SUMMARY_FILL
+        r_no += 1
+    ws.column_dimensions["A"].width = 58
+    for c in range(2, len(years) + 2):
+        ws.column_dimensions[get_column_letter(c)].width = 14
+    return r_no + 1
+
+
+def _write_cashflow_summary_sheet(wb: Workbook, portfolio: Portfolio,
+                                  simulation_results: List[SimulationResult]) -> None:
+    ws = wb.create_sheet("Cash Flow Summary")
+    ws["A1"] = "Cash flow summary"
+    ws["A1"].font = TITLE_FONT
+    ws["A2"] = ("Income, expenses, debt service and estimated tax by category, a column per year (your share). "
+                "Net cash flow = income - expenses - debt service - tax; a surplus is reinvested, a deficit "
+                "withdrawn. Grey rows are the items in each category.")
+    ws["A2"].font = SUBTITLE_FONT
+    row = 4
+    names = {s.scenario_id: s.name for s in portfolio.scenarios}
+    for res in simulation_results:
+        years = [r.year for r in res.annual_results]
+        row = _fill_cashflow_summary(ws, res, portfolio, years, row, f"Scenario: {names.get(res.scenario_id, res.scenario_id)}")
+    ws.freeze_panes = "B4"
+
+
+def cashflow_summary_bytes(result: SimulationResult, portfolio: Portfolio, years: List[int],
+                           scenario_name: str = "", show_detail: bool = True) -> bytes:
+    """The Cash flow summary sub-tab as a one-sheet workbook."""
+    import io
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Cash Flow Summary"
+    span = f"{years[0]}" + (f"-{years[-1]}" if len(years) > 1 else "")
+    ws["A1"] = f"Cash flow summary - {scenario_name or result.scenario_id}, {span}"
+    ws["A1"].font = TITLE_FONT
+    ws["A2"] = "Net cash flow = income - expenses - debt service - est. tax. Amounts are your share."
+    ws["A2"].font = SUBTITLE_FONT
+    _fill_cashflow_summary(ws, result, portfolio, years, 4, "", show_detail)
+    ws.freeze_panes = "B6"
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()

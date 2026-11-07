@@ -23,7 +23,7 @@ Python does the calculations, your data is stored in a JSON file in the data fol
 | Events | Dated moments (retire, claim, buy, sell, close) that start and stop other records |
 | Assumptions | Plan years, inflation, tax method, filing status, state, exchange rates |
 | Scenarios | What-ifs: overrides to assumptions, assets, cashflows and event dates |
-| Simulation | Run the plan. Sub-tabs: Results (table + chart, Years to view), Taxes by year, Rental pro forma, Spending (spending policy, highest steady spending), Social Security claiming, Monte Carlo, Warnings |
+| Simulation | Run the plan. Sub-tabs: Results (table + chart, Years to view), Cash flow summary (income, expenses, debt and tax by category, years across), Taxes by year, Rental pro forma, Spending (spending policy, highest steady spending), Social Security claiming, Monte Carlo, Warnings |
 | Audit | The items behind every number in the results, for a year or a range, with checks that they add up |
 | Explore | Drill down by entity > collection > asset > cashflow/loan, as a chart or a 1-5 year table |
 | Help | This manual, on screen |
@@ -381,6 +381,15 @@ Every table -- entities, people, events, assets, liabilities, cashflows, actuals
 - **Liquid Assets** = liquid + semi-liquid assets (brokerage, IRAs); **Illiquid Assets** = everything else (real estate, businesses, trusts, receivables). Neither subtracts debt; Total Net Worth does.
 - **Years to view** (under the table) limits the chart to the first N years (10 by default), so early changes aren't flattened by the scale of later decades.
 
+## See where the money comes from and goes, year by year (cash flow summary)?
+
+1. Simulation tab > **Run simulation for all scenarios**, pick the scenario, then the **Cash flow summary** sub-tab.
+2. Choose **From** and **To** years (the first five by default). Each column is a year.
+3. Rows are grouped: **Income** (salaries, pensions, Social Security, rents, business and farm, distributions, interest, principal repaid to you), **Expenses** (living, rental property costs, business and farm costs, other), **Debt service** (rental loans, home mortgage, HELOC, car, student, other) and **Est. income tax**, then **Net cash flow** = income - expenses - debt service - tax.
+4. Tick **Show the items in each category** to see the lines inside each group (each rental, each loan...).
+5. **Net cash flow excluding principal repaid to you** leaves out money you lent coming back: it is cash, but not new income, and it stops when the loan is repaid.
+6. **Download to Excel** saves the same table. The full Export also has a Cash Flow Summary sheet for every scenario and year.
+
 ## Audit a number (where does a total come from)?
 
 1. Simulation tab > **Run simulation for all scenarios**.
@@ -437,7 +446,7 @@ If your income covers your spending (the draw rate is zero or negative), guardra
 
 ## Export to Excel?
 
-1. Export tab > Export. The workbook includes inputs, annual results, tax detail, actuals, the rental pro forma and the period view.
+1. Export tab > Export. The workbook includes inputs, annual results, the cash flow summary, tax detail, actuals, the rental pro forma and the period view.
 
 ## Rebuild or print this manual?
 
@@ -479,6 +488,7 @@ Household-specific to-dos live next to each portfolio in `data/<file>_tasks.md` 
 | 1.2 | Assets in another currency (value and cashflows converted to USD at Assumptions exchange rates); interest taxed yearly on bank/CD accounts |
 | 1.2 | Credit lines that convert to an amortizing loan after a draw period (HELOC: interest-only, then repaid over N years) |
 | 1.2 | Audit: the simulation records every item behind each annual total; Audit tab (year or range, by entity, with checks that items add back to the totals) and Audit / Audit Checks sheets in the Excel export. Simulation tab split into sub-tabs; chart Years to view; Liquid/Illiquid Assets labels |
+| 1.2 | Cash flow summary: income, expenses, debt service and tax by category with years across (Simulation sub-tab, Excel download, Cash Flow Summary export sheet); a memo line for net cash excluding principal repaid to you |
 | 1.2 | Off-machine backups: one dated zip of all private files (portfolios, actuals, builder scripts, outputs) to a synced folder; daily automatic backup on save; keep the newest N; restore with the current files set aside; tidy save copies into data/Archive |
 | 1.0 | Integer primary keys in every table (migration renumbers older files); actuals import links by key (cashflow_id), never by name, with a template listing each planned cashflow's key; unplanned actuals count once in their own year; re-link stored records |
 

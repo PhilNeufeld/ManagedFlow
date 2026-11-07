@@ -528,3 +528,14 @@ def test_spending_tab_shows_guardrail_cuts(tmp_path):
     no_crash(at)
     table = next(d.value for d in at.dataframe if "What changed" in d.value.columns)
     assert table["What changed"].str.contains("cut 10%").any()
+
+
+def test_cash_flow_summary_tab_groups_by_category(tmp_path):
+    at = start(_depreciating_rental(), tmp_path)
+    at = click(at, label="Run simulation for all scenarios")
+    no_crash(at)
+    assert any(t.label == "Cash flow summary" for t in at.tabs)
+    assert at.selectbox(key="cfs_from").value is not None
+    at.checkbox(key="cfs_detail").check().run()
+    no_crash(at)
+    assert not any("don't add up" in e.value for e in at.error)

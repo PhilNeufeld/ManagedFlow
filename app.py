@@ -3065,9 +3065,14 @@ def render_simulation_tab(portfolio: Portfolio) -> None:
     _run_simulation_button(portfolio, "sim_run_btn")
     chosen = _pick_result(portfolio, "sim_view_scenario")
     warnings_count = sum(len(r.warnings) for r in chosen.annual_results) if chosen else 0
-    labels = ["Results", "Taxes by year", "Rental pro forma", "Spending", "Social Security claiming", "Monte Carlo",
+    labels = ["Results", "Cash flow summary", "Taxes by year", "Rental pro forma", "Spending", "Social Security claiming", "Monte Carlo",
               f"Warnings ({warnings_count})"]
-    t_results, t_tax, t_rental, t_spend, t_ss, t_mc, t_warn = st.tabs(labels)
+    t_results, t_summary, t_tax, t_rental, t_spend, t_ss, t_mc, t_warn = st.tabs(labels)
+    with t_summary:
+        if chosen is None:
+            st.info("Run the simulation to see the cash flow summary.")
+        else:
+            _render_cashflow_summary(portfolio, chosen)
     with t_spend:
         _render_spending(portfolio, chosen)
     with t_results:
@@ -3101,6 +3106,54 @@ def render_simulation_tab(portfolio: Portfolio) -> None:
                 st.success("No warnings for this scenario.")
             for year, w in all_warnings:
                 st.warning(f"Year {year}: {w}")
+
+
+def _render_cashflow_summary(portfolio: Portfolio, chosen) -> None:
+    """Categories as rows, years as columns: where the money comes from and goes."""
+    import cashflow_summary
+    years_all = [r.year for r in chosen.annual_results]
+    c1, c2, c3 = st.columns([1, 1, 2])
+    y_from = c1.selectbox("From", years_all, index=0, key="cfs_from")
+    later = [y for y in years_all if y >= y_from]
+    y_to = c2.selectbox("To", later, index=min(4, len(later) - 1), key="cfs_to")
+    show_detail = c3.checkbox("Show the items in each category", value=False, key="cfs_detail")
+    years = [y for y in years_all if y_from <= y <= y_to]
+    rows = cashflow_summary.build(chosen, portfolio, years)
+    st.caption("Net cash flow = income - expenses - debt service - est. tax; a surplus is reinvested, a deficit "
+               "withdrawn from savings. \"Principal repaid to you\" is money you lent coming back -- cash, but "
+               "not new income -- so the memo line shows the net without it. Amounts are your share. The Audit "
+               "tab has every item behind these numbers.")
+    shown = rows if show_detail else [r for r in rows if r["Kind"] != "detail"]
+    indent = {"item": "\u2003", "detail": "\u2003\u2003\u00b7 "}
+    table = pd.DataFrame([
+        {"Section": r["Section"] if i == 0 or shown[i - 1]["Section"] != r["Section"] else "",
+         "Line": indent.get(r["Kind"], "") + r["Line"],
+         **{str(y): format_currency(r[y]) for y in years}} for i, r in enumerate(shown)])
+
+    def _style(row):
+        kind = shown[row.name]["Kind"]
+        if kind == "net":
+            return ["font-weight: bold; background-color: rgba(31, 78, 120, 0.15)"] * len(row)
+        if kind == "total":
+            return ["font-weight: bold"] * len(row)
+        if kind in ("detail", "memo"):
+            return ["font-style: italic; color: grey"] * len(row)
+        return [""] * len(row)
+
+    try:
+        shown_table = table.style.apply(_style, axis=1)
+    except (AttributeError, ImportError):  # pandas styling needs jinja2; plain table without it
+        shown_table = table
+    st.dataframe(shown_table, hide_index=True, use_container_width=True,
+                 height=min(38 * (len(table) + 1), 1400))
+    bad = [c for c in cashflow_summary.check(rows, chosen, years) if not c["OK"]]
+    if bad:
+        st.error(f"{len(bad)} categories don't add up to their totals -- see the Audit tab.")
+    label = _scenario_label(portfolio, chosen.scenario_id)
+    st.download_button(
+        "Download to Excel", exports.cashflow_summary_bytes(chosen, portfolio, years, label, show_detail),
+        file_name=f"Cash_Flow_Summary_{label}_{years[0]}-{years[-1]}.xlsx".replace(" ", "_"), key="cfs_xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 
 def _render_results(chosen) -> None:

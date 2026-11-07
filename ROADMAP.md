@@ -30,6 +30,7 @@ Household-specific to-dos live next to each portfolio in `data/<file>_tasks.md`
 | 1.2 | Assets in another currency (value and cashflows converted to USD at Assumptions exchange rates); interest taxed yearly on bank/CD accounts |
 | 1.2 | Credit lines that convert to an amortizing loan after a draw period (HELOC: interest-only, then repaid over N years) |
 | 1.2 | Audit: the simulation records every item behind each annual total; Audit tab (year or range, by entity, with checks that items add back to the totals) and Audit / Audit Checks sheets in the Excel export. Simulation tab split into sub-tabs; chart Years to view; Liquid/Illiquid Assets labels |
+| 1.2 | Cash flow summary: income, expenses, debt service and tax by category with years across (Simulation sub-tab, Excel download, Cash Flow Summary export sheet); a memo line for net cash excluding principal repaid to you |
 | 1.2 | Off-machine backups: one dated zip of all private files (portfolios, actuals, builder scripts, outputs) to a synced folder; daily automatic backup on save; keep the newest N; restore with the current files set aside; tidy save copies into data/Archive |
 | 1.0 | Integer primary keys in every table (migration renumbers older files); actuals import links by key (cashflow_id), never by name, with a template listing each planned cashflow's key; unplanned actuals count once in their own year; re-link stored records |
 
