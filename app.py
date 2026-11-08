@@ -3144,16 +3144,18 @@ def _render_cashflow_summary(portfolio: Portfolio, chosen) -> None:
         shown_table = table.style.apply(_style, axis=1)
     except (AttributeError, ImportError):  # pandas styling needs jinja2; plain table without it
         shown_table = table
-    st.dataframe(shown_table, hide_index=True, use_container_width=True,
-                 height=min(38 * (len(table) + 1), 1400))
-    bad = [c for c in cashflow_summary.check(rows, chosen, years) if not c["OK"]]
-    if bad:
-        st.error(f"{len(bad)} categories don't add up to their totals -- see the Audit tab.")
     label = _scenario_label(portfolio, chosen.scenario_id)
     st.download_button(
         "Download to Excel", exports.cashflow_summary_bytes(chosen, portfolio, years, label, show_detail),
         file_name=f"Cash_Flow_Summary_{label}_{years[0]}-{years[-1]}.xlsx".replace(" ", "_"), key="cfs_xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    # Tall enough for every row (Streamlit rows are 35px, plus the header), so the page scrolls, not the grid
+    st.dataframe(shown_table, hide_index=True, use_container_width=True, height=35 * (len(table) + 1) + 3,
+                 column_config={"Section": st.column_config.TextColumn(width=110),
+                                "Line": st.column_config.TextColumn(width=420)})
+    bad = [c for c in cashflow_summary.check(rows, chosen, years) if not c["OK"]]
+    if bad:
+        st.error(f"{len(bad)} categories don't add up to their totals -- see the Audit tab.")
 
 
 def _render_results(chosen) -> None:
