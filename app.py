@@ -3108,6 +3108,47 @@ def render_simulation_tab(portfolio: Portfolio) -> None:
                 st.warning(f"Year {year}: {w}")
 
 
+PRINT_CSS = """<style>
+.mf-print table {border-collapse: collapse; width: 100%; font-size: 12px;}
+.mf-print th, .mf-print td {border-bottom: 1px solid #ddd; padding: 3px 8px; text-align: right; white-space: nowrap;}
+.mf-print th:nth-child(-n+2), .mf-print td:nth-child(-n+2) {text-align: left;}
+.mf-print th {border-bottom: 2px solid #1F4E78; color: #1F4E78;}
+.mf-print tr.total td {font-weight: bold; border-top: 1px solid #999;}
+.mf-print tr.net td {font-weight: bold; background: #DDEBF7; border-top: 2px solid #1F4E78;}
+.mf-print tr.detail td, .mf-print tr.memo td {color: #666; font-style: italic;}
+.mf-print tr.detail td:nth-child(2) {padding-left: 36px;}
+.mf-print tr.item td:nth-child(2) {padding-left: 18px;}
+.mf-print h3 {margin: 0 0 6px 0;}
+@media print {
+  @page {size: landscape; margin: 0.5in;}
+  [data-testid="stSidebar"], [data-testid="stHeader"], [data-testid="stToolbar"], header,
+  [data-baseweb="tab-list"], [role="tablist"], [data-testid="stHeading"], [data-testid="stCaptionContainer"],
+  [data-testid="stElementToolbar"], [data-testid="stAlert"], .stButton, .stDownloadButton, [data-testid="stCheckbox"],
+  [data-testid="stSelectbox"], [data-testid="stCaptionContainer"], [data-testid="stExpander"],
+  [data-testid="stDecoration"] {display: none !important;}
+  [data-testid="stAppViewContainer"] .main, [data-testid="stMainBlockContainer"], .block-container
+    {padding: 0 !important; max-width: 100% !important;}
+  [data-testid="stVerticalBlock"] {gap: 0 !important;}
+  .mf-print tr {page-break-inside: avoid;}
+  .mf-print thead {display: table-header-group;}
+}
+</style>"""
+
+
+def printable_summary_html(rows, years, title: str) -> str:
+    """The cash flow summary as a plain HTML table (prints in full, unlike the canvas grid)."""
+    import html as _html
+    out = [PRINT_CSS, '<div class="mf-print">', f"<h3>{_html.escape(title)}</h3>", "<table><thead><tr>",
+           "<th>Section</th><th>Line</th>" + "".join(f"<th>{y}</th>" for y in years), "</tr></thead><tbody>"]
+    for i, r in enumerate(rows):
+        section = r["Section"] if i == 0 or rows[i - 1]["Section"] != r["Section"] else ""
+        line = ("\u00b7 " if r["Kind"] == "detail" else "") + r["Line"]
+        cells = "".join(f"<td>{_html.escape(format_currency(r[y]))}</td>" for y in years)
+        out.append(f'<tr class="{r["Kind"]}"><td>{_html.escape(section)}</td><td>{_html.escape(line)}</td>{cells}</tr>')
+    out.append("</tbody></table></div>")
+    return "".join(out)
+
+
 def _render_cashflow_summary(portfolio: Portfolio, chosen) -> None:
     """Categories as rows, years as columns: where the money comes from and goes."""
     import cashflow_summary
@@ -3117,6 +3158,9 @@ def _render_cashflow_summary(portfolio: Portfolio, chosen) -> None:
     later = [y for y in years_all if y >= y_from]
     y_to = c2.selectbox("To", later, index=min(4, len(later) - 1), key="cfs_to")
     show_detail = c3.checkbox("Show the items in each category", value=False, key="cfs_detail")
+    printable = c3.checkbox("Printable view (then Ctrl+P)", value=False, key="cfs_print",
+                            help="Shows the summary as a plain table that prints in full; the sidebar, tabs and "
+                                 "buttons are left off the printout. Choose Landscape in the print dialog.")
     years = [y for y in years_all if y_from <= y <= y_to]
     rows = cashflow_summary.build(chosen, portfolio, years)
     st.caption("Net cash flow = income - expenses - debt service - est. tax; a surplus is reinvested, a deficit "
@@ -3149,6 +3193,10 @@ def _render_cashflow_summary(portfolio: Portfolio, chosen) -> None:
         "Download to Excel", exports.cashflow_summary_bytes(chosen, portfolio, years, label, show_detail),
         file_name=f"Cash_Flow_Summary_{label}_{years[0]}-{years[-1]}.xlsx".replace(" ", "_"), key="cfs_xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    if printable:
+        title = f"Cash flow summary - {label}, {years[0]}" + (f"-{years[-1]}" if len(years) > 1 else "")
+        st.markdown(printable_summary_html(shown, years, title), unsafe_allow_html=True)
+        return
     # Tall enough for every row (Streamlit rows are 35px, plus the header), so the page scrolls, not the grid
     st.dataframe(shown_table, hide_index=True, use_container_width=True, height=35 * (len(table) + 1) + 3,
                  column_config={"Section": st.column_config.TextColumn(width=110),

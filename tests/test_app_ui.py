@@ -539,3 +539,20 @@ def test_cash_flow_summary_tab_groups_by_category(tmp_path):
     at.checkbox(key="cfs_detail").check().run()
     no_crash(at)
     assert not any("don't add up" in e.value for e in at.error)
+
+
+def test_cash_flow_summary_printable_view(tmp_path):
+    at = start(_depreciating_rental(), tmp_path)
+    at = click(at, label="Run simulation for all scenarios")
+    at.checkbox(key="cfs_print").check().run()
+    no_crash(at)
+    html = "".join(m.value for m in at.markdown)
+    assert 'class="mf-print"' in html and "@media print" in html and "Net cash flow" in html
+
+
+def test_printable_html_escapes_and_marks_rows():
+    import app
+    rows = [{"Section": "Income", "Line": "Rent <A&B>", "Kind": "detail", "Category": "Rents", 2026: 1200.0},
+            {"Section": "Net", "Line": "Net cash flow", "Kind": "net", "Category": "", 2026: 100.0}]
+    html = app.printable_summary_html(rows, [2026], "T")
+    assert "Rent &lt;A&amp;B&gt;" in html and '<tr class="net">' in html and "$1,200" in html

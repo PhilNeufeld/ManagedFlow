@@ -388,7 +388,8 @@ Every table -- entities, people, events, assets, liabilities, cashflows, actuals
 3. Rows are grouped: **Income** (salaries, pensions, Social Security, rents, business and farm, distributions, interest, principal repaid to you), **Expenses** (living, rental property costs, business and farm costs, other), **Debt service** (rental loans, home mortgage, HELOC, car, student, other) and **Est. income tax**, then **Net cash flow** = income - expenses - debt service - tax.
 4. Tick **Show the items in each category** to see the lines inside each group (each rental, each loan...).
 5. **Net cash flow excluding principal repaid to you** leaves out money you lent coming back: it is cash, but not new income, and it stops when the loan is repaid.
-6. **Download to Excel** saves the same table. The full Export also has a Cash Flow Summary sheet for every scenario and year.
+6. To print: tick **Printable view (then Ctrl+P)**, then print from the browser (Landscape). The sidebar, tabs and buttons are left off and the column headings repeat on each page.
+7. **Download to Excel** saves the same table. The full Export also has a Cash Flow Summary sheet for every scenario and year.
 
 ## Audit a number (where does a total come from)?
 
